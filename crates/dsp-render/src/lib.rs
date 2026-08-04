@@ -8,7 +8,11 @@ mod resources;
 mod runtime;
 mod spec;
 
-pub use resources::{AudioClipSource, PluginProcessContext, PluginProcessor, RenderResources};
+pub use heron_audio_plugin::{
+    AudioPluginProcessor, AudioPluginProcessorHandle, ParameterToken, ProcessContext,
+    SidechainSource,
+};
+pub use resources::{AudioClipSource, RenderResources};
 pub use runtime::{
     RenderBuildError, RenderDiagnosticSnapshot, RenderMeter, RenderRuntime, RenderTransport,
 };

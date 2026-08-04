@@ -4,8 +4,9 @@ use super::{
     ApplicationCaptureSnapshot, ApplicationCaptureTargetDescriptor, AudioBackend,
     AudioBenchmarkReport, AudioDeviceList, AudioRuntime, BinaryPayload, CompiledAudioGraphSnapshot,
     GraphTransactionValue, MidiInputSnapshot, MidiRecordingResult, MixerChannelMeter,
-    PluginEditorMode, PluginEditorToolbarState, PluginParameter, RecordingResult,
-    RecordingWaveform, RoundTripLatencyMeasurement, RpcError, RpcResult, TransportState,
+    PluginEditorMode, PluginEditorToolbarState, PluginParameter, PluginStateEnvelope,
+    RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement, RpcError, RpcResult,
+    TransportState,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -117,9 +118,7 @@ pub enum ControlResult {
         parameters: Vec<PluginParameter>,
     },
     PluginState {
-        component_state: BinaryPayload,
-        controller_state: BinaryPayload,
-        ara_document_state: BinaryPayload,
+        state: PluginStateEnvelope,
     },
     GraphAccepted {
         revision: u64,

@@ -1,5 +1,33 @@
 use serde::{Deserialize, Serialize};
 
+use super::BinaryPayload;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginFormat {
+    Vst3,
+    Clap,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PluginLocator {
+    pub format: PluginFormat,
+    pub artifact_path: String,
+    pub native_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginStateChunk {
+    pub key: String,
+    pub bytes: BinaryPayload,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginStateEnvelope {
+    pub version: u32,
+    pub chunks: Vec<PluginStateChunk>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PluginEditorMode {
@@ -31,7 +59,7 @@ pub enum PluginEditorAction {
         zoom_percent: u16,
     },
     SidechainRoute {
-        input_bus_index: u32,
+        input_port_key: String,
         source_channel_id: Option<String>,
     },
 }
@@ -46,7 +74,7 @@ pub enum PluginEditorSidechainSourceKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginEditorSidechainBus {
-    pub input_bus_index: u32,
+    pub input_port_key: String,
     pub name: String,
     pub source_channel_id: Option<String>,
 }
@@ -141,15 +169,15 @@ pub enum PluginAudioMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LivePluginAuxInputBus {
-    pub input_bus_index: u32,
+    pub input_port_key: String,
     pub name: String,
     pub channels: u8,
     pub source_channel_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginAuxInputConfiguration {
-    pub input_bus_index: u32,
+    pub input_port_key: String,
     pub channels: u8,
 }
 
@@ -191,22 +219,33 @@ pub struct ParameterCommand {
     pub sequence: u64,
     pub target_kind: ParameterTargetKind,
     pub runtime_handle: u32,
-    pub parameter_id: u32,
+    pub parameter_token: u32,
     pub target_generation: u32,
-    pub normalized: f64,
+    pub value: f64,
     pub gesture: ParameterGesture,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PluginParameter {
-    pub id: u32,
+    pub parameter_key: String,
+    pub runtime_token: u32,
     pub title: String,
     pub units: String,
     pub step_count: i32,
     pub default_normalized: f64,
     pub normalized: f64,
+    pub min_value: f64,
+    pub max_value: f64,
+    pub default_value: f64,
+    pub value: f64,
+    pub normalized_value: f64,
+    pub module_path: String,
+    pub read_only: bool,
+    pub hidden: bool,
+    pub stepped: bool,
+    pub automatable: bool,
+    pub bypass: bool,
     pub formatted: String,
-    pub flags: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -28,6 +28,7 @@ import {
   keySignatureEvents,
   mixerChannels,
   pluginInstances,
+  pluginStateChunks,
   project,
   tempoEvents,
   tracks,
@@ -187,11 +188,16 @@ export class ProjectDatabase {
           channelId: "metronome",
           role: "instrument",
           slotOrder: 0,
-          classId: "8CD16A11027ACC7FDF0C1419E86D1024",
+          locatorFormat: "vst3",
+          artifactPath: "Heron Metronome.vst3",
+          nativeId: "8CD16A11027ACC7FDF0C1419E86D1024",
           descriptorSnapshot: JSON.stringify({
             source: { kind: "builtin", id: "live.minori.heron.metronome" },
-            classId: "8CD16A11027ACC7FDF0C1419E86D1024",
-            modulePath: "Heron Metronome.vst3",
+            locator: {
+              format: "vst3",
+              artifactPath: "Heron Metronome.vst3",
+              nativeId: "8CD16A11027ACC7FDF0C1419E86D1024"
+            },
             name: "Heron Metronome",
             vendor: "Heron Studio",
             version: "",
@@ -200,7 +206,7 @@ export class ProjectDatabase {
             architecture: process.arch,
             buses: [
               {
-                index: 0,
+                portKey: "vst3:audio:output:0",
                 direction: "output",
                 kind: "main",
                 name: "Stereo Out",
@@ -214,10 +220,12 @@ export class ProjectDatabase {
             compatibilityReason: null
           }),
           audioMode: "stereo",
-          enabled: true,
-          componentState: new Uint8Array(),
-          controllerState: new Uint8Array()
+          enabled: true
         })
+        await tx.insert(pluginStateChunks).values([
+          { pluginId: "metronome-instrument", chunkKey: "component", bytes: new Uint8Array() },
+          { pluginId: "metronome-instrument", chunkKey: "controller", bytes: new Uint8Array() }
+        ])
       })
       return instance
     } catch (error) {
@@ -341,14 +349,16 @@ export class ProjectDatabase {
     if (states.length === 0) return Promise.resolve()
     return this.db.transaction(async (tx) => {
       for (const state of states) {
-        await tx
-          .update(pluginInstances)
-          .set({
-            componentState: state.componentState,
-            controllerState: state.controllerState,
-            araDocumentState: state.araDocumentState ?? new Uint8Array()
-          })
-          .where(eq(pluginInstances.id, state.id))
+        await tx.delete(pluginStateChunks).where(eq(pluginStateChunks.pluginId, state.id))
+        if (state.state.chunks.length > 0) {
+          await tx.insert(pluginStateChunks).values(
+            state.state.chunks.map((chunk) => ({
+              pluginId: state.id,
+              chunkKey: chunk.key,
+              bytes: chunk.bytes
+            }))
+          )
+        }
       }
     })
   }

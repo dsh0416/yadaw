@@ -69,6 +69,7 @@ macro_rules! control_error {
 }
 
 mod ara;
+mod clap;
 pub use heron_audio_engine::{HostError, HostResult, Status};
 
 pub mod device {

@@ -14,7 +14,7 @@ thiserror.workspace = true
 heron-dsp-core.workspace = true
 heron-dsp-render.workspace = true
 heron-dsp-runtime.workspace = true
-heron-vst3-host.workspace = true
+heron-audio-plugin.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 cpal = { workspace = true, features = ["asio", "custom", "realtime"] }

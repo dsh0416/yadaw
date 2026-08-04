@@ -23,9 +23,9 @@ use super::{
     ActorRequest, Arc as RuntimeArc, AtomicU64 as RuntimeAtomicU64, EmbeddedUiHost,
     GraphParameterHandles, HashMap as RuntimeHashMap, MIDI_INPUT, Mutex as RuntimeMutex,
     NativeUiContext, RuntimeConfig, UiEvent, UiMailboxWaker, Vst3ActorDeps, WorkerSupervisor,
-    background_io_actor, dispatch_actor, dispatch_parameter, editor_platform, engine, engine_actor,
-    is_background_io_command, is_vst3_command, mpsc, slow_request_threshold, stable_runtime_handle,
-    std_mpsc as runtime_mpsc, vst3, vst3_actor,
+    audio_plugin_actor, background_io_actor, clap, dispatch_actor, dispatch_parameter,
+    editor_platform, engine, engine_actor, is_background_io_command, is_vst3_command, mpsc,
+    slow_request_threshold, stable_runtime_handle, std_mpsc as runtime_mpsc, vst3,
 };
 use heron_dsp_runtime::protocol::{
     ControlCommand, ControlRequest, ControlResponse, ControlResult, HostEvent, ParameterCommand,
@@ -269,6 +269,7 @@ impl EmbeddedAudioHost {
             host_events: host_event_sender,
             pending_ara_events: VecDeque::new(),
             vst3: Some(vst3::Vst3Runtime::new()),
+            clap: Some(clap::ClapRuntime::default()),
             ara_graph: None,
             next_ara_tick: None,
             next_retirement_tick: None,
@@ -712,7 +713,7 @@ async fn run_direct_actor(
     mut inbox: mpsc::Receiver<DirectMessage>,
     ui_sender: std_mpsc::SyncSender<ActorRequest>,
     ui_proxy: UiMailboxWaker,
-    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    processors: Arc<Mutex<HashMap<String, vst3::AudioPluginProcessorHandle>>>,
     audio_engine: Arc<engine::AudioEngine>,
     _winit_generation: Arc<AtomicU64>,
     background_sender: mpsc::Sender<ActorRequest>,
@@ -729,7 +730,7 @@ async fn run_direct_actor(
         Arc::clone(&handles),
         Arc::clone(&audio_engine),
     ));
-    tokio::task::spawn_local(vst3_actor(
+    tokio::task::spawn_local(audio_plugin_actor(
         vst3_inbox,
         Vst3ActorDeps {
             ui_proxy: ui_proxy.clone(),

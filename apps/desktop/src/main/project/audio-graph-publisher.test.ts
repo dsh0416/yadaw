@@ -5,8 +5,11 @@ import { AudioGraphPublisher } from "./audio-graph-publisher"
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "ABCDEF0123456789ABCDEF0123456789",
-  modulePath: "/plugins/Effect.vst3",
+  locator: {
+    format: "vst3",
+    artifactPath: "/plugins/Effect.vst3",
+    nativeId: "ABCDEF0123456789ABCDEF0123456789"
+  },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -73,13 +76,12 @@ const graph: ProjectGraphSnapshot = {
       channelId: "master",
       role: "insert",
       slotOrder: 0,
-      classId: descriptor.classId,
+      locator: descriptor.locator,
       descriptor: { ...descriptor, name: "Stale" },
       audioMode: "stereo",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     }
   ],
   midiClips: [],
@@ -105,8 +107,12 @@ const projectGraph = {
 
 describe("AudioGraphPublisher", () => {
   it("resolves plugin descriptors through the catalog", () => {
+    const relocatedDescriptor: PluginDescriptor = {
+      ...descriptor,
+      locator: { ...descriptor.locator, artifactPath: "/current/Effect.vst3" }
+    }
     const plugins = {
-      resolveDescriptor: vi.fn(() => descriptor)
+      resolveDescriptor: vi.fn(() => relocatedDescriptor)
     }
     const publisher = new AudioGraphPublisher(
       { compile: vi.fn(() => ({ sample_rate: 48_000 })) } as never,
@@ -117,7 +123,8 @@ describe("AudioGraphPublisher", () => {
     )
 
     const resolved = publisher.resolve(graph)
-    expect(resolved.plugins[0]?.descriptor).toEqual(descriptor)
+    expect(resolved.plugins[0]?.locator).toEqual(relocatedDescriptor.locator)
+    expect(resolved.plugins[0]?.descriptor).toEqual(relocatedDescriptor)
     expect(plugins.resolveDescriptor).toHaveBeenCalled()
   })
 
@@ -148,9 +155,10 @@ describe("AudioGraphPublisher", () => {
   it("deep-resolves descriptors before compiling a used plug-in", async () => {
     const sidechainDescriptor: PluginDescriptor = {
       ...descriptor,
+      locator: { ...descriptor.locator, artifactPath: "/current/Effect.vst3" },
       buses: [
         {
-          index: 1,
+          portKey: "vst3:audio:input:1",
           direction: "input",
           kind: "aux",
           name: "Stereo Side Chain",
@@ -179,8 +187,15 @@ describe("AudioGraphPublisher", () => {
         graph: {
           plugins: [
             {
+              locator: sidechainDescriptor.locator,
               descriptor: {
-                buses: [expect.objectContaining({ index: 1, kind: "aux", channels: 2 })]
+                buses: [
+                  expect.objectContaining({
+                    portKey: "vst3:audio:input:1",
+                    kind: "aux",
+                    channels: 2
+                  })
+                ]
               }
             }
           ]

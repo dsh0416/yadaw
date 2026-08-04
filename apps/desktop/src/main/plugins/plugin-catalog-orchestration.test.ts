@@ -5,8 +5,11 @@ import { PluginCatalogService } from "./plugin-catalog-service"
 function externalDescriptor(buses: PluginDescriptor["buses"] = []): PluginDescriptor {
   return {
     source: { kind: "external" },
-    classId: "sidechain-effect",
-    modulePath: "/plugins/Sidechain.vst3",
+    locator: {
+      format: "vst3",
+      artifactPath: "/plugins/Sidechain.vst3",
+      nativeId: "sidechain-effect"
+    },
     name: "Sidechain",
     vendor: "Acme",
     version: "1",
@@ -73,7 +76,7 @@ describe("PluginCatalogService orchestration", () => {
   it("deep-probes once per bundle immediately before runtime loading", async () => {
     const deep = externalDescriptor([
       {
-        index: 0,
+        portKey: "vst3:audio:input:0",
         direction: "input",
         kind: "main",
         name: "Stereo In",
@@ -81,7 +84,7 @@ describe("PluginCatalogService orchestration", () => {
         defaultActive: true
       },
       {
-        index: 1,
+        portKey: "vst3:audio:input:1",
         direction: "input",
         kind: "aux",
         name: "Stereo Side Chain",
@@ -101,9 +104,13 @@ describe("PluginCatalogService orchestration", () => {
     ])
 
     expect(probeClient.probe).toHaveBeenCalledOnce()
-    expect(probeClient.probe).toHaveBeenCalledWith(startupDescriptor.modulePath, "deep")
+    expect(probeClient.probe).toHaveBeenCalledWith(startupDescriptor.locator.artifactPath, "deep")
     expect(first.buses).toContainEqual(
-      expect.objectContaining({ index: 1, direction: "input", kind: "aux" })
+      expect.objectContaining({
+        portKey: "vst3:audio:input:1",
+        direction: "input",
+        kind: "aux"
+      })
     )
     expect(second).toEqual(first)
   })

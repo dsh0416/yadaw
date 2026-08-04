@@ -1,6 +1,10 @@
 import { eq } from "drizzle-orm"
-import type { PluginInstancePatch, ProjectCommand } from "@heron/contracts"
-import { pluginInstances, pluginSidechainRoutes } from "../schema"
+import {
+  type PluginInstancePatch,
+  type PluginStateEnvelope,
+  type ProjectCommand
+} from "@heron/contracts"
+import { pluginInstances, pluginSidechainRoutes, pluginStateChunks } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 
 type PluginCommand = Extract<
@@ -15,41 +19,54 @@ function pluginPatch(patch: PluginInstancePatch): Partial<typeof pluginInstances
   if (patch.slotOrder !== undefined) result.slotOrder = patch.slotOrder
   if (patch.enabled !== undefined) result.enabled = patch.enabled
   if (patch.descriptor !== undefined) result.descriptorSnapshot = JSON.stringify(patch.descriptor)
-  if (patch.componentState !== undefined) result.componentState = patch.componentState
-  if (patch.controllerState !== undefined) result.controllerState = patch.controllerState
-  if (patch.araDocumentState !== undefined) result.araDocumentState = patch.araDocumentState
   return result
+}
+
+async function replaceStateChunks(
+  tx: ProjectTransaction,
+  pluginId: string,
+  state: PluginStateEnvelope
+): Promise<void> {
+  await tx.delete(pluginStateChunks).where(eq(pluginStateChunks.pluginId, pluginId))
+  if (state.chunks.length > 0) {
+    await tx
+      .insert(pluginStateChunks)
+      .values(state.chunks.map((chunk) => ({ pluginId, chunkKey: chunk.key, bytes: chunk.bytes })))
+  }
 }
 
 function pluginValue(
   plugin: Extract<ProjectCommand, { type: "create-plugin" }>["plugin"]
 ): typeof pluginInstances.$inferInsert {
+  const locator = plugin.locator
   return {
     id: plugin.id,
     channelId: plugin.channelId,
     role: plugin.role,
     slotOrder: plugin.slotOrder,
-    classId: plugin.classId,
+    locatorFormat: locator.format,
+    artifactPath: locator.artifactPath,
+    nativeId: locator.nativeId,
     descriptorSnapshot: JSON.stringify(plugin.descriptor),
     audioMode: plugin.audioMode,
-    enabled: plugin.enabled,
-    componentState: plugin.componentState,
-    controllerState: plugin.controllerState,
-    araDocumentState: plugin.araDocumentState ?? new Uint8Array()
+    enabled: plugin.enabled
   }
 }
 
 async function replaceSidechainRoutes(
   tx: ProjectTransaction,
   pluginId: string,
-  routes: readonly { inputBusIndex: number; sourceChannelId: string }[]
+  routes: readonly {
+    inputPortKey: string
+    sourceChannelId: string
+  }[]
 ): Promise<void> {
   await tx.delete(pluginSidechainRoutes).where(eq(pluginSidechainRoutes.pluginId, pluginId))
   if (routes.length > 0) {
     await tx.insert(pluginSidechainRoutes).values(
       routes.map((route) => ({
         pluginId,
-        inputBusIndex: route.inputBusIndex,
+        inputPortKey: route.inputPortKey,
         sourceChannelId: route.sourceChannelId
       }))
     )
@@ -73,6 +90,7 @@ export async function persistPluginCommand(
   switch (command.type) {
     case "create-plugin":
       await tx.insert(pluginInstances).values(pluginValue(command.plugin))
+      await replaceStateChunks(tx, command.plugin.id, command.plugin.state)
       await replaceSidechainRoutes(tx, command.plugin.id, command.plugin.sidechainInputs)
       return
     case "delete-plugin":
@@ -85,6 +103,9 @@ export async function persistPluginCommand(
       }
       if (command.patch.sidechainInputs !== undefined) {
         await replaceSidechainRoutes(tx, command.pluginId, command.patch.sidechainInputs)
+      }
+      if (command.patch.state !== undefined) {
+        await replaceStateChunks(tx, command.pluginId, command.patch.state)
       }
       return
     }
@@ -166,6 +187,7 @@ export async function persistPluginCommand(
     case "replace-plugin":
       await tx.delete(pluginInstances).where(eq(pluginInstances.id, command.pluginId))
       await tx.insert(pluginInstances).values(pluginValue(command.plugin))
+      await replaceStateChunks(tx, command.plugin.id, command.plugin.state)
       await replaceSidechainRoutes(tx, command.plugin.id, command.plugin.sidechainInputs)
   }
 }

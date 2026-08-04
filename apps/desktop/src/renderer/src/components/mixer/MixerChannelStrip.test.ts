@@ -410,8 +410,7 @@ describe("MixerChannelStrip", () => {
   it("places an instrument in Input while keeping Audio FX rows aligned", () => {
     const instrumentDescriptor: PluginDescriptor = {
       source: { kind: "external" },
-      classId: "synth",
-      modulePath: "synth.vst3",
+      locator: { format: "vst3", artifactPath: "synth.vst3", nativeId: "synth" },
       name: "Synth",
       vendor: "Heron Studio",
       version: "1.0",
@@ -429,13 +428,12 @@ describe("MixerChannelStrip", () => {
       channelId: "instrument",
       role: "instrument",
       slotOrder: 0,
-      classId: instrumentDescriptor.classId,
+      locator: instrumentDescriptor.locator,
       descriptor: instrumentDescriptor,
       audioMode: "stereo",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     }
     const wrapper = mount(MixerChannelStrip, {
       props: {

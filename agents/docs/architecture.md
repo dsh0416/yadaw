@@ -10,7 +10,9 @@ Vue renderer
   -> @heron/dsp-node (.node dynamic library, same process)
        -> embedded Rust control runtime
        -> audio engine and cpal streams
-       -> VST3 host and editor runtime
+       -> format-neutral AudioPlugin runtime
+            -> VST3 adapter and ARA sidecar
+            -> CLAP adapter
        -> direct telemetry and bounded parameter queue
 ```
 
@@ -26,7 +28,7 @@ main/native boundary is N-API within one process.
 - Electron main owns resource validation, project state, native runtime
   lifetime, and application policy.
 - `@heron/dsp-node` owns `EmbeddedAudioHost`, its bounded Tokio control queues,
-  audio engine, VST3 actors, and telemetry.
+  audio engine, AudioPlugin actors, and telemetry.
 - The audio callback owns only real-time-safe state. It must not perform N-API,
   Electron IPC, filesystem I/O, allocation, logging, or blocking locks.
 
@@ -41,7 +43,7 @@ The addon places control work on bounded in-process channels. N-API async tasks
 wait outside the JavaScript thread. Parameter automation uses a separate
 bounded direct queue, and telemetry is read directly from the engine snapshot.
 
-VST3 controller and editor calls remain thread-affine. Tokio queues them on a
+Plug-in control and editor calls remain thread-affine. Tokio queues them on a
 bounded mailbox and wakes Electron main through a non-blocking N-API
 threadsafe function. Electron drains at most one bounded batch per turn and
 owns the platform application loop; the embedded runtime never creates or
@@ -49,6 +51,30 @@ pumps a winit event loop. Electron `BaseWindow` owns each native plug-in editor
 surface and a sandboxed `WebContentsView` toolbar; Rust attaches only the
 platform child view below that toolbar and returns resize/state requests through
 a bounded queue drained by Electron main.
+
+## Audio plug-in formats
+
+`heron-audio-plugin` owns the format-neutral block processor, process context,
+events, stable audio-port and parameter keys, and temporary real-time tokens.
+`audio-engine` and `dsp-render` depend only on this crate; concrete plug-in
+formats must not leak into either render graph.
+
+The control plane identifies a plug-in by `{ format, artifactPath, nativeId }`.
+Projects persist opaque state chunks and audio side-chain port keys. Strings are
+resolved to bounded numeric tokens before graph publication, so the callback
+never performs string lookup. VST3 maps bus and parameter IDs into this model;
+CLAP uses its native IDs. ARA remains a VST3-only sidecar.
+
+`heron-clap-host` is the only owner of CLAP unsafe FFI and depends directly on
+the pinned `clap-sys` version. It separates a main-thread, `!Send + !Sync`
+control instance from a `Send + !Sync` audio endpoint. Factory probing occurs
+in `heron-clap-probe`; live processing remains embedded in Electron main.
+Timer callbacks and Unix POSIX-FD readiness are polled from the existing
+UI/control heartbeat and never from the audio callback. Restart and parameter
+or port rescans publish a temporary processor-less graph, explicitly stop the
+old endpoint on the audio thread, wait for its lease to return, reactivate on
+the control thread, then publish the replacement endpoint. A failed
+reactivation leaves the committed project intact and the live graph bypassed.
 
 ## Failure model
 

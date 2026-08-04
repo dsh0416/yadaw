@@ -413,7 +413,7 @@ pub struct CompiledGraphEdge {
     pub kind: CompiledGraphEdgeKind,
     pub signal_width: CompiledGraphSignalWidth,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub target_input_bus_index: Option<u32>,
+    pub target_input_port_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

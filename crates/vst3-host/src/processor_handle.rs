@@ -1,4 +1,7 @@
 use crate::{HostProcessContext, ProcessorLease, processor::AuxiliaryAudioInput};
+use heron_audio_plugin::{
+    AudioPluginProcessor, ProcessContext as AudioPluginProcessContext, SidechainSource,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Vst3AuxInputConfig {
@@ -265,6 +268,75 @@ impl Vst3ProcessorHandle {
     pub fn sysex(&mut self, offset: usize, bytes: &[u8]) -> bool {
         self.primary
             .sysex(offset.min(i32::MAX as usize) as i32, bytes)
+    }
+}
+
+impl AudioPluginProcessor for Vst3ProcessorHandle {
+    fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
+        Box::new(self.clone())
+    }
+
+    fn process_block(
+        &mut self,
+        frames: &mut [[f32; 2]],
+        sidechains: &dyn SidechainSource,
+        context: &AudioPluginProcessContext,
+    ) -> bool {
+        let context = HostProcessContext {
+            project_time_samples: context.project_time_samples,
+            continuous_time_samples: context.continuous_time_samples,
+            project_time_quarters: context.project_time_quarters,
+            bar_position_quarters: context.bar_position_quarters,
+            tempo: context.tempo,
+            time_signature_numerator: context.time_signature_numerator,
+            time_signature_denominator: context.time_signature_denominator,
+            playing: context.playing,
+            recording: context.recording,
+        };
+        self.process_block_with_sidechain_source(
+            frames,
+            |bus_index| sidechains.frames(heron_audio_plugin::AudioPortToken::new(bus_index)),
+            &context,
+        )
+    }
+
+    fn note_on(&mut self, offset: usize, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
+        self.note_on(offset, channel, key, velocity, note_id)
+    }
+
+    fn note_off(
+        &mut self,
+        offset: usize,
+        channel: u8,
+        key: u8,
+        velocity: u8,
+        note_id: i32,
+    ) -> bool {
+        self.note_off(offset, channel, key, velocity, note_id)
+    }
+
+    fn poly_pressure(&mut self, offset: usize, channel: u8, key: u8, pressure: u8) -> bool {
+        self.poly_pressure(offset, channel, key, pressure)
+    }
+
+    fn control_change(&mut self, offset: usize, channel: u8, controller: u8, value: u8) -> bool {
+        self.control_change(offset, channel, controller, value)
+    }
+
+    fn pitch_bend(&mut self, offset: usize, channel: u8, value: u16) -> bool {
+        self.pitch_bend(offset, channel, value)
+    }
+
+    fn channel_pressure(&mut self, offset: usize, channel: u8, pressure: u8) -> bool {
+        self.channel_pressure(offset, channel, pressure)
+    }
+
+    fn program_change(&mut self, offset: usize, channel: u8, program: u8) -> bool {
+        self.program_change(offset, channel, program)
+    }
+
+    fn sysex(&mut self, offset: usize, bytes: &[u8]) -> bool {
+        self.sysex(offset, bytes)
     }
 }
 

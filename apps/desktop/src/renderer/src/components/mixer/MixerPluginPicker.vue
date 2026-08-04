@@ -3,7 +3,12 @@ import { computed, shallowRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { Search } from "@lucide/vue"
 import { UiPopover } from "@heron/ui"
-import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@heron/contracts"
+import {
+  pluginCategoriesLabel,
+  pluginDescriptorKey,
+  pluginLocator,
+  type PluginDescriptor
+} from "@heron/contracts"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import type { PluginSelection } from "../plugins/plugin-audio-mode"
 
@@ -27,7 +32,7 @@ const filteredPlugins = computed(() => {
   const normalizedQuery = query.value.trim().toLocaleLowerCase()
   return [...props.plugins]
     .filter((plugin) =>
-      `${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`
+      `${plugin.name} ${plugin.vendor} ${pluginLocator(plugin).format} ${pluginCategoriesLabel(plugin.categories)}`
         .toLocaleLowerCase()
         .includes(normalizedQuery)
     )
@@ -69,7 +74,7 @@ function selectMode(audioMode: PluginSelection["audioMode"]): void {
       />
       <template v-else>
         <header>
-          <span>{{ t("mixer.pluginPicker.vst3") }}</span
+          <span>{{ t("mixer.pluginPicker.audioPlugins") }}</span
           ><strong>{{ title }}</strong>
         </header>
         <label>
@@ -88,7 +93,9 @@ function selectMode(audioMode: PluginSelection["audioMode"]): void {
             :aria-label="t('mixer.pluginPicker.addPlugin', { name: plugin.name })"
             @click="selectPlugin(plugin)"
           >
-            <b>{{ plugin.name }}</b>
+            <b
+              >{{ plugin.name }} <em>{{ pluginLocator(plugin).format.toUpperCase() }}</em></b
+            >
             <small
               >{{ plugin.source.kind === "builtin" ? `${t("mixer.pluginPicker.builtin")} · ` : ""
               }}{{ plugin.vendor }} · {{ pluginCategoriesLabel(plugin.categories) }}</small
@@ -184,6 +191,12 @@ function selectMode(audioMode: PluginSelection["audioMode"]): void {
   font-size: var(--ui-type-size-control);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.plugin-list em {
+  margin-left: 4px;
+  color: var(--accent);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  font-style: normal;
 }
 .plugin-list small {
   overflow: hidden;

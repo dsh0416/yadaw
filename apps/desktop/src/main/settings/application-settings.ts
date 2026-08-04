@@ -26,7 +26,8 @@ export const DEFAULT_PLUGIN_EDITOR_PREFERENCE: Readonly<PluginEditorPreference> 
   zoomPercent: 100
 }
 
-const VST3_CLASS_ID = /^[0-9A-F]{32}$/u
+const LEGACY_VST3_CLASS_ID = /^[0-9A-F]{32}$/u
+const PLUGIN_TYPE_KEY = /^(vst3|clap):\S+$/u
 
 function isRecordingBitDepth(value: unknown): value is RecordingBitDepth {
   return value === "float32" || value === "pcm24" || value === "pcm16"
@@ -124,12 +125,18 @@ export function validateAudioHostRuntimePreferences(value: unknown): AudioHostRu
   return preferences
 }
 
-function normalizePluginClassId(value: string): string {
-  const classId = value.trim().toUpperCase()
-  if (!VST3_CLASS_ID.test(classId)) {
-    throw new TypeError("VST3 class ID must contain exactly 32 hexadecimal characters")
+function normalizePluginTypeKey(value: string): string {
+  const key = value.trim()
+  if (LEGACY_VST3_CLASS_ID.test(key.toUpperCase())) return `vst3:${key.toUpperCase()}`
+  const separator = key.indexOf(":")
+  const normalized =
+    separator < 0
+      ? key
+      : `${key.slice(0, separator).toLocaleLowerCase()}:${key.slice(separator + 1).trim()}`
+  if (!PLUGIN_TYPE_KEY.test(normalized)) {
+    throw new TypeError("Plugin type key must contain a supported format and native ID")
   }
-  return classId
+  return normalized
 }
 
 export function validatePluginEditorPreference(value: unknown): PluginEditorPreference {
@@ -156,10 +163,10 @@ export function validatePluginEditorPreference(value: unknown): PluginEditorPref
 function pluginEditorPreferences(value: unknown): Record<string, PluginEditorPreference> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
   const preferences: Record<string, PluginEditorPreference> = {}
-  for (const [rawClassId, rawPreference] of Object.entries(value)) {
+  for (const [rawTypeKey, rawPreference] of Object.entries(value)) {
     try {
-      const classId = normalizePluginClassId(rawClassId)
-      preferences[classId] = validatePluginEditorPreference(rawPreference)
+      const typeKey = normalizePluginTypeKey(rawTypeKey)
+      preferences[typeKey] = validatePluginEditorPreference(rawPreference)
     } catch {
       // Settings are user-editable; ignore only the malformed per-plugin entry.
     }
@@ -436,21 +443,21 @@ export class ApplicationSettingsStore {
     return this.update({ lowLatencyPluginBudgetMs: value })
   }
 
-  async pluginEditorPreference(classId: string): Promise<PluginEditorPreference> {
-    const normalizedClassId = normalizePluginClassId(classId)
+  async pluginEditorPreference(typeKey: string): Promise<PluginEditorPreference> {
+    const normalizedTypeKey = normalizePluginTypeKey(typeKey)
     const current = await this.get()
     return structuredClone(
-      current.pluginEditors[normalizedClassId] ?? DEFAULT_PLUGIN_EDITOR_PREFERENCE
+      current.pluginEditors[normalizedTypeKey] ?? DEFAULT_PLUGIN_EDITOR_PREFERENCE
     )
   }
 
   async setPluginEditorPreference(
-    classId: string,
+    typeKey: string,
     preference: PluginEditorPreference
   ): Promise<ApplicationSettings> {
-    const normalizedClassId = normalizePluginClassId(classId)
+    const normalizedTypeKey = normalizePluginTypeKey(typeKey)
     const current = await this.get()
-    current.pluginEditors[normalizedClassId] = validatePluginEditorPreference(preference)
+    current.pluginEditors[normalizedTypeKey] = validatePluginEditorPreference(preference)
     return this.write(current)
   }
 

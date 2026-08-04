@@ -19,7 +19,7 @@ export type PluginEditorToolbarAction =
   | { type: "undo" }
   | { type: "redo" }
   | { type: "zoom"; zoom_percent: number }
-  | { type: "sidechain-route"; input_bus_index: number; source_channel_id: string | null }
+  | { type: "sidechain-route"; input_port_key: string; source_channel_id: string | null }
 
 type ParameterGesture = "begin" | "perform" | "end"
 
@@ -37,7 +37,7 @@ export interface AudioHostEditorWindows {
     applyAction: (action: PluginEditorToolbarAction) => Promise<NativeEditorToolbarState>,
     loadParameters: () => Promise<PluginParameterInfo[]>,
     setParameter: (
-      parameterId: number,
+      runtimeToken: number,
       normalized: number,
       gesture: ParameterGesture
     ) => Promise<void>,
@@ -66,7 +66,7 @@ interface EditorWindowEntry {
   applyAction: (action: PluginEditorToolbarAction) => Promise<NativeEditorToolbarState>
   loadParameters: () => Promise<PluginParameterInfo[]>
   setParameter: (
-    parameterId: number,
+    runtimeToken: number,
     normalized: number,
     gesture: ParameterGesture
   ) => Promise<void>
@@ -97,7 +97,7 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
     applyAction: (action: PluginEditorToolbarAction) => Promise<NativeEditorToolbarState>,
     loadParameters: () => Promise<PluginParameterInfo[]>,
     setParameter: (
-      parameterId: number,
+      runtimeToken: number,
       normalized: number,
       gesture: ParameterGesture
     ) => Promise<void>,
@@ -491,14 +491,24 @@ function toolbarAction(action: string): PluginEditorToolbarAction | null {
     case "redo":
       return { type: action }
     default: {
-      const sidechain = action.match(/^sidechain-(\d+)-(.+)$/)
-      if (sidechain?.[1] && sidechain[2]) {
-        const inputBusIndex = Number.parseInt(sidechain[1], 10)
-        const encodedSource = sidechain[2]
-        return {
-          type: "sidechain-route",
-          input_bus_index: inputBusIndex,
-          source_channel_id: encodedSource === "_" ? null : decodeURIComponent(encodedSource)
+      if (action.startsWith("sidechain-")) {
+        try {
+          const route = JSON.parse(decodeURIComponent(action.slice("sidechain-".length))) as unknown
+          const sourceChannelId: unknown = Array.isArray(route) ? route[1] : undefined
+          if (
+            Array.isArray(route) &&
+            typeof route[0] === "string" &&
+            route[0].length > 0 &&
+            (sourceChannelId === null || typeof sourceChannelId === "string")
+          ) {
+            return {
+              type: "sidechain-route",
+              input_port_key: route[0],
+              source_channel_id: sourceChannelId
+            }
+          }
+        } catch {
+          return null
         }
       }
       const zoom = action.match(/^zoom-(\d+)$/)?.[1]
@@ -617,16 +627,16 @@ function toolbarHtml(
           return entries ? `<optgroup label="${labels[kind]}">${entries}</optgroup>` : ""
         })
         .join("")
-      return `<label class="sidechain"><span>${escapeHtml(bus.name || labels.sidechain)}</span><select ${state?.sidechainPending ? "disabled" : ""} onchange="routeSidechain(${bus.inputBusIndex},this.value,this)"><option value=""${bus.sourceChannelId ? "" : " selected"}>${labels.none}</option>${grouped}</select></label>`
+      return `<label class="sidechain"><span>${escapeHtml(bus.name || labels.sidechain)}</span><select ${state?.sidechainPending ? "disabled" : ""} data-port-key="${escapeHtml(bus.inputPortKey)}" onchange="routeSidechain(this.dataset.portKey,this.value,this)"><option value=""${bus.sourceChannelId ? "" : " selected"}>${labels.none}</option>${grouped}</select></label>`
     })
     .join("")
   const parameterRows = parameters
     .map((parameter) => {
-      const readOnly = (parameter.flags & 2) !== 0
+      const readOnly = parameter.readOnly === true
       const step = parameter.stepCount > 0 ? 1 / parameter.stepCount : 0.001
       const value = Math.max(0, Math.min(1, parameter.normalized))
       const display = parameter.formatted || `${Math.round(value * 1000) / 10}%`
-      return `<label class="parameter"><span class="parameter-name">${escapeHtml(parameter.title)}</span><input type="range" min="0" max="1" step="${step}" value="${value}" data-id="${parameter.id}" ${readOnly ? "disabled" : ""} onpointerdown="parameterBegin(this)" oninput="parameterPerform(this)" onpointerup="parameterEnd(this)" onchange="parameterEnd(this)"><output>${escapeHtml(display)}${parameter.units && !display.includes(parameter.units) ? ` ${escapeHtml(parameter.units)}` : ""}</output></label>`
+      return `<label class="parameter"><span class="parameter-name">${escapeHtml(parameter.title)}</span><input type="range" min="0" max="1" step="${step}" value="${value}" data-id="${parameter.runtimeToken}" ${readOnly ? "disabled" : ""} onpointerdown="parameterBegin(this)" oninput="parameterPerform(this)" onpointerup="parameterEnd(this)" onchange="parameterEnd(this)"><output>${escapeHtml(display)}${parameter.units && !display.includes(parameter.units) ? ` ${escapeHtml(parameter.units)}` : ""}</output></label>`
     })
     .join("")
   const parameterPane = parameterMode
@@ -635,7 +645,7 @@ function toolbarHtml(
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:${text};background:${background};user-select:none}body{--toolbar:60px}.chrome{height:var(--toolbar);padding:6px 10px;border-bottom:1px solid ${border}}.title{height:20px;display:flex;align-items:center;gap:8px;white-space:nowrap}.rail{width:4px;height:18px;border-radius:2px;background:${safeColor(context.channelColor)}}.channel{font-weight:650}.plugin{color:${muted};font-size:11px}.commands{height:24px;display:flex;align-items:center;gap:4px}.spacer{flex:1}.group{display:flex;border:1px solid ${border};border-radius:4px;overflow:hidden}.button,select{height:24px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;border:1px solid ${border};border-radius:4px;background:${control};color:${text};text-decoration:none;line-height:22px}.group .button{border:0;border-radius:0;min-width:26px}.button:hover,select:hover{filter:brightness(1.12)}.button.selected{background:${active}}.button.disabled{opacity:.38;pointer-events:none}select{min-width:72px;outline:none}.mode{min-width:112px}.settings{display:flex;gap:4px}.sidechain{display:flex;gap:4px;align-items:center}.sidechain span{color:${muted}}.parameter-pane{height:calc(100vh - var(--toolbar));overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px 16px;align-content:start}.parameter{display:grid;grid-template-columns:minmax(100px,1fr) minmax(120px,2fr) 72px;gap:10px;align-items:center;min-height:32px;padding:4px 8px;border:1px solid ${border};border-radius:5px;background:${control}}.parameter-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.parameter input{width:100%;accent-color:${active}}.parameter output{text-align:right;color:${muted};font-variant-numeric:tabular-nums}.empty{color:${muted}}@media(max-width:519px){body{--toolbar:96px}.commands{height:60px;align-content:flex-start;flex-wrap:wrap}.spacer{flex-basis:100%;height:0;order:2}.settings{order:3}.parameter-pane{grid-template-columns:1fr}}
-</style><script>const action=${JSON.stringify(ACTION_SCHEME)};function go(value){location.href=action+value}function routeSidechain(bus,source,select){document.querySelectorAll('.sidechain select').forEach(control=>control.disabled=true);select.disabled=true;go('sidechain-'+bus+'-'+(source?encodeURIComponent(source):'_'))}function parameterValue(input,gesture){go('parameter-'+gesture+'-'+input.dataset.id+'-'+input.value)}function parameterBegin(input){parameterValue(input,'begin')}function parameterPerform(input){parameterValue(input,'perform');input.nextElementSibling.value=(Math.round(Number(input.value)*1000)/10)+'%'}function parameterEnd(input){parameterValue(input,'end')}</script></head><body><header class="chrome"><div class="title"><span class="rail"></span><span class="channel">${escapeHtml(context.channelName)}</span><span class="plugin">${escapeHtml(context.pluginName)}</span></div><div class="commands"><span class="group">${button("A", "compare-a", state?.canCompare ?? false, state?.compareSlot === "a")}${button("B", "compare-b", state?.canCompare ?? false, state?.compareSlot === "b")}</span>${button(labels.copy, "copy", true)}${button(labels.paste, "paste", state?.canPaste ?? false)}${button(labels.undo, "undo", state?.canUndo ?? false)}${button(labels.redo, "redo", state?.canRedo ?? false)}<span class="spacer"></span><span class="settings"><select class="mode" aria-label="Mode" onchange="go('mode-'+this.value)">${modeOptions}</select><select aria-label="Zoom" onchange="go('zoom-'+this.value)">${options}</select>${sidechains}</span></div></header>${parameterPane}</body></html>`
+</style><script>const action=${JSON.stringify(ACTION_SCHEME)};function go(value){location.href=action+value}function routeSidechain(port,source,select){document.querySelectorAll('.sidechain select').forEach(control=>control.disabled=true);select.disabled=true;go('sidechain-'+encodeURIComponent(JSON.stringify([port,source||null])))}function parameterValue(input,gesture){go('parameter-'+gesture+'-'+input.dataset.id+'-'+input.value)}function parameterBegin(input){parameterValue(input,'begin')}function parameterPerform(input){parameterValue(input,'perform');input.nextElementSibling.value=(Math.round(Number(input.value)*1000)/10)+'%'}function parameterEnd(input){parameterValue(input,'end')}</script></head><body><header class="chrome"><div class="title"><span class="rail"></span><span class="channel">${escapeHtml(context.channelName)}</span><span class="plugin">${escapeHtml(context.pluginName)}</span></div><div class="commands"><span class="group">${button("A", "compare-a", state?.canCompare ?? false, state?.compareSlot === "a")}${button("B", "compare-b", state?.canCompare ?? false, state?.compareSlot === "b")}</span>${button(labels.copy, "copy", true)}${button(labels.paste, "paste", state?.canPaste ?? false)}${button(labels.undo, "undo", state?.canUndo ?? false)}${button(labels.redo, "redo", state?.canRedo ?? false)}<span class="spacer"></span><span class="settings"><select class="mode" aria-label="Mode" onchange="go('mode-'+this.value)">${modeOptions}</select><select aria-label="Zoom" onchange="go('zoom-'+this.value)">${options}</select>${sidechains}</span></div></header>${parameterPane}</body></html>`
 }
 
 function escapeHtml(value: string): string {

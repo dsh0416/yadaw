@@ -3,6 +3,9 @@ import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import {
   normalizePluginDescriptor,
+  pluginDescriptorKey,
+  pluginLocator,
+  pluginTypeKey,
   type PluginCatalogSnapshot,
   type PluginDescriptor,
   type PluginScanEvent,
@@ -13,6 +16,7 @@ import { descriptorsFromModuleInfo } from "./plugin-descriptor-normalizer"
 import type { PluginProbeClient } from "./plugin-probe-client"
 
 export const PLUGIN_SCANNER_VERSION = 8
+export const PLUGIN_PROVIDER_VERSIONS = { vst3: 8, clap: 1 } as const
 
 interface PluginFingerprint {
   mtimeMs: number
@@ -48,18 +52,37 @@ function defaultPluginPaths(): string[] {
   if (process.platform === "win32") {
     return [
       join(process.env.COMMONPROGRAMFILES ?? "C:\\Program Files\\Common Files", "VST3"),
+      join(process.env.COMMONPROGRAMFILES ?? "C:\\Program Files\\Common Files", "CLAP"),
       join(
         process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
         "Programs",
         "Common",
         "VST3"
+      ),
+      join(
+        process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
+        "Programs",
+        "Common",
+        "CLAP"
       )
     ]
   }
   if (process.platform === "darwin") {
-    return ["/Library/Audio/Plug-Ins/VST3", join(homedir(), "Library", "Audio", "Plug-Ins", "VST3")]
+    return [
+      "/Library/Audio/Plug-Ins/VST3",
+      "/Library/Audio/Plug-Ins/CLAP",
+      join(homedir(), "Library", "Audio", "Plug-Ins", "VST3"),
+      join(homedir(), "Library", "Audio", "Plug-Ins", "CLAP")
+    ]
   }
-  return ["/usr/lib/vst3", "/usr/local/lib/vst3", join(homedir(), ".vst3")]
+  return [
+    "/usr/lib/vst3",
+    "/usr/local/lib/vst3",
+    join(homedir(), ".vst3"),
+    "/usr/lib/clap",
+    "/usr/local/lib/clap",
+    join(homedir(), ".clap")
+  ]
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -84,11 +107,26 @@ async function discoverBundles(root: string): Promise<string[]> {
     }
     for (const entry of entries) {
       const path = join(directory, entry.name)
-      if (entry.name.toLowerCase().endsWith(".vst3")) bundles.push(path)
+      if (/\.(vst3|clap)$/i.test(entry.name)) bundles.push(path)
       else if (entry.isDirectory()) pending.push(path)
     }
   }
   return bundles.sort((left, right) => left.localeCompare(right))
+}
+
+function fingerprintPath(artifactPath: string): string {
+  if (process.platform !== "darwin" || !artifactPath.toLocaleLowerCase().endsWith(".clap")) {
+    return artifactPath
+  }
+  return join(
+    artifactPath,
+    "Contents",
+    "MacOS",
+    artifactPath
+      .split(/[\\/]/)
+      .at(-1)!
+      .replace(/\.clap$/i, "")
+  )
 }
 
 async function readModuleInfo(bundlePath: string): Promise<Record<string, unknown> | null> {
@@ -135,6 +173,7 @@ export class PluginDiscoveryService {
     this.fingerprints = parsed.fingerprints ?? {}
     return {
       ...parsed,
+      providerVersions: parsed.providerVersions ?? { vst3: PLUGIN_PROVIDER_VERSIONS.vst3 },
       scanning: false,
       plugins: parsed.plugins.map((plugin) => normalizePluginDescriptor(plugin))
     }
@@ -148,29 +187,36 @@ export class PluginDiscoveryService {
     const knownExternalRoots = catalog.plugins
       .filter((plugin) => plugin.source.kind === "external")
       // Catalogs are persisted across upgrades. Older or partially-written
-      // entries can miss `modulePath`; ignore those entries during discovery
+      // entries can miss their locator; ignore those entries during discovery
       // instead of allowing one malformed cache record to abort startup.
-      .map((plugin) => plugin.modulePath)
+      .map((plugin) => pluginLocator(plugin)?.artifactPath)
       .filter(
-        (modulePath): modulePath is string =>
-          typeof modulePath === "string" && modulePath.length > 0
+        (artifactPath): artifactPath is string =>
+          typeof artifactPath === "string" && artifactPath.length > 0
       )
-      .map((modulePath) => dirname(modulePath))
+      .map((artifactPath) => dirname(artifactPath))
     const roots = [
       ...new Set([...(request.paths ?? []), ...knownExternalRoots, ...this.systemPluginPaths()])
     ]
-    const bundles = (await Promise.all(roots.map(discoverBundles))).flat()
+    const enabledFormats = new Set(request.formats ?? ["vst3", "clap"])
+    const bundles = (await Promise.all(roots.map(discoverBundles)))
+      .flat()
+      .filter((path) =>
+        enabledFormats.has(path.toLocaleLowerCase().endsWith(".clap") ? "clap" : "vst3")
+      )
     publish({ type: "started", total: bundles.length })
     const plugins: PluginDescriptor[] = []
     const fingerprints: Record<string, PluginFingerprint> = {}
     for (const [index, bundlePath] of bundles.entries()) {
       publish({ type: "progress", completed: index, total: bundles.length, path: bundlePath })
       try {
-        const bundleStat = await stat(bundlePath)
+        const bundleStat = await stat(fingerprintPath(bundlePath))
         const fingerprint = { mtimeMs: bundleStat.mtimeMs, size: bundleStat.size }
         fingerprints[bundlePath] = fingerprint
         const previousFingerprint = this.fingerprints[bundlePath]
-        const previousPlugins = catalog.plugins.filter((plugin) => plugin.modulePath === bundlePath)
+        const previousPlugins = catalog.plugins.filter(
+          (plugin) => pluginLocator(plugin).artifactPath === bundlePath
+        )
         if (
           canReuseCachedBundle({
             force: request.force === true,
@@ -186,9 +232,11 @@ export class PluginDiscoveryService {
         }
         plugins.push(...(await this.discoverBundle(bundlePath)))
       } catch (error) {
-        const reason = error instanceof Error ? error.message : "VST3 discovery failed"
+        const reason = error instanceof Error ? error.message : "AudioPlugin discovery failed"
         publish({ type: "quarantined", path: bundlePath, reason })
-        const fallback = descriptorsFromModuleInfo(bundlePath, await readModuleInfo(bundlePath))
+        const fallback = bundlePath.toLocaleLowerCase().endsWith(".clap")
+          ? []
+          : descriptorsFromModuleInfo(bundlePath, await readModuleInfo(bundlePath))
         plugins.push(
           ...fallback.map((plugin) => ({
             ...plugin,
@@ -200,17 +248,19 @@ export class PluginDiscoveryService {
     }
 
     const builtins = catalog.plugins.filter((plugin) => plugin.source.kind === "builtin")
-    const builtinClassIds = new Set(builtins.map((plugin) => plugin.classId))
+    const builtinTypeKeys = new Set(builtins.map(pluginTypeKey))
     const unique = new Map<string, PluginDescriptor>(
-      builtins.map((plugin) => [plugin.classId, plugin])
+      builtins.map((plugin) => [pluginDescriptorKey(plugin), plugin])
     )
     for (const plugin of plugins) {
-      if (!builtinClassIds.has(plugin.classId) && !unique.has(plugin.classId)) {
-        unique.set(plugin.classId, plugin)
+      const key = pluginDescriptorKey(plugin)
+      if (!builtinTypeKeys.has(pluginTypeKey(plugin)) && !unique.has(key)) {
+        unique.set(key, plugin)
       }
     }
     const next: PluginCatalogSnapshot = {
       scannerVersion: PLUGIN_SCANNER_VERSION,
+      providerVersions: PLUGIN_PROVIDER_VERSIONS,
       scanning: false,
       scannedAt: Date.now(),
       plugins: [...unique.values()].sort(
@@ -226,6 +276,9 @@ export class PluginDiscoveryService {
   }
 
   private async discoverBundle(bundlePath: string): Promise<PluginDescriptor[]> {
+    if (bundlePath.toLocaleLowerCase().endsWith(".clap")) {
+      return this.probeClient.probe(bundlePath, "soft")
+    }
     const moduleInfo = await readModuleInfo(bundlePath)
     if (
       hasClass(moduleInfo, "Audio Module Class") &&

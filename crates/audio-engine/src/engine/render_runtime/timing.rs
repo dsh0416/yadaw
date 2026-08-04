@@ -75,6 +75,7 @@ impl NativeMixerRuntime {
         ProcessContext {
             project_time_samples: frame.min(i64::MAX as u64) as i64,
             continuous_time_samples: frame.min(i64::MAX as u64) as i64,
+            steady_time_samples: frame.min(i64::MAX as u64) as i64,
             project_time_quarters: tick as f64 / f64::from(MUSICAL_TICKS_PER_QUARTER),
             bar_position_quarters: bar_tick as f64 / f64::from(MUSICAL_TICKS_PER_QUARTER),
             tempo,
@@ -82,6 +83,12 @@ impl NativeMixerRuntime {
             time_signature_denominator: i32::from(signature.denominator),
             playing: state == TRANSPORT_PLAYING,
             recording: state == TRANSPORT_RECORDING,
+            loop_active: self.transport.loop_enabled.load(Ordering::Acquire)
+                && self.transport.loop_has_range.load(Ordering::Acquire),
+            loop_start_quarters: self.transport.loop_start_tick.load(Ordering::Relaxed) as f64
+                / f64::from(MUSICAL_TICKS_PER_QUARTER),
+            loop_end_quarters: self.transport.loop_end_tick.load(Ordering::Relaxed) as f64
+                / f64::from(MUSICAL_TICKS_PER_QUARTER),
         }
     }
 }

@@ -12,30 +12,30 @@ function clientWithEvents(events: unknown[]): AudioHostRuntime {
 
 describe("drainHostEvents", () => {
   it("persists the latest valid editor preference and ignores invalid zoom", async () => {
-    const writes: Array<{ classId: string; preference: { mode: string; zoomPercent: number } }> = []
+    const writes: Array<{ typeKey: string; preference: { mode: string; zoomPercent: number } }> = []
     const pending = new Set<Promise<void>>()
     drainHostEvents(
       clientWithEvents([
         {
           type: "plugin-editor-preference-changed",
-          class_id: "AAAABBBBCCCCDDDDEEEEFFFF00001111",
+          plugin_type_key: "vst3:AAAABBBBCCCCDDDDEEEEFFFF00001111",
           preference: { mode: "native", zoom_percent: 49 }
         },
         {
           type: "plugin-editor-preference-changed",
-          class_id: "AAAABBBBCCCCDDDDEEEEFFFF00001111",
+          plugin_type_key: "vst3:AAAABBBBCCCCDDDDEEEEFFFF00001111",
           preference: { mode: "parameters", zoom_percent: 150 }
         }
       ]),
-      async (classId, preference) => {
-        writes.push({ classId, preference })
+      async (typeKey, preference) => {
+        writes.push({ typeKey, preference })
       },
       pending
     )
     await Promise.all([...pending])
     expect(writes).toEqual([
       {
-        classId: "AAAABBBBCCCCDDDDEEEEFFFF00001111",
+        typeKey: "vst3:AAAABBBBCCCCDDDDEEEEFFFF00001111",
         preference: { mode: "parameters", zoomPercent: 150 }
       }
     ])
@@ -83,7 +83,7 @@ describe("drainHostEvents", () => {
     const requests: Array<{
       requestId: number
       instanceId: string
-      inputBusIndex: number
+      inputPortKey: string
       sourceChannelId: string | null
     }> = []
     drainHostEvents(
@@ -92,21 +92,21 @@ describe("drainHostEvents", () => {
           type: "plugin-sidechain-route-requested",
           request_id: 4,
           instance_id: "fx-1",
-          input_bus_index: 1,
+          input_port_key: "vst3:audio:input:1",
           source_channel_id: "audio-1"
         },
         {
           type: "plugin-sidechain-route-requested",
           request_id: 5,
           instance_id: "fx-1",
-          input_bus_index: 2,
+          input_port_key: "vst3:audio:input:2",
           source_channel_id: null
         },
         {
           type: "plugin-sidechain-route-requested",
           request_id: 0,
           instance_id: "fx-1",
-          input_bus_index: 2,
+          input_port_key: "vst3:audio:input:2",
           source_channel_id: null
         }
       ]),
@@ -118,8 +118,18 @@ describe("drainHostEvents", () => {
       (request) => requests.push(request)
     )
     expect(requests).toEqual([
-      { requestId: 4, instanceId: "fx-1", inputBusIndex: 1, sourceChannelId: "audio-1" },
-      { requestId: 5, instanceId: "fx-1", inputBusIndex: 2, sourceChannelId: null }
+      {
+        requestId: 4,
+        instanceId: "fx-1",
+        inputPortKey: "vst3:audio:input:1",
+        sourceChannelId: "audio-1"
+      },
+      {
+        requestId: 5,
+        instanceId: "fx-1",
+        inputPortKey: "vst3:audio:input:2",
+        sourceChannelId: null
+      }
     ])
   })
 

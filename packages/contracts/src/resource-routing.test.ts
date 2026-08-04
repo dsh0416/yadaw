@@ -19,8 +19,9 @@ describe("plugin and MIDI resource routing contracts", () => {
       helperEpoch: "18446744073709551614",
       pluginGeneration: 7,
       sequence: "9007199254740993",
-      parameterId: 42,
-      normalized: 0.75,
+      parameterKey: "vst3:42",
+      runtimeToken: 42,
+      value: 0.75,
       gesture: "perform"
     }
 

@@ -1,12 +1,12 @@
 use super::{
-    METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, METRONOME_NOTE_ID, METRONOME_NOTE_LENGTH_MS,
-    MUSICAL_TICKS_PER_QUARTER, PluginAudioMode, ProcessContext, StereoDelayLine, StereoFrame,
-    TempoMap, Vst3ProcessorHandle,
+    AudioPluginProcessorHandle, AudioPortToken, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE,
+    METRONOME_NOTE_ID, METRONOME_NOTE_LENGTH_MS, MUSICAL_TICKS_PER_QUARTER, PluginAudioMode,
+    ProcessContext, SidechainSource, StereoDelayLine, StereoFrame, TempoMap,
 };
 
 pub(super) struct LivePlugin {
     pub(super) instance_id: String,
-    pub(super) processor: Option<Vst3ProcessorHandle>,
+    pub(super) processor: Option<AudioPluginProcessorHandle>,
     pub(super) audio_mode: PluginAudioMode,
     pub(super) enabled: bool,
     pub(super) is_instrument: bool,
@@ -18,11 +18,25 @@ pub(super) struct LivePlugin {
 }
 
 pub(super) struct LivePluginAuxInput {
-    pub(super) bus_index: u32,
+    pub(super) port_token: u32,
     pub(super) channels: u8,
     pub(super) source_index: usize,
     pub(super) delay: StereoDelayLine,
     pub(super) block: Vec<StereoFrame>,
+}
+
+struct LivePluginSidechains<'a> {
+    inputs: &'a [LivePluginAuxInput],
+    frame_count: usize,
+}
+
+impl SidechainSource for LivePluginSidechains<'_> {
+    fn frames(&self, port: AudioPortToken) -> Option<&[[f32; 2]]> {
+        self.inputs
+            .iter()
+            .find(|input| input.port_token == port.get())
+            .map(|input| &input.block[..self.frame_count])
+    }
 }
 
 impl LivePlugin {
@@ -79,19 +93,12 @@ impl LivePlugin {
                 *target = input.delay.process(*source);
             }
         }
-        let aux_inputs = &self.aux_inputs;
+        let sidechains = LivePluginSidechains {
+            inputs: &self.aux_inputs,
+            frame_count,
+        };
         *width = output_width;
-        if !processor.process_block_with_sidechain_source(
-            frames,
-            |bus_index| {
-                aux_inputs
-                    .iter()
-                    .find(|input| input.bus_index == bus_index)
-                    .map(|input| &input.block[..frame_count])
-            },
-            context,
-        ) && !self.is_instrument
-        {
+        if !processor.process_block(frames, &sidechains, context) && !self.is_instrument {
             for frame in frames {
                 *frame = self.passthrough(*frame);
             }

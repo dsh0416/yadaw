@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "xtask",
+    "crates/audio-plugin",
+    "crates/clap-host",
     "crates/dsp-core",
     "crates/dsp-node",
     "crates/dsp-runtime",
@@ -32,6 +34,7 @@ bindgen = "0.72.1"
 cc = "1"
 clap = { version = "4.5.61", features = ["derive"] }
 cpal = "0.18"
+clap-sys = "=0.5.0"
 criterion = { version = "0.8.2", features = ["csv_output", "html_reports"] }
 futures-util = "0.3"
 getrandom = "0.3"
@@ -71,6 +74,8 @@ winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "
 windows = "0.61.3"
 zerocopy = { version = "0.8.55", features = ["derive"] }
 heron-dsp-core = { path = "crates/dsp-core" }
+heron-audio-plugin = { path = "crates/audio-plugin" }
+heron-clap-host = { path = "crates/clap-host" }
 heron-dsp-runtime = { path = "crates/dsp-runtime" }
 heron-dsp-render = { path = "crates/dsp-render" }
 heron-audio-engine = { path = "crates/audio-engine" }

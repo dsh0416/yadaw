@@ -12,7 +12,7 @@ use super::{
 pub(super) struct Vst3ActorDeps {
     pub(super) ui_proxy: UiMailboxWaker,
     pub(super) ui_sender: std_mpsc::SyncSender<ActorRequest>,
-    pub(super) processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    pub(super) processors: Arc<Mutex<HashMap<String, vst3::AudioPluginProcessorHandle>>>,
     pub(super) handles: Arc<Mutex<GraphParameterHandles>>,
     pub(super) background_sender: mpsc::Sender<ActorRequest>,
     pub(super) engine_sender: mpsc::Sender<ActorRequest>,
@@ -29,7 +29,7 @@ mod loading;
 #[path = "plugin_actor/request_policy.rs"]
 mod request_policy;
 
-pub(super) use command_dispatch::{dispatch_actor, dispatch_parameter, vst3_actor};
+pub(super) use command_dispatch::{audio_plugin_actor, dispatch_actor, dispatch_parameter};
 pub(super) use request_policy::{
     is_background_io_command, is_vst3_command, slow_request_threshold,
 };

@@ -46,7 +46,9 @@ use crate::recording::{
     RecorderController, RecordingTap, StereoFrame,
 };
 use crate::{HostError as Error, HostResult as Result, Status};
-use heron_vst3_host::{HostProcessContext as ProcessContext, Vst3ProcessorHandle};
+use heron_audio_plugin::{
+    AudioPluginProcessorHandle, AudioPortToken, ProcessContext, SidechainSource,
+};
 
 const UNKNOWN_LATENCY_US: u64 = u64::MAX;
 const RING_BUFFER_BLOCKS: usize = 8;

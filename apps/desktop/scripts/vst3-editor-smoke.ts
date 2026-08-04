@@ -17,11 +17,24 @@ interface WireResponse {
     open?: boolean
     parameters?: Array<{
       id: number
+      parameter_key: string
+      runtime_token: number
       title: string
       units: string
       step_count: number
       default_normalized: number
       normalized: number
+      min_value: number
+      max_value: number
+      default_value: number
+      value: number
+      normalized_value: number
+      module_path: string
+      read_only: boolean
+      hidden: boolean
+      stepped: boolean
+      automatable: boolean
+      bypass: boolean
       formatted?: string
       flags: number
     }>
@@ -34,7 +47,7 @@ interface WireResponse {
       can_undo: boolean
       can_redo: boolean
       sidechain_buses: Array<{
-        input_bus_index: number
+        input_port_key: string
         name: string
         source_channel_id: string | null
       }>
@@ -129,7 +142,7 @@ async function run(): Promise<void> {
       canUndo: result.state.can_undo,
       canRedo: result.state.can_redo,
       sidechainBuses: result.state.sidechain_buses.map((bus) => ({
-        inputBusIndex: bus.input_bus_index,
+        inputPortKey: bus.input_port_key,
         name: bus.name,
         ...(bus.source_channel_id === null ? {} : { sourceChannelId: bus.source_channel_id })
       })),
@@ -161,13 +174,17 @@ async function run(): Promise<void> {
     await request({
       type: "load-plugin",
       instance_id: "editor-smoke",
-      module_path: pluginPath,
-      class_id: classId,
+      locator: { format: "vst3", artifact_path: pluginPath, native_id: classId },
       plugin_kind: pluginKind,
       audio_mode: "stereo",
       sample_rate: 48_000,
-      component_state: { storage: "inline", bytes: new Uint8Array() },
-      controller_state: { storage: "inline", bytes: new Uint8Array() }
+      state: {
+        version: 1,
+        chunks: [
+          { key: "component", bytes: { storage: "inline", bytes: new Uint8Array() } },
+          { key: "controller", bytes: { storage: "inline", bytes: new Uint8Array() } }
+        ]
+      }
     })
     console.log("VST3 editor smoke: plug-in loaded")
 
@@ -197,23 +214,38 @@ async function run(): Promise<void> {
       applyToolbarAction,
       async () => {
         return (await readParameters()).map((parameter) => ({
-          id: parameter.id,
+          parameterKey: parameter.parameter_key,
+          runtimeToken: parameter.runtime_token,
           title: parameter.title,
           shortTitle: parameter.title,
           units: parameter.units,
           stepCount: parameter.step_count,
           defaultNormalized: parameter.default_normalized,
           normalized: parameter.normalized,
-          ...(parameter.formatted === undefined ? {} : { formatted: parameter.formatted }),
-          flags: parameter.flags
+          minValue: parameter.min_value,
+          maxValue: parameter.max_value,
+          defaultValue: parameter.default_value,
+          value: parameter.value,
+          normalizedValue: parameter.normalized_value,
+          modulePath: parameter.module_path,
+          readOnly: parameter.read_only,
+          hidden: parameter.hidden,
+          stepped: parameter.stepped,
+          automatable: parameter.automatable,
+          bypass: parameter.bypass,
+          ...(parameter.formatted === undefined ? {} : { formatted: parameter.formatted })
         }))
       },
-      async (parameterId, normalized, gesture) => {
+      async (runtimeToken, normalized, gesture) => {
+        const parameter = (await readParameters()).find(
+          (candidate) => candidate.runtime_token === runtimeToken
+        )
+        if (!parameter) throw new Error(`unknown runtime parameter token ${runtimeToken}`)
         await request({
           type: "set-plugin-parameter",
           instance_id: "editor-smoke",
-          parameter_id: parameterId,
-          normalized,
+          parameter_key: parameter.parameter_key,
+          value: parameter.min_value + normalized * (parameter.max_value - parameter.min_value),
           gesture
         })
       },

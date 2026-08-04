@@ -16,6 +16,7 @@ const BENCHMARKS: [&str; 4] = [
 ];
 const BENCH_FEATURES: &str = "heron-dsp-node/bench-internals";
 const VST3_PROBE: &str = "heron-vst3-probe";
+const CLAP_PROBE: &str = "heron-clap-probe";
 
 #[derive(Debug, Parser)]
 #[command(name = "cargo xtask", about = "Heron Rust workspace tasks")]
@@ -330,17 +331,29 @@ fn native_build(workspace: &Path, args: &NativeBuildArgs) -> Result<(), XtaskErr
         Some(target) => target.clone(),
         None => host_target(workspace)?,
     };
-    run_spec(workspace, &native_probe_spec(args.profile, &target))?;
+    run_spec(
+        workspace,
+        &native_probe_spec(args.profile, &target, "heron-vst3-host", VST3_PROBE),
+    )?;
+    run_spec(
+        workspace,
+        &native_probe_spec(args.profile, &target, "heron-clap-host", CLAP_PROBE),
+    )?;
     run_spec(workspace, &native_plugins_spec(args.profile, &target))?;
     stage_native_artifacts(workspace, args.profile, &target)
 }
 
-fn native_probe_spec(profile: BuildProfile, target: &str) -> CommandSpec {
+fn native_probe_spec(
+    profile: BuildProfile,
+    target: &str,
+    package: &str,
+    binary: &str,
+) -> CommandSpec {
     let mut args = vec!["build", "--target", target];
     if profile.is_release() {
         args.push("--release");
     }
-    args.extend(["-p", "heron-vst3-host", "--bin", VST3_PROBE]);
+    args.extend(["-p", package, "--bin", binary]);
     CommandSpec::cargo(args)
 }
 
@@ -374,16 +387,24 @@ fn stage_native_artifacts(
     }
 
     let stable_profile = paths
-        .stable_probe
+        .stable_vst3_probe
         .parent()
         .expect("stable probe path must have a parent directory");
     fs::create_dir_all(stable_profile).map_err(|source| XtaskError::Io {
         operation: "failed to create the stable native artifact directory",
         source,
     })?;
-    fs::copy(paths.source_probe, paths.stable_probe).map_err(|source| XtaskError::Io {
-        operation: "failed to stage the VST3 probe",
-        source,
+    fs::copy(paths.source_vst3_probe, paths.stable_vst3_probe).map_err(|source| {
+        XtaskError::Io {
+            operation: "failed to stage the VST3 probe",
+            source,
+        }
+    })?;
+    fs::copy(paths.source_clap_probe, paths.stable_clap_probe).map_err(|source| {
+        XtaskError::Io {
+            operation: "failed to stage the CLAP probe",
+            source,
+        }
     })?;
     Ok(())
 }
@@ -392,8 +413,10 @@ fn stage_native_artifacts(
 struct NativeArtifactPaths {
     source_bundles: PathBuf,
     stable_bundles: PathBuf,
-    source_probe: PathBuf,
-    stable_probe: PathBuf,
+    source_vst3_probe: PathBuf,
+    stable_vst3_probe: PathBuf,
+    source_clap_probe: PathBuf,
+    stable_clap_probe: PathBuf,
 }
 
 fn native_artifact_paths(
@@ -403,15 +426,17 @@ fn native_artifact_paths(
     windows: bool,
 ) -> NativeArtifactPaths {
     let target_directory = workspace.join("target");
-    let executable = executable_name(VST3_PROBE, windows);
+    let profile_directory = target_directory.join(target).join(profile.directory());
+    let stable_profile_directory = target_directory.join(profile.directory());
+    let vst3_executable = executable_name(VST3_PROBE, windows);
+    let clap_executable = executable_name(CLAP_PROBE, windows);
     NativeArtifactPaths {
         source_bundles: target_directory.join("bundles").join(target),
         stable_bundles: target_directory.join("bundles"),
-        source_probe: target_directory
-            .join(target)
-            .join(profile.directory())
-            .join(&executable),
-        stable_probe: target_directory.join(profile.directory()).join(executable),
+        source_vst3_probe: profile_directory.join(&vst3_executable),
+        stable_vst3_probe: stable_profile_directory.join(vst3_executable),
+        source_clap_probe: profile_directory.join(&clap_executable),
+        stable_clap_probe: stable_profile_directory.join(clap_executable),
     }
 }
 
@@ -571,13 +596,20 @@ mod tests {
 
     #[test]
     fn native_specs_preserve_profile_and_target() {
-        let probe = native_probe_spec(BuildProfile::Release, "aarch64-apple-darwin");
+        let probe = native_probe_spec(
+            BuildProfile::Release,
+            "aarch64-apple-darwin",
+            "heron-clap-host",
+            CLAP_PROBE,
+        );
         assert!(probe.args.contains(&OsString::from("--release")));
         assert!(
             probe.args.windows(2).any(|pair| {
                 pair == [OsStr::new("--target"), OsStr::new("aarch64-apple-darwin")]
             })
         );
+        assert!(probe.args.contains(&OsString::from("heron-clap-host")));
+        assert!(probe.args.contains(&OsString::from(CLAP_PROBE)));
 
         let plugins = native_plugins_spec(BuildProfile::Debug, "aarch64-apple-darwin");
         assert!(plugins.args.contains(&OsString::from("--debug")));
@@ -611,7 +643,7 @@ mod tests {
             workspace.join("target").join("bundles")
         );
         assert_eq!(
-            paths.source_probe,
+            paths.source_vst3_probe,
             workspace
                 .join("target")
                 .join("x86_64-pc-windows-msvc")
@@ -619,11 +651,26 @@ mod tests {
                 .join("heron-vst3-probe.exe")
         );
         assert_eq!(
-            paths.stable_probe,
+            paths.stable_vst3_probe,
             workspace
                 .join("target")
                 .join("release")
                 .join("heron-vst3-probe.exe")
+        );
+        assert_eq!(
+            paths.source_clap_probe,
+            workspace
+                .join("target")
+                .join("x86_64-pc-windows-msvc")
+                .join("release")
+                .join("heron-clap-probe.exe")
+        );
+        assert_eq!(
+            paths.stable_clap_probe,
+            workspace
+                .join("target")
+                .join("release")
+                .join("heron-clap-probe.exe")
         );
     }
 

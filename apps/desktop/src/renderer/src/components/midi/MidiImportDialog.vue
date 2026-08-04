@@ -3,6 +3,7 @@ import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { UiButton, UiDialog, UiSelect, UiStatusNotice } from "@heron/ui"
 import type { MidiImportTrackTarget } from "@heron/contracts"
+import { pluginTypeKey } from "@heron/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
 import { useMixerStore } from "../../stores/mixer"
 import { usePluginStore } from "../../stores/plugins"
@@ -53,14 +54,14 @@ function updateTarget(sourceTrack: number, sequence: number, value: string): voi
 
 function instrumentValue(sourceTrack: number, sequence: number): string {
   const target = midiImportStore.targetFor(sourceTrack, sequence)
-  return target.type === "ignore" ? "" : (target.instrumentClassId ?? "")
+  return target.type === "ignore" ? "" : (target.instrumentTypeKey ?? "")
 }
 
 function updateInstrument(sourceTrack: number, sequence: number, value: string): void {
   const current = midiImportStore.targetFor(sourceTrack, sequence)
   if (current.type === "ignore") return
-  const instrumentClassId = value || undefined
-  midiImportStore.setTarget(sourceTrack, sequence, { ...current, instrumentClassId })
+  const instrumentTypeKey = value || undefined
+  midiImportStore.setTarget(sourceTrack, sequence, { ...current, instrumentTypeKey })
 }
 </script>
 
@@ -115,8 +116,8 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
             <option value="">{{ t("midiImport.noInstrument") }}</option>
             <option
               v-for="plugin in pluginStore.compatibleInstruments"
-              :key="plugin.classId"
-              :value="plugin.classId"
+              :key="pluginTypeKey(plugin)"
+              :value="pluginTypeKey(plugin)"
             >
               {{ plugin.name }} · {{ plugin.vendor }}
             </option>

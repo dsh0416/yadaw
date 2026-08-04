@@ -19,7 +19,7 @@ use std::{
 };
 
 use crate::{
-    device,
+    clap, device,
     editor_platform::{self, NativeUiContext},
     engine,
     midi_input::MidiInputActor,
@@ -62,8 +62,8 @@ use graph_transactions::{
     wait_for_graph_publication,
 };
 use plugin_actor::{
-    Vst3ActorDeps, dispatch_actor, dispatch_parameter, is_background_io_command, is_vst3_command,
-    slow_request_threshold, vst3_actor,
+    Vst3ActorDeps, audio_plugin_actor, dispatch_actor, dispatch_parameter,
+    is_background_io_command, is_vst3_command, slow_request_threshold,
 };
 use runtime_config::RuntimeConfig;
 use ui_runtime::{EmbeddedUiHost, UiEvent, UiMailboxWaker};

@@ -77,8 +77,8 @@ pub struct ParameterEnqueueResult {
 pub struct ParameterEnqueueRequest {
     pub target_kind: String,
     pub runtime_handle: u32,
-    pub parameter_id: u32,
-    pub normalized: f64,
+    pub parameter_token: u32,
+    pub value: f64,
     pub gesture: String,
     pub sequence: Option<String>,
     pub target_generation: Option<u32>,
@@ -137,7 +137,7 @@ pub struct NativeEditorToolbarState {
 
 #[napi(object)]
 pub struct NativeEditorSidechainBus {
-    pub input_bus_index: u32,
+    pub input_port_key: String,
     pub name: String,
     pub source_channel_id: Option<String>,
 }
@@ -372,8 +372,8 @@ impl AudioHostRuntime {
             sequence,
             target_kind,
             runtime_handle: request.runtime_handle,
-            parameter_id: request.parameter_id,
-            normalized: request.normalized,
+            parameter_token: request.parameter_token,
+            value: request.value,
             target_generation: request.target_generation.unwrap_or(0),
             gesture: parse_gesture(&request.gesture)?,
         };
@@ -474,7 +474,7 @@ fn native_toolbar_state(
             .sidechain_buses
             .into_iter()
             .map(|bus| NativeEditorSidechainBus {
-                input_bus_index: bus.input_bus_index,
+                input_port_key: bus.input_port_key,
                 name: bus.name,
                 source_channel_id: bus.source_channel_id,
             })

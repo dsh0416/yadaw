@@ -7,16 +7,17 @@ use std::{
 use heron_dsp_runtime::protocol::{
     ControlResult, PluginEditorAction, PluginEditorCompareSlot, PluginEditorMode,
     PluginEditorPreference, PluginEditorSidechainBus, PluginEditorSidechainSource,
-    PluginEditorSidechainSourceKind, PluginEditorToolbarState,
+    PluginEditorSidechainSourceKind, PluginEditorToolbarState, PluginStateEnvelope,
 };
 use heron_vst3_host::{EditorParameterGesture, PlugFrame, PlugView, ViewRect};
 
 use crate::{
+    clap::ClapGuiHostConfig,
     editor_platform::{
         NativeContainer, NativeContainerGeometry, NativeParentHandle,
         with_native_child_scale_context,
     },
-    vst3::{EditorPluginState, Vst3Runtime},
+    vst3::{EditorPluginState as Vst3EditorPluginState, Vst3Runtime},
 };
 
 use super::{
@@ -26,6 +27,12 @@ use super::{
 
 const DEFAULT_WIDTH: i32 = 800;
 const DEFAULT_HEIGHT: i32 = 600;
+
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::runtime) enum EditorPluginState {
+    Vst3(Vst3EditorPluginState),
+    Clap(PluginStateEnvelope),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SidechainSourceKind {
@@ -43,7 +50,7 @@ struct SidechainSource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SidechainBus {
-    input_bus_index: u32,
+    input_port_key: String,
     name: String,
     source_channel_id: Option<String>,
 }
@@ -61,7 +68,7 @@ fn sidechain_view_for_graph(
         .aux_input_buses
         .iter()
         .map(|bus| SidechainBus {
-            input_bus_index: bus.input_bus_index,
+            input_port_key: bus.input_port_key.clone(),
             name: bus.name.clone(),
             source_channel_id: bus.source_channel_id.clone(),
         })
@@ -464,7 +471,7 @@ impl EmbeddedEditorHost {
             sidechain_buses: sidechain_buses
                 .into_iter()
                 .map(|bus| PluginEditorSidechainBus {
-                    input_bus_index: bus.input_bus_index,
+                    input_port_key: bus.input_port_key,
                     name: bus.name,
                     source_channel_id: bus.source_channel_id,
                 })
@@ -524,6 +531,10 @@ impl EmbeddedUiHost {
             .embedded_editor_hosts
             .get(&registration.instance_id)
             .is_some_and(|host| host.attachment.is_some())
+            || self
+                .clap
+                .as_ref()
+                .is_some_and(|runtime| runtime.gui_snapshot(&registration.instance_id).is_some())
         {
             return Err("the native plug-in editor is already attached".into());
         }
@@ -575,10 +586,31 @@ impl EmbeddedUiHost {
         if let Some(attachment) = host.attachment.as_mut() {
             attachment.resize(host.width, host.height, host.top_inset, host.display_scale);
         }
+        let geometry = (
+            host.width,
+            host.height,
+            host.top_inset,
+            host.display_scale,
+            host.preference.zoom_percent,
+        );
+        if let Some(runtime) = self.clap.as_mut() {
+            let (width, height, top_inset, display_scale, zoom_percent) = geometry;
+            let _ = runtime.resize_gui(
+                instance_id,
+                width,
+                height,
+                top_inset,
+                display_scale,
+                zoom_percent,
+            );
+        }
         Ok(())
     }
 
     pub(in crate::runtime) fn unregister_embedded_editor_host(&mut self, instance_id: &str) {
+        if let Some(runtime) = self.clap.as_mut() {
+            runtime.close_gui(instance_id);
+        }
         if let Some(mut host) = self.embedded_editor_hosts.remove(instance_id)
             && let Some(attachment) = host.attachment.take()
         {
@@ -590,21 +622,36 @@ impl EmbeddedUiHost {
         &self,
         instance_id: &str,
     ) -> Option<EmbeddedEditorHostSnapshot> {
-        self.embedded_editor_hosts
-            .get(instance_id)
-            .map(|host| host.snapshot(instance_id))
+        let host = self.embedded_editor_hosts.get(instance_id)?;
+        if let Some(snapshot) = self
+            .clap
+            .as_ref()
+            .and_then(|runtime| runtime.gui_snapshot(instance_id))
+        {
+            return Some(EmbeddedEditorHostSnapshot {
+                instance_id: instance_id.to_owned(),
+                width: snapshot.width,
+                height: snapshot.height,
+                display_scale: host.display_scale,
+                resizable: snapshot.resizable,
+                attached: true,
+            });
+        }
+        Some(host.snapshot(instance_id))
     }
 
     pub(in crate::runtime) fn focus_embedded_editor_host(&self, instance_id: &str) -> bool {
-        let Some(attachment) = self
+        if let Some(attachment) = self
             .embedded_editor_hosts
             .get(instance_id)
             .and_then(|host| host.attachment.as_ref())
-        else {
-            return false;
-        };
-        attachment.focus();
-        true
+        {
+            attachment.focus();
+            return true;
+        }
+        self.clap
+            .as_ref()
+            .is_some_and(|runtime| runtime.focus_gui(instance_id))
     }
 
     pub(in crate::runtime) fn drain_embedded_editor_events(
@@ -628,6 +675,13 @@ impl EmbeddedUiHost {
         instance_id: &str,
         action: PluginEditorAction,
     ) -> Result<PluginEditorToolbarState, String> {
+        if self
+            .clap
+            .as_ref()
+            .is_some_and(|runtime| runtime.contains(instance_id))
+        {
+            return self.apply_clap_editor_action(instance_id, action);
+        }
         let events = Rc::clone(&self.embedded_editor_events);
         let host_events = self.host_events.clone();
         let sidechain = sidechain_view_for_graph(self.ara_graph.as_ref(), instance_id);
@@ -667,10 +721,10 @@ impl EmbeddedUiHost {
                             host.preference.mode = PluginEditorMode::Parameters;
                         }
                     }
-                    if let Some(class_id) = host.class_id.clone() {
+                    if let Some(plugin_type_key) = host.class_id.clone() {
                         let _ = host_events.try_send(
                             heron_dsp_runtime::protocol::HostEvent::PluginEditorPreferenceChanged {
-                                class_id,
+                                plugin_type_key,
                                 preference: host.preference,
                             },
                         );
@@ -680,13 +734,16 @@ impl EmbeddedUiHost {
             PluginEditorAction::Compare { slot } => {
                 let target = usize::from(slot == PluginEditorCompareSlot::B);
                 if target != host.compare_slot {
-                    let current = runtime.editor_state(instance_id)?;
+                    let current = EditorPluginState::Vst3(runtime.editor_state(instance_id)?);
                     let slots = host
                         .compare_slots
                         .as_mut()
                         .ok_or_else(|| "A/B comparison is unavailable".to_owned())?;
                     let target_state = slots[target].clone();
-                    runtime.restore_editor_state(instance_id, &target_state)?;
+                    let EditorPluginState::Vst3(target_state) = &target_state else {
+                        return Err("A/B state belongs to a different plug-in format".to_owned());
+                    };
+                    runtime.restore_editor_state(instance_id, target_state)?;
                     slots[host.compare_slot] = current;
                     host.compare_slot = target;
                     runtime.mark_editor_state_dirty(instance_id);
@@ -700,7 +757,10 @@ impl EmbeddedUiHost {
                     .class_id
                     .clone()
                     .ok_or_else(|| "VST3 instance class is unavailable".to_owned())?;
-                *clipboard = Some((class_id, runtime.editor_state(instance_id)?));
+                *clipboard = Some((
+                    class_id,
+                    EditorPluginState::Vst3(runtime.editor_state(instance_id)?),
+                ));
             }
             PluginEditorAction::Paste => {
                 let class_id = host
@@ -712,7 +772,10 @@ impl EmbeddedUiHost {
                     .filter(|(copied_class, _)| copied_class == class_id)
                     .map(|(_, state)| state.clone())
                     .ok_or_else(|| "Copied settings belong to a different plug-in".to_owned())?;
-                runtime.restore_editor_state(instance_id, &state)?;
+                let EditorPluginState::Vst3(vst3_state) = &state else {
+                    return Err("Copied settings belong to a different plug-in format".to_owned());
+                };
+                runtime.restore_editor_state(instance_id, vst3_state)?;
                 runtime.mark_editor_state_dirty(instance_id);
                 if let Some(slots) = host.compare_slots.as_mut() {
                     slots[host.compare_slot] = state;
@@ -761,17 +824,17 @@ impl EmbeddedUiHost {
                         resizable: attachment.resizable,
                     });
                 }
-                if let Some(class_id) = host.class_id.clone() {
+                if let Some(plugin_type_key) = host.class_id.clone() {
                     let _ = host_events.try_send(
                         heron_dsp_runtime::protocol::HostEvent::PluginEditorPreferenceChanged {
-                            class_id,
+                            plugin_type_key,
                             preference: host.preference,
                         },
                     );
                 }
             }
             PluginEditorAction::SidechainRoute {
-                input_bus_index,
+                input_port_key,
                 source_channel_id,
             } => {
                 if host.pending_sidechain_request.is_some() {
@@ -780,10 +843,7 @@ impl EmbeddedUiHost {
                 let Some((buses, sources)) = sidechain.as_ref() else {
                     return Err("side-chain routing is unavailable".into());
                 };
-                if !buses
-                    .iter()
-                    .any(|bus| bus.input_bus_index == input_bus_index)
-                {
+                if !buses.iter().any(|bus| bus.input_port_key == input_port_key) {
                     return Err("the selected side-chain input bus is unavailable".into());
                 }
                 if source_channel_id
@@ -800,7 +860,7 @@ impl EmbeddedUiHost {
                         heron_dsp_runtime::protocol::HostEvent::PluginSidechainRouteRequested {
                             request_id,
                             instance_id: instance_id.to_owned(),
-                            input_bus_index,
+                            input_port_key,
                             source_channel_id,
                         },
                     )
@@ -809,6 +869,184 @@ impl EmbeddedUiHost {
                     host.pending_sidechain_request = None;
                     return Err("the host event queue is busy; try again".into());
                 }
+            }
+        }
+        Ok(host.toolbar_state(clipboard, sidechain))
+    }
+
+    fn apply_clap_editor_action(
+        &mut self,
+        instance_id: &str,
+        action: PluginEditorAction,
+    ) -> Result<PluginEditorToolbarState, String> {
+        let sidechain = sidechain_view_for_graph(self.ara_graph.as_ref(), instance_id);
+        let sidechain_request_id = matches!(action, PluginEditorAction::SidechainRoute { .. })
+            .then(|| {
+                self.next_sidechain_request_id =
+                    self.next_sidechain_request_id.wrapping_add(1).max(1);
+                self.next_sidechain_request_id
+            });
+        let events = Rc::clone(&self.embedded_editor_events);
+        let host_events = self.host_events.clone();
+        let (runtime, hosts, clipboard) = (
+            self.clap
+                .as_mut()
+                .ok_or_else(|| "CLAP UI runtime is shutting down".to_owned())?,
+            &mut self.embedded_editor_hosts,
+            &mut self.embedded_editor_clipboard,
+        );
+        let plugin_type_key = runtime.plugin_type_key(instance_id).map(str::to_owned);
+        let host = hosts
+            .get_mut(instance_id)
+            .ok_or_else(|| "the Electron editor host surface is not registered".to_owned())?;
+        match action {
+            PluginEditorAction::Mode { mode } => {
+                if mode != host.preference.mode {
+                    match mode {
+                        PluginEditorMode::Native => {
+                            let snapshot = runtime.open_gui(
+                                instance_id,
+                                ClapGuiHostConfig {
+                                    parent: host.parent,
+                                    width: host.width,
+                                    height: host.height,
+                                    top_inset: host.top_inset,
+                                    display_scale: host.display_scale,
+                                    zoom_percent: host.preference.zoom_percent,
+                                },
+                            )?;
+                            events.borrow_mut().push_back(EmbeddedEditorHostEvent {
+                                instance_id: instance_id.to_owned(),
+                                width: snapshot.width,
+                                height: snapshot.height,
+                                resizable: snapshot.resizable,
+                            });
+                            host.preference.mode = PluginEditorMode::Native;
+                        }
+                        PluginEditorMode::Parameters => {
+                            runtime.close_gui(instance_id);
+                            host.preference.mode = PluginEditorMode::Parameters;
+                        }
+                    }
+                    if let Some(plugin_type_key) = plugin_type_key.clone() {
+                        let _ = host_events.try_send(
+                            heron_dsp_runtime::protocol::HostEvent::PluginEditorPreferenceChanged {
+                                plugin_type_key,
+                                preference: host.preference,
+                            },
+                        );
+                    }
+                }
+            }
+            PluginEditorAction::Zoom { zoom_percent } => {
+                let zoom_percent = (50..=400)
+                    .contains(&zoom_percent)
+                    .then_some(zoom_percent)
+                    .ok_or_else(|| "CLAP editor zoom is outside 50...400".to_owned())?;
+                host.preference.zoom_percent = zoom_percent;
+                if let Some(snapshot) = runtime.gui_snapshot(instance_id) {
+                    let _ = runtime.resize_gui(
+                        instance_id,
+                        snapshot.width,
+                        snapshot.height,
+                        host.top_inset,
+                        host.display_scale,
+                        zoom_percent,
+                    );
+                }
+                if let Some(plugin_type_key) = plugin_type_key {
+                    let _ = host_events.try_send(
+                        heron_dsp_runtime::protocol::HostEvent::PluginEditorPreferenceChanged {
+                            plugin_type_key,
+                            preference: host.preference,
+                        },
+                    );
+                }
+            }
+            PluginEditorAction::SidechainRoute {
+                input_port_key,
+                source_channel_id,
+            } => {
+                if host.pending_sidechain_request.is_some() {
+                    return Err("a side-chain routing request is already pending".into());
+                }
+                let Some((buses, sources)) = sidechain.as_ref() else {
+                    return Err("side-chain routing is unavailable".into());
+                };
+                if !buses.iter().any(|bus| bus.input_port_key == input_port_key) {
+                    return Err("the selected side-chain input port is unavailable".into());
+                }
+                if source_channel_id
+                    .as_ref()
+                    .is_some_and(|source_id| !sources.iter().any(|source| &source.id == source_id))
+                {
+                    return Err("the selected side-chain source is unavailable".into());
+                }
+                let request_id = sidechain_request_id
+                    .ok_or_else(|| "side-chain request identifier is unavailable".to_owned())?;
+                host.pending_sidechain_request = Some(request_id);
+                if host_events
+                    .try_send(
+                        heron_dsp_runtime::protocol::HostEvent::PluginSidechainRouteRequested {
+                            request_id,
+                            instance_id: instance_id.to_owned(),
+                            input_port_key,
+                            source_channel_id,
+                        },
+                    )
+                    .is_err()
+                {
+                    host.pending_sidechain_request = None;
+                    return Err("the host event queue is busy; try again".into());
+                }
+            }
+            PluginEditorAction::Compare { slot } => {
+                let target = usize::from(slot == PluginEditorCompareSlot::B);
+                if target != host.compare_slot {
+                    let current = EditorPluginState::Clap(runtime.editor_state(instance_id)?);
+                    let slots = host
+                        .compare_slots
+                        .as_mut()
+                        .ok_or_else(|| "A/B comparison is unavailable".to_owned())?;
+                    let target_state = slots[target].clone();
+                    let EditorPluginState::Clap(target_state) = &target_state else {
+                        return Err("A/B state belongs to a different plug-in format".to_owned());
+                    };
+                    runtime.restore_editor_state(instance_id, target_state)?;
+                    slots[host.compare_slot] = current;
+                    host.compare_slot = target;
+                }
+            }
+            PluginEditorAction::Copy => {
+                let plugin_type_key = host
+                    .class_id
+                    .clone()
+                    .ok_or_else(|| "CLAP plug-in type is unavailable".to_owned())?;
+                *clipboard = Some((
+                    plugin_type_key,
+                    EditorPluginState::Clap(runtime.editor_state(instance_id)?),
+                ));
+            }
+            PluginEditorAction::Paste => {
+                let plugin_type_key = host
+                    .class_id
+                    .as_ref()
+                    .ok_or_else(|| "CLAP plug-in type is unavailable".to_owned())?;
+                let state = clipboard
+                    .as_ref()
+                    .filter(|(copied_type, _)| copied_type == plugin_type_key)
+                    .map(|(_, state)| state.clone())
+                    .ok_or_else(|| "Copied settings belong to a different plug-in".to_owned())?;
+                let EditorPluginState::Clap(clap_state) = &state else {
+                    return Err("Copied settings belong to a different plug-in format".to_owned());
+                };
+                runtime.restore_editor_state(instance_id, clap_state)?;
+                if let Some(slots) = host.compare_slots.as_mut() {
+                    slots[host.compare_slot] = state;
+                }
+            }
+            PluginEditorAction::Undo | PluginEditorAction::Redo => {
+                return Err("this CLAP editor action is not available yet".to_owned());
             }
         }
         Ok(host.toolbar_state(clipboard, sidechain))
@@ -874,12 +1112,14 @@ impl EmbeddedUiHost {
             };
         };
         if !host.open {
-            host.class_id = runtime.class_id(&instance_id);
+            host.class_id = runtime
+                .class_id(&instance_id)
+                .map(|class_id| format!("vst3:{class_id}"));
             host.preference = preference;
-            host.compare_slots = runtime
-                .editor_state(&instance_id)
-                .ok()
-                .map(|state| [state.clone(), state]);
+            host.compare_slots = runtime.editor_state(&instance_id).ok().map(|state| {
+                let state = EditorPluginState::Vst3(state);
+                [state.clone(), state]
+            });
             host.compare_slot = 0;
             host.undo.clear();
             host.redo.clear();
@@ -908,6 +1148,72 @@ impl EmbeddedUiHost {
         }
     }
 
+    pub(super) fn open_clap_editor(
+        &mut self,
+        instance_id: String,
+        preference: PluginEditorPreference,
+    ) -> ControlResult {
+        if !preference.is_valid() {
+            return control_error! {
+                message: "CLAP editor zoom is outside 50...400".into(),
+            };
+        }
+        let (runtime, hosts, events) = (
+            self.clap.as_mut(),
+            &mut self.embedded_editor_hosts,
+            &self.embedded_editor_events,
+        );
+        let Some(runtime) = runtime else {
+            return control_error! {
+                message: "CLAP UI runtime is shutting down".into(),
+            };
+        };
+        let Some(host) = hosts.get_mut(&instance_id) else {
+            return control_error! {
+                message: "Electron editor host surface is not registered".into(),
+            };
+        };
+        if !host.open {
+            host.class_id = runtime.plugin_type_key(&instance_id).map(str::to_owned);
+            host.preference = preference;
+            host.compare_slots = runtime.editor_state(&instance_id).ok().map(|state| {
+                let state = EditorPluginState::Clap(state);
+                [state.clone(), state]
+            });
+            host.compare_slot = 0;
+            host.undo.clear();
+            host.redo.clear();
+            host.pending_edits.clear();
+            host.pending_sidechain_request = None;
+            if preference.mode == PluginEditorMode::Native {
+                match runtime.open_gui(
+                    &instance_id,
+                    ClapGuiHostConfig {
+                        parent: host.parent,
+                        width: host.width,
+                        height: host.height,
+                        top_inset: host.top_inset,
+                        display_scale: host.display_scale,
+                        zoom_percent: preference.zoom_percent,
+                    },
+                ) {
+                    Ok(snapshot) => events.borrow_mut().push_back(EmbeddedEditorHostEvent {
+                        instance_id: instance_id.clone(),
+                        width: snapshot.width,
+                        height: snapshot.height,
+                        resizable: snapshot.resizable,
+                    }),
+                    Err(_) => host.preference.mode = PluginEditorMode::Parameters,
+                }
+            }
+            host.open = true;
+        }
+        ControlResult::PluginEditor {
+            active_mode: host.preference.mode,
+            open: true,
+        }
+    }
+
     pub(super) fn close_embedded_editor(&mut self, instance_id: &str, notify: bool) -> bool {
         let Some(host) = self.embedded_editor_hosts.get_mut(instance_id) else {
             return false;
@@ -919,6 +1225,9 @@ impl EmbeddedUiHost {
         host.pending_sidechain_request = None;
         if let Some(attachment) = host.attachment.take() {
             attachment.detach();
+        }
+        if let Some(runtime) = self.clap.as_mut() {
+            runtime.close_gui(instance_id);
         }
         if notify {
             let _ = self.host_events.try_send(
@@ -989,11 +1298,12 @@ fn initial_view_rect(view: &PlugView) -> ViewRect {
 }
 
 fn parameter_value(runtime: &Vst3Runtime, instance_id: &str, parameter_id: u32) -> Option<f64> {
+    let parameter_key = format!("vst3:{parameter_id}");
     runtime
         .parameters(instance_id)
         .ok()?
         .into_iter()
-        .find(|parameter| parameter.id == parameter_id)
+        .find(|parameter| parameter.parameter_key == parameter_key)
         .map(|parameter| parameter.normalized)
 }
 
@@ -1032,7 +1342,7 @@ fn update_compare_slot(runtime: &Vst3Runtime, instance_id: &str, host: &mut Embe
         runtime.editor_state(instance_id),
         host.compare_slots.as_mut(),
     ) {
-        slots[host.compare_slot] = state;
+        slots[host.compare_slot] = EditorPluginState::Vst3(state);
     }
 }
 
@@ -1159,7 +1469,7 @@ mod tests {
                 audio_mode: PluginAudioMode::Stereo,
                 enabled: true,
                 aux_input_buses: vec![LivePluginAuxInputBus {
-                    input_bus_index: 1,
+                    input_port_key: "vst3:audio:input:1".into(),
                     name: "Side Chain".to_owned(),
                     channels: 2,
                     source_channel_id: None,
@@ -1177,7 +1487,7 @@ mod tests {
     fn sidechain_view_exposes_aux_bus_and_valid_source() {
         let graph = graph();
         let (buses, sources) = sidechain_view_for_graph(Some(&graph), "effect").unwrap();
-        assert_eq!(buses[0].input_bus_index, 1);
+        assert_eq!(buses[0].input_port_key, "vst3:audio:input:1");
         assert_eq!(sources[0].id, "source");
     }
 

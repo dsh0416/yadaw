@@ -4,6 +4,7 @@ import type {
   PluginDescriptor,
   PluginInstanceState
 } from "@heron/contracts"
+import { pluginLocator } from "@heron/contracts"
 import type { ControlResponse } from "./wire"
 
 export interface AudioHostBenchmarkReport {
@@ -78,7 +79,7 @@ export class AudioHostBenchmarkRunner {
       effect.compatibility !== "compatible" ||
       !effect.supportedAudioModes.includes("stereo")
     ) {
-      throw new Error("audio benchmark requires a compatible stereo VST3 effect")
+      throw new Error("audio benchmark requires a compatible stereo audio plug-in effect")
     }
     const generation = host.beginBenchmark()
     const pluginInstanceIds = Array.from(
@@ -95,13 +96,12 @@ export class AudioHostBenchmarkRunner {
             channelId: "__heron-audio-benchmark",
             role: "insert",
             slotOrder,
-            classId: effect.classId,
+            locator: pluginLocator(effect),
             descriptor: effect,
             audioMode: "stereo",
             enabled: true,
             sidechainInputs: [],
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
+            state: { version: 1, chunks: [] }
           },
           48_000
         )

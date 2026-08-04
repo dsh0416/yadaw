@@ -4,8 +4,9 @@ use super::{
     AudioEngineConfig, BinaryPayload, GraphTransactionRequest, GraphUpdate,
     MidiRecordingStartConfig, MidiSyncPreferences, MixerParameterPreview, ParameterCommand,
     ParameterGesture, PluginAudioMode, PluginAuxInputConfiguration, PluginEditorAction,
-    PluginEditorAppearance, PluginEditorContext, PluginEditorPreference, PrepareGraphRequest,
-    RecordingStartConfig, RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
+    PluginEditorAppearance, PluginEditorContext, PluginEditorPreference, PluginLocator,
+    PluginStateEnvelope, PrepareGraphRequest, RecordingStartConfig,
+    RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -62,7 +63,7 @@ pub enum ControlCommand {
     },
     PrepareGraph {
         meta: RpcRequestMeta,
-        request: PrepareGraphRequest,
+        request: Box<PrepareGraphRequest>,
     },
     ActivateGraph {
         meta: RpcRequestMeta,
@@ -104,19 +105,15 @@ pub enum ControlCommand {
     },
     LoadPlugin {
         instance_id: String,
-        module_path: String,
-        class_id: String,
+        locator: PluginLocator,
         plugin_kind: String,
         audio_mode: PluginAudioMode,
         #[serde(default)]
         active_aux_inputs: Vec<PluginAuxInputConfiguration>,
         sample_rate: f64,
-        component_state: BinaryPayload,
-        controller_state: BinaryPayload,
+        state: PluginStateEnvelope,
         #[serde(default)]
         ara_factory_class_id: Option<String>,
-        #[serde(default)]
-        ara_document_state: BinaryPayload,
     },
     UnloadPlugin {
         instance_id: String,
@@ -126,8 +123,8 @@ pub enum ControlCommand {
     },
     SetPluginParameter {
         instance_id: String,
-        parameter_id: u32,
-        normalized: f64,
+        parameter_key: String,
+        value: f64,
         gesture: ParameterGesture,
     },
     SavePluginState {

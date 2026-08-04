@@ -7,14 +7,16 @@ import type {
   PluginParameterChange,
   PluginParameterCommand,
   PluginParameterEnqueueResult,
-  PluginParameterInfo
+  PluginParameterInfo,
+  PluginStateEnvelope
 } from "@heron/contracts"
+import { pluginTypeKey } from "@heron/contracts"
 import { binaryBytes, inlineBinary } from "./wire"
 import type { ControlResponse } from "./wire"
 import type { PluginEditorToolbarAction } from "./audio-host-editor-windows"
 
 interface LoadedPlugin {
-  classId: string
+  typeKey: string
   runtimeHandle: number
   latencySamples: number
   tailSamples: number | null
@@ -40,8 +42,8 @@ export class AudioHostPluginClient {
     {
       targetKind: "plugin" | "mixer-channel" | "mixer-send"
       runtimeHandle: number
-      parameterId: number
-      normalized: number
+      parameterToken: number
+      value: number
     }
   >()
   private parameterFlush: NodeJS.Timeout | null = null
@@ -101,13 +103,18 @@ export class AudioHostPluginClient {
   }> {
     const existing = this.loadedPlugins.get(plugin.id)
     if (existing) return existing
+    const locator = plugin.locator
+    const state = plugin.state
     const response = await (
       immediate ? this.requestImmediately.bind(this) : this.request.bind(this)
     )({
       type: "load-plugin",
       instance_id: plugin.id,
-      module_path: plugin.descriptor.modulePath,
-      class_id: plugin.classId,
+      locator: {
+        format: locator.format,
+        artifact_path: locator.artifactPath,
+        native_id: locator.nativeId
+      },
       plugin_kind: plugin.descriptor.kind,
       audio_mode: plugin.audioMode,
       active_aux_inputs: plugin.sidechainInputs.map((route) => {
@@ -115,24 +122,25 @@ export class AudioHostPluginClient {
           (candidate) =>
             candidate.direction === "input" &&
             candidate.kind === "aux" &&
-            candidate.index === route.inputBusIndex
+            candidate.portKey === route.inputPortKey
         )
         if (!bus || (bus.channels !== 1 && bus.channels !== 2)) {
-          throw new Error(`Plugin side-chain bus ${route.inputBusIndex} is unavailable`)
+          throw new Error(`Plugin side-chain port ${route.inputPortKey} is unavailable`)
         }
-        return { input_bus_index: route.inputBusIndex, channels: bus.channels }
+        return { input_port_key: route.inputPortKey, channels: bus.channels }
       }),
       sample_rate: sampleRate,
-      component_state: inlineBinary(plugin.componentState),
-      controller_state: inlineBinary(plugin.controllerState),
-      ara_factory_class_id: plugin.descriptor.ara?.factoryClassId ?? null,
-      ara_document_state: inlineBinary(plugin.araDocumentState ?? new Uint8Array())
+      state: {
+        version: state.version,
+        chunks: state.chunks.map((chunk) => ({ key: chunk.key, bytes: inlineBinary(chunk.bytes) }))
+      },
+      ara_factory_class_id: plugin.descriptor.ara?.factoryClassId ?? null
     })
     if (response.result.type !== "plugin-loaded") {
       throw new Error("audio host returned an invalid plugin load response")
     }
     const status = {
-      classId: plugin.classId,
+      typeKey: pluginTypeKey(locator),
       runtimeHandle: response.result.runtime_handle ?? 0,
       latencySamples: response.result.latency_samples ?? 0,
       tailSamples: response.result.tail_samples ?? null
@@ -160,15 +168,26 @@ export class AudioHostPluginClient {
       throw new Error("audio host returned an invalid parameter response")
     }
     return (response.result.parameters ?? []).map((parameter) => ({
-      id: parameter.id,
+      parameterKey: parameter.parameter_key,
+      runtimeToken: parameter.runtime_token,
       title: parameter.title,
       shortTitle: parameter.title,
       units: parameter.units,
       stepCount: parameter.step_count,
       defaultNormalized: parameter.default_normalized,
       normalized: parameter.normalized,
-      ...(parameter.formatted === undefined ? {} : { formatted: parameter.formatted }),
-      flags: parameter.flags
+      minValue: parameter.min_value,
+      maxValue: parameter.max_value,
+      defaultValue: parameter.default_value,
+      value: parameter.value,
+      normalizedValue: parameter.normalized_value,
+      modulePath: parameter.module_path,
+      readOnly: parameter.read_only,
+      hidden: parameter.hidden,
+      stepped: parameter.stepped,
+      automatable: parameter.automatable,
+      bypass: parameter.bypass,
+      ...(parameter.formatted === undefined ? {} : { formatted: parameter.formatted })
     }))
   }
 
@@ -223,6 +242,9 @@ export class AudioHostPluginClient {
       throw new Error("audio host returned an invalid plug-in editor toolbar response")
     }
     const state = response.result.state
+    if ("version" in state) {
+      throw new Error("audio host returned plug-in state instead of editor toolbar state")
+    }
     return {
       activeMode: state.active_mode,
       zoomPercent: state.zoom_percent,
@@ -232,7 +254,7 @@ export class AudioHostPluginClient {
       canUndo: state.can_undo,
       canRedo: state.can_redo,
       sidechainBuses: state.sidechain_buses.map((bus) => ({
-        inputBusIndex: bus.input_bus_index,
+        inputPortKey: bus.input_port_key,
         name: bus.name,
         ...(bus.source_channel_id === null ? {} : { sourceChannelId: bus.source_channel_id })
       })),
@@ -256,8 +278,8 @@ export class AudioHostPluginClient {
     await this.request({
       type: "set-plugin-parameter",
       instance_id: change.instanceId,
-      parameter_id: change.parameterId,
-      normalized: change.normalized,
+      parameter_key: change.parameterKey,
+      value: change.value,
       gesture: change.gesture
     })
   }
@@ -271,8 +293,8 @@ export class AudioHostPluginClient {
       await this.request({
         type: "set-plugin-parameter",
         instance_id: change.plugin.id,
-        parameter_id: change.parameterId,
-        normalized: change.normalized,
+        parameter_key: change.parameterKey,
+        value: change.value,
         gesture: change.gesture
       })
       return {
@@ -285,8 +307,8 @@ export class AudioHostPluginClient {
     const result = client.enqueueParameter({
       targetKind: "plugin",
       runtimeHandle: plugin.runtimeHandle,
-      parameterId: change.parameterId,
-      normalized: change.normalized,
+      parameterToken: change.runtimeToken,
+      value: change.value,
       gesture: change.gesture,
       sequence: change.sequence,
       targetGeneration: change.pluginGeneration
@@ -298,8 +320,8 @@ export class AudioHostPluginClient {
       this.coalesceParameter({
         targetKind: "plugin",
         runtimeHandle: plugin.runtimeHandle,
-        parameterId: change.parameterId,
-        normalized: change.normalized
+        parameterToken: change.runtimeToken,
+        value: change.value
       })
     }
     return {
@@ -316,11 +338,7 @@ export class AudioHostPluginClient {
     }
   }
 
-  async savePluginState(instanceId: string): Promise<{
-    componentState: Uint8Array
-    controllerState: Uint8Array
-    araDocumentState: Uint8Array
-  }> {
+  async savePluginState(instanceId: string): Promise<PluginStateEnvelope> {
     const response = await this.request({
       type: "save-plugin-state",
       instance_id: instanceId
@@ -328,20 +346,23 @@ export class AudioHostPluginClient {
     if (response.result.type !== "plugin-state") {
       throw new Error("audio host returned an invalid plugin state response")
     }
+    const state = response.result.state
+    if (!state || !("version" in state) || !Array.isArray(state.chunks)) {
+      throw new Error("audio host returned an invalid plug-in state envelope")
+    }
     return {
-      componentState: binaryBytes(response.result.component_state),
-      controllerState: binaryBytes(response.result.controller_state),
-      araDocumentState: binaryBytes(response.result.ara_document_state)
+      version: 1,
+      chunks: state.chunks.map((chunk) => ({ key: chunk.key, bytes: binaryBytes(chunk.bytes) }))
     }
   }
 
   coalesceParameter(value: {
     targetKind: "plugin" | "mixer-channel" | "mixer-send"
     runtimeHandle: number
-    parameterId: number
-    normalized: number
+    parameterToken: number
+    value: number
   }): void {
-    const key = `${value.targetKind}:${value.runtimeHandle}:${value.parameterId}`
+    const key = `${value.targetKind}:${value.runtimeHandle}:${value.parameterToken}`
     this.coalescedParameters.set(key, value)
     if (this.parameterFlush) return
     this.parameterFlush = setTimeout(() => {
@@ -354,8 +375,8 @@ export class AudioHostPluginClient {
         const result = client.enqueueParameter({
           targetKind: command.targetKind,
           runtimeHandle: command.runtimeHandle,
-          parameterId: command.parameterId,
-          normalized: Math.max(0, Math.min(1, command.normalized)),
+          parameterToken: command.parameterToken,
+          value: command.value,
           gesture: "perform"
         })
         if (result.outcome === "soft-full" || result.outcome === "full") {

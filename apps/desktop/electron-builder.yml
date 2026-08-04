@@ -48,6 +48,8 @@ win:
       to: THIRD_PARTY_NOTICES.txt
     - from: ../../target/release/heron-vst3-probe.exe
       to: heron-vst3-probe.exe
+    - from: ../../target/release/heron-clap-probe.exe
+      to: heron-clap-probe.exe
     - from: ../../target/bundles
       to: plugins
       filter:
@@ -67,6 +69,8 @@ mac:
       to: THIRD_PARTY_NOTICES.txt
     - from: ../../target/release/heron-vst3-probe
       to: heron-vst3-probe
+    - from: ../../target/release/heron-clap-probe
+      to: heron-clap-probe
     - from: ../../target/bundles
       to: plugins
       filter:
@@ -83,6 +87,8 @@ linux:
       to: THIRD_PARTY_NOTICES.txt
     - from: ../../target/release/heron-vst3-probe
       to: heron-vst3-probe
+    - from: ../../target/release/heron-clap-probe
+      to: heron-clap-probe
     - from: ../../target/bundles
       to: plugins
       filter:

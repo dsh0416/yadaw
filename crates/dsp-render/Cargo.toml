@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 heron-dsp-core.workspace = true
 heron-dsp-runtime.workspace = true
+heron-audio-plugin.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

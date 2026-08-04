@@ -4,6 +4,8 @@ use std::{
     rc::Rc,
 };
 
+pub use heron_audio_plugin::AudioPluginProcessorHandle;
+use heron_audio_plugin::ParameterTokenMap;
 use heron_dsp_runtime::{
     block::MAX_PLUGIN_BLOCK_FRAMES,
     protocol::{
@@ -12,9 +14,9 @@ use heron_dsp_runtime::{
         PluginParameter,
     },
 };
-pub use heron_vst3_host::Vst3ProcessorHandle;
 use heron_vst3_host::{
     AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind, Vst3AuxInputConfig, Vst3HostRequest,
+    Vst3ProcessorHandle,
 };
 
 use crate::{
@@ -57,6 +59,7 @@ struct Instance {
     plugin: HostedPlugin,
     secondary: Option<HostedPlugin>,
     runtime_handle: u32,
+    parameter_tokens: ParameterTokenMap<u32>,
     display_name: String,
     ara_document_state: Vec<u8>,
     aux_input_configs: Vec<PluginAuxInputConfiguration>,
@@ -125,7 +128,7 @@ impl Instance {
                 .is_some_and(HostedPlugin::has_outstanding_processor_leases)
     }
 
-    fn processor_handle(&self) -> Vst3ProcessorHandle {
+    fn processor_handle(&self) -> AudioPluginProcessorHandle {
         let primary_latency = self.plugin.latency_samples();
         let secondary_latency = self
             .secondary
@@ -135,18 +138,18 @@ impl Instance {
             .aux_input_configs
             .iter()
             .map(|input| Vst3AuxInputConfig {
-                bus_index: input.input_bus_index,
+                bus_index: vst3_input_index(&input.input_port_key).unwrap_or_default(),
                 channels: input.channels,
             })
             .collect::<Vec<_>>();
-        Vst3ProcessorHandle::new_with_aux_inputs(
+        AudioPluginProcessorHandle::new(Vst3ProcessorHandle::new_with_aux_inputs(
             self.plugin.processor_lease(),
             self.secondary.as_ref().map(HostedPlugin::processor_lease),
             primary_latency,
             secondary_latency,
             MAX_PLUGIN_BLOCK_FRAMES,
             &aux_inputs,
-        )
+        ))
     }
 
     fn latency_samples(&self) -> u32 {
@@ -209,33 +212,40 @@ impl Vst3Runtime {
         match command {
             ControlCommand::LoadPlugin {
                 instance_id,
-                module_path,
-                class_id,
+                locator,
                 plugin_kind,
                 audio_mode,
                 active_aux_inputs,
                 sample_rate,
-                component_state,
-                controller_state,
+                state,
                 ara_factory_class_id,
-                ara_document_state,
             } => {
-                let component_state = match inline_bytes(component_state) {
+                if locator.format != heron_dsp_runtime::protocol::PluginFormat::Vst3 {
+                    return control_error("plug-in locator is not VST3");
+                }
+                let chunk = |key: &str| {
+                    state
+                        .chunks
+                        .iter()
+                        .find(|chunk| chunk.key == key)
+                        .map_or_else(|| Ok(Vec::new()), |chunk| inline_bytes(chunk.bytes.clone()))
+                };
+                let component_state = match chunk("component") {
                     Ok(bytes) => bytes,
                     Err(message) => return control_error(message),
                 };
-                let controller_state = match inline_bytes(controller_state) {
+                let controller_state = match chunk("controller") {
                     Ok(bytes) => bytes,
                     Err(message) => return control_error(message),
                 };
-                let ara_document_state = match inline_bytes(ara_document_state) {
+                let ara_document_state = match chunk("ara-document") {
                     Ok(bytes) => bytes,
                     Err(message) => return control_error(message),
                 };
                 self.load_plugin(LoadPluginRequest {
                     instance_id,
-                    module_path,
-                    class_id,
+                    module_path: locator.artifact_path,
+                    class_id: locator.native_id,
                     plugin_kind,
                     audio_mode,
                     active_aux_inputs,
@@ -252,10 +262,18 @@ impl Vst3Runtime {
             }
             ControlCommand::SetPluginParameter {
                 instance_id,
-                parameter_id,
-                normalized,
+                parameter_key,
+                value,
                 gesture,
-            } => self.set_parameter(&instance_id, parameter_id, normalized, gesture),
+            } => match parameter_key
+                .strip_prefix("vst3:")
+                .and_then(|id| id.parse().ok())
+            {
+                Some(parameter_id) => {
+                    self.set_parameter_plain(&instance_id, parameter_id, value, gesture)
+                }
+                None => control_error("VST3 parameter key is invalid"),
+            },
             ControlCommand::SavePluginState { instance_id } => self.save_state(&instance_id),
             ControlCommand::OpenPluginEditor {
                 instance_id,
@@ -342,13 +360,13 @@ impl Vst3Runtime {
         self.retired_instances.len()
     }
 
-    pub fn processor_handle(&self, instance_id: &str) -> Option<Vst3ProcessorHandle> {
+    pub fn processor_handle(&self, instance_id: &str) -> Option<AudioPluginProcessorHandle> {
         self.instances
             .get(instance_id)
             .map(Instance::processor_handle)
     }
 
-    pub fn processor_handles(&self) -> HashMap<String, Vst3ProcessorHandle> {
+    pub fn processor_handles(&self) -> HashMap<String, AudioPluginProcessorHandle> {
         self.instances
             .iter()
             .map(|(id, instance)| (id.clone(), instance.processor_handle()))
@@ -371,16 +389,16 @@ impl Vst3Runtime {
                 .iter()
                 .filter(|bus| bus.source_channel_id.is_some())
                 .map(|bus| PluginAuxInputConfiguration {
-                    input_bus_index: bus.input_bus_index,
+                    input_port_key: bus.input_port_key.clone(),
                     channels: bus.channels,
                 })
                 .collect::<Vec<_>>();
-            desired.sort_by_key(|bus| bus.input_bus_index);
+            desired.sort_by(|left, right| left.input_port_key.cmp(&right.input_port_key));
             let Some(current) = self.instances.get_mut(&plugin.instance_id) else {
                 continue;
             };
             let mut current_aux = current.aux_input_configs.clone();
-            current_aux.sort_by_key(|bus| bus.input_bus_index);
+            current_aux.sort_by(|left, right| left.input_port_key.cmp(&right.input_port_key));
             if current_aux == desired {
                 continue;
             }
@@ -438,7 +456,7 @@ impl Vst3Runtime {
     pub fn graph_processor_handles(
         &self,
         operation_id: &str,
-    ) -> HashMap<String, Vst3ProcessorHandle> {
+    ) -> HashMap<String, AudioPluginProcessorHandle> {
         let staged = self.staged_graph_instances.get(operation_id);
         self.instances
             .iter()
@@ -533,25 +551,40 @@ impl Vst3Runtime {
             .instances
             .get(instance_id)
             .ok_or_else(|| "VST3 instance is not loaded".to_owned())?;
-        instance
+        let parameters = instance
             .plugin
             .parameters()
-            .map(|parameters| {
-                parameters
-                    .into_iter()
-                    .map(|parameter| PluginParameter {
-                        id: parameter.id,
-                        title: parameter.title,
-                        units: parameter.units,
-                        step_count: parameter.step_count,
-                        default_normalized: parameter.default_normalized,
-                        normalized: parameter.normalized,
-                        formatted: parameter.formatted,
-                        flags: parameter.flags,
-                    })
-                    .collect()
+            .map_err(|error| error.to_string())?;
+        parameters
+            .into_iter()
+            .map(|parameter| {
+                let runtime_token = instance
+                    .parameter_tokens
+                    .token(parameter.id)
+                    .ok_or_else(|| "VST3 parameter token table is stale".to_owned())?;
+                Ok(PluginParameter {
+                    parameter_key: format!("vst3:{}", parameter.id),
+                    runtime_token,
+                    title: parameter.title,
+                    units: parameter.units,
+                    step_count: parameter.step_count,
+                    default_normalized: parameter.default_normalized,
+                    normalized: parameter.normalized,
+                    min_value: parameter.min_value,
+                    max_value: parameter.max_value,
+                    default_value: parameter.default_value,
+                    value: parameter.value,
+                    normalized_value: parameter.normalized,
+                    module_path: String::new(),
+                    read_only: parameter.read_only,
+                    hidden: parameter.hidden,
+                    stepped: parameter.stepped,
+                    automatable: parameter.automatable,
+                    bypass: parameter.bypass,
+                    formatted: parameter.formatted,
+                })
             })
-            .map_err(|error| error.to_string())
+            .collect()
     }
 
     pub fn format_parameter_value(
@@ -667,12 +700,15 @@ impl Vst3Runtime {
             (instance.runtime_handle == command.runtime_handle).then(|| id.clone())
         });
         match instance_id {
-            Some(instance_id) => self.set_parameter(
-                &instance_id,
-                command.parameter_id,
-                command.normalized,
-                command.gesture,
-            ),
+            Some(instance_id) => {
+                let Some(parameter_id) = self.instances[&instance_id]
+                    .parameter_tokens
+                    .native_id(command.parameter_token)
+                else {
+                    return control_error("VST3 parameter token is stale");
+                };
+                self.set_parameter_plain(&instance_id, parameter_id, command.value, command.gesture)
+            }
             None => control_error("VST3 runtime handle is stale"),
         }
     }
@@ -889,10 +925,13 @@ impl Vst3Runtime {
             PluginAudioMode::MonoToStereo => AudioLayout::MonoToStereo,
             PluginAudioMode::Stereo => AudioLayout::Stereo,
         };
-        let active_aux_bus_indices = active_aux_inputs
+        let Some(active_aux_bus_indices) = active_aux_inputs
             .iter()
-            .map(|input| input.input_bus_index)
-            .collect::<Vec<_>>();
+            .map(|input| vst3_input_index(&input.input_port_key))
+            .collect::<Option<Vec<_>>>()
+        else {
+            return control_error("VST3 input port key is invalid");
+        };
         if kind == PluginKind::Instrument
             && matches!(
                 audio_mode,
@@ -1000,6 +1039,10 @@ impl Vst3Runtime {
         );
         let runtime_handle = self.next_runtime_handle;
         self.next_runtime_handle = self.next_runtime_handle.wrapping_add(1).max(1);
+        let parameter_tokens = match allocate_parameter_tokens(&plugin) {
+            Ok(tokens) => tokens,
+            Err(error) => return control_error(&error),
+        };
         let display_name = Path::new(&module_path)
             .file_stem()
             .and_then(|name| name.to_str())
@@ -1014,6 +1057,7 @@ impl Vst3Runtime {
                 plugin,
                 secondary,
                 runtime_handle,
+                parameter_tokens,
                 display_name,
                 ara_document_state,
                 aux_input_configs: active_aux_inputs,
@@ -1064,6 +1108,39 @@ impl Vst3Runtime {
         ControlResult::Accepted
     }
 
+    fn set_parameter_plain(
+        &mut self,
+        instance_id: &str,
+        parameter_id: u32,
+        value: f64,
+        gesture: ParameterGesture,
+    ) -> ControlResult {
+        let Some(instance) = self.instances.get(instance_id) else {
+            return control_error("VST3 instance is not loaded");
+        };
+        if gesture == ParameterGesture::Begin {
+            return ControlResult::Accepted;
+        }
+        if !value.is_finite() {
+            return control_error("VST3 parameter value is invalid");
+        }
+        if let Err(error) = instance.plugin.set_parameter_plain(
+            parameter_id,
+            value,
+            gesture == ParameterGesture::End,
+        ) {
+            return control_error(&error.to_string());
+        }
+        if gesture == ParameterGesture::Perform {
+            push_pending_host_request(
+                &mut self.pending_host_requests,
+                instance_id.to_owned(),
+                Vst3HostRequest::DirtyChanged(true),
+            );
+        }
+        ControlResult::Accepted
+    }
+
     fn save_state(&mut self, instance_id: &str) -> ControlResult {
         let Some(instance) = self.instances.get_mut(instance_id) else {
             return control_error("VST3 instance is not loaded");
@@ -1080,9 +1157,23 @@ impl Vst3Runtime {
         };
         match instance.plugin.save_state() {
             Ok((component_state, controller_state)) => ControlResult::PluginState {
-                component_state: BinaryPayload::inline(component_state),
-                controller_state: BinaryPayload::inline(controller_state),
-                ara_document_state: BinaryPayload::inline(ara_document_state),
+                state: heron_dsp_runtime::protocol::PluginStateEnvelope {
+                    version: 1,
+                    chunks: vec![
+                        heron_dsp_runtime::protocol::PluginStateChunk {
+                            key: "component".to_owned(),
+                            bytes: BinaryPayload::inline(component_state),
+                        },
+                        heron_dsp_runtime::protocol::PluginStateChunk {
+                            key: "controller".to_owned(),
+                            bytes: BinaryPayload::inline(controller_state),
+                        },
+                        heron_dsp_runtime::protocol::PluginStateChunk {
+                            key: "ara-document".to_owned(),
+                            bytes: BinaryPayload::inline(ara_document_state),
+                        },
+                    ],
+                },
             },
             Err(error) => control_error(&error.to_string()),
         }
@@ -1104,6 +1195,11 @@ impl Vst3Runtime {
             open: false,
         }
     }
+}
+
+fn vst3_input_index(port_key: &str) -> Option<u32> {
+    let prefix = "vst3:audio:input:";
+    port_key.strip_prefix(prefix)?.parse().ok()
 }
 
 fn inline_bytes(payload: BinaryPayload) -> Result<Vec<u8>, &'static str> {
@@ -1145,6 +1241,17 @@ fn push_pending_host_request(
         pending.pop_front();
     }
     pending.push_back((instance_id, request));
+}
+
+fn allocate_parameter_tokens(plugin: &HostedPlugin) -> Result<ParameterTokenMap<u32>, String> {
+    let native_ids = plugin
+        .parameters()
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|parameter| parameter.id)
+        .collect::<Vec<_>>();
+    ParameterTokenMap::from_native_ids(native_ids)
+        .ok_or_else(|| "VST3 parameter count exceeds runtime token capacity".to_owned())
 }
 
 fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {

@@ -4,8 +4,11 @@ import { isPluginCommand, persistPluginCommand } from "../internal/plugin-persis
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "ABCDEF0123456789ABCDEF0123456789",
-  modulePath: "/plugins/Effect.vst3",
+  locator: {
+    format: "vst3",
+    artifactPath: "/plugins/Effect.vst3",
+    nativeId: "ABCDEF0123456789ABCDEF0123456789"
+  },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -53,24 +56,36 @@ describe("plugin-persistence", () => {
         channelId: "master",
         role: "insert",
         slotOrder: 0,
-        classId: descriptor.classId,
+        locator: descriptor.locator,
         descriptor,
         audioMode: "stereo",
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array([1]),
-        controllerState: new Uint8Array([2])
+        state: {
+          version: 1,
+          chunks: [
+            { key: "component", bytes: new Uint8Array([1]) },
+            { key: "controller", bytes: new Uint8Array([2]) }
+          ]
+        }
       }
     })
 
     expect(tx.insert).toHaveBeenCalled()
-    expect(tx.insertValues).toHaveBeenCalledWith(
+    expect(tx.insertValues).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         id: "plugin-1",
-        classId: descriptor.classId,
+        locatorFormat: "vst3",
+        artifactPath: descriptor.locator.artifactPath,
+        nativeId: descriptor.locator.nativeId,
         descriptorSnapshot: expect.stringContaining("Effect")
       })
     )
+    expect(tx.insertValues).toHaveBeenNthCalledWith(2, [
+      { pluginId: "plugin-1", chunkKey: "component", bytes: new Uint8Array([1]) },
+      { pluginId: "plugin-1", chunkKey: "controller", bytes: new Uint8Array([2]) }
+    ])
   })
 
   it("deletes plugin rows", async () => {

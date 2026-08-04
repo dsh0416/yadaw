@@ -26,7 +26,7 @@ pub(super) fn compiled_graph_snapshot(
             target: target.to_owned(),
             kind,
             signal_width: width,
-            target_input_bus_index: None,
+            target_input_port_key: None,
         });
     }
 
@@ -202,7 +202,7 @@ pub(super) fn compiled_graph_snapshot(
             for bus in &plugin.aux_input_buses {
                 if let Some(source) = bus.source_index {
                     sidechain_delays.insert(
-                        (plugin_index, bus.input_bus_index),
+                        (plugin_index, bus.input_port_key.clone()),
                         convergence.saturating_sub(channel_latencies[source as usize]),
                     );
                 }
@@ -591,18 +591,18 @@ pub(super) fn compiled_graph_snapshot(
                 continue;
             };
             let delay = sidechain_delays
-                .get(&(plugin_index, bus.input_bus_index))
+                .get(&(plugin_index, bus.input_port_key.clone()))
                 .copied()
                 .unwrap_or(0);
             let route_source = if delay > 0 {
                 let delay_id = format!(
                     "pdc:sidechain:{}:{}",
-                    plugin.instance_id, bus.input_bus_index
+                    plugin.instance_id, bus.input_port_token
                 );
                 nodes.push(CompiledGraphNode {
                     id: delay_id.clone(),
                     kind: CompiledGraphNodeKind::PdcDelay,
-                    label: format!("Side-chain PDC · bus {}", bus.input_bus_index),
+                    label: format!("Side-chain PDC · {}", bus.input_port_key),
                     channel_id: Some(source.id.clone()),
                     plugin_instance_id: Some(plugin.instance_id.clone()),
                     signal_width: CompiledGraphSignalWidth::Stereo,
@@ -636,7 +636,7 @@ pub(super) fn compiled_graph_snapshot(
                 } else {
                     CompiledGraphSignalWidth::Stereo
                 },
-                target_input_bus_index: Some(bus.input_bus_index),
+                target_input_port_key: Some(bus.input_port_key.clone()),
             });
         }
     }

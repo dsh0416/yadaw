@@ -1,11 +1,11 @@
 use super::window_config::presentation_latency_bases;
 use super::{
-    ActorCommand, ActorRequest, ControlCommand, ControlResult, EmbeddedUiHost, HostEvent, Instant,
-    queue_background_graph_build, vst3_host_request_payload,
+    ActorCommand, ActorRequest, ControlCommand, ControlResult, EmbeddedUiHost, HashMap, HostEvent,
+    Instant, clap, queue_background_graph_build, vst3_host_request_payload,
 };
 
 impl EmbeddedUiHost {
-    pub(super) fn execute_vst3_request(&mut self, request: ActorRequest) {
+    pub(super) fn execute_audio_plugin_request(&mut self, request: ActorRequest) {
         let ActorRequest { command, reply } = request;
         let command = match command {
             ActorCommand::Control(ControlCommand::OpenPluginEditor {
@@ -14,6 +14,15 @@ impl EmbeddedUiHost {
                 context,
             }) => {
                 let _ = context;
+                if self
+                    .clap
+                    .as_ref()
+                    .is_some_and(|runtime| runtime.contains(&instance_id))
+                {
+                    let result = self.open_clap_editor(instance_id, preference);
+                    let _ = reply.send(result);
+                    return;
+                }
                 let result = self.open_embedded_editor(instance_id, preference);
                 let _ = reply.send(result);
                 return;
@@ -60,6 +69,22 @@ impl EmbeddedUiHost {
                 self.close_embedded_editor(&instance_id, true);
                 if let Ok(mut processors) = self.processors.lock() {
                     processors.remove(&instance_id);
+                }
+                if self
+                    .clap
+                    .as_ref()
+                    .is_some_and(|runtime| runtime.contains(&instance_id))
+                {
+                    let result = self.clap.as_mut().map_or_else(
+                        || control_error! { message: "CLAP UI runtime is shutting down".into() },
+                        |runtime| {
+                            runtime.execute(ControlCommand::UnloadPlugin {
+                                instance_id: instance_id.clone(),
+                            })
+                        },
+                    );
+                    let _ = reply.send(result);
+                    return;
                 }
                 let Some(runtime) = self.vst3.as_mut() else {
                     let _ = reply.send(control_error! {
@@ -119,7 +144,12 @@ impl EmbeddedUiHost {
                 let result = match runtime.prepare_graph_instances(&operation_id, &graph) {
                     Ok(()) => {
                         if let Ok(mut processors) = self.processors.lock() {
-                            *processors = runtime.graph_processor_handles(&operation_id);
+                            let mut handles = self
+                                .clap
+                                .as_ref()
+                                .map_or_else(HashMap::new, clap::ClapRuntime::processor_handles);
+                            handles.extend(runtime.graph_processor_handles(&operation_id));
+                            *processors = handles;
                         }
                         ControlResult::Accepted
                     }
@@ -138,7 +168,12 @@ impl EmbeddedUiHost {
                 let result = match runtime.activate_graph_instances(&operation_id) {
                     Ok(changed) => {
                         if let Ok(mut processors) = self.processors.lock() {
-                            *processors = runtime.processor_handles();
+                            let mut handles = self
+                                .clap
+                                .as_ref()
+                                .map_or_else(HashMap::new, clap::ClapRuntime::processor_handles);
+                            handles.extend(runtime.processor_handles());
+                            *processors = handles;
                         }
                         for instance_id in changed {
                             self.rebind_embedded_editor(&instance_id);
@@ -164,7 +199,12 @@ impl EmbeddedUiHost {
                 let rollback = if let Some(runtime) = self.vst3.as_mut() {
                     let changed = runtime.rollback_graph_instances(&operation_id);
                     if let Ok(mut processors) = self.processors.lock() {
-                        *processors = runtime.processor_handles();
+                        let mut handles = self
+                            .clap
+                            .as_ref()
+                            .map_or_else(HashMap::new, clap::ClapRuntime::processor_handles);
+                        handles.extend(runtime.processor_handles());
+                        *processors = handles;
                     }
                     Some((changed, runtime.has_retired_instances()))
                 } else {
@@ -185,7 +225,12 @@ impl EmbeddedUiHost {
                 if let Some(runtime) = self.vst3.as_mut() {
                     runtime.abort_graph_instances(&operation_id);
                     if let Ok(mut processors) = self.processors.lock() {
-                        *processors = runtime.processor_handles();
+                        let mut handles = self
+                            .clap
+                            .as_ref()
+                            .map_or_else(HashMap::new, clap::ClapRuntime::processor_handles);
+                        handles.extend(runtime.processor_handles());
+                        *processors = handles;
                     }
                 }
                 let _ = reply.send(ControlResult::Accepted);
@@ -193,6 +238,182 @@ impl EmbeddedUiHost {
             }
             command => command,
         };
+        let clap_instance_id = match &command {
+            ActorCommand::Control(ControlCommand::LoadPlugin {
+                instance_id,
+                locator,
+                ..
+            }) if locator.format == heron_dsp_runtime::protocol::PluginFormat::Clap => {
+                Some(instance_id.clone())
+            }
+            ActorCommand::Control(
+                ControlCommand::PluginParameters { instance_id }
+                | ControlCommand::SetPluginParameter { instance_id, .. }
+                | ControlCommand::SavePluginState { instance_id },
+            ) if self
+                .clap
+                .as_ref()
+                .is_some_and(|runtime| runtime.contains(instance_id)) =>
+            {
+                Some(instance_id.clone())
+            }
+            _ => None,
+        };
+        if let Some(instance_id) = clap_instance_id {
+            let result = match command {
+                ActorCommand::Control(command) => self.clap.as_mut().map_or_else(
+                    || control_error! { message: "CLAP UI runtime is shutting down".into() },
+                    |runtime| runtime.execute(command),
+                ),
+                _ => control_error! { message: "invalid CLAP control command".into() },
+            };
+            if matches!(result, ControlResult::PluginLoaded { .. })
+                && let Some(processor) = self
+                    .clap
+                    .as_ref()
+                    .and_then(|runtime| runtime.processor_handle(&instance_id))
+                && let Ok(mut processors) = self.processors.lock()
+            {
+                processors.insert(instance_id, processor);
+            }
+            let _ = reply.send(result);
+            return;
+        }
+        if let ActorCommand::Parameter(command) = &command
+            && self
+                .clap
+                .as_ref()
+                .is_some_and(|runtime| runtime.contains_runtime_handle(command.runtime_handle))
+        {
+            let result = self.clap.as_ref().map_or_else(
+                || control_error! { message: "CLAP UI runtime is shutting down".into() },
+                |runtime| runtime.apply_parameter_command(*command),
+            );
+            let _ = reply.send(result);
+            return;
+        }
+        if matches!(command, ActorCommand::Control(ControlCommand::Ping)) {
+            let parameter_outputs = self
+                .clap
+                .as_ref()
+                .map(clap::ClapRuntime::take_parameter_outputs)
+                .unwrap_or_default();
+            for (instance_id, parameter_id, value, gesture) in parameter_outputs {
+                let gesture = match gesture {
+                    heron_clap_host::ClapParameterGesture::Begin => "begin",
+                    heron_clap_host::ClapParameterGesture::Perform => "perform",
+                    heron_clap_host::ClapParameterGesture::End => "end",
+                };
+                let _ = self.host_events.try_send(HostEvent::PluginRuntime {
+                    instance_id,
+                    kind: "parameter-output".to_owned(),
+                    value: format!("clap:{parameter_id},{value},{gesture}"),
+                });
+            }
+            let clap_requests = self
+                .clap
+                .as_mut()
+                .map(clap::ClapRuntime::take_host_requests)
+                .unwrap_or_default();
+            for (instance_id, request, latency, tail) in clap_requests {
+                let needs_reconfigure = request.restart
+                    || request.parameter_rescan != 0
+                    || request.audio_port_rescan != 0;
+                if needs_reconfigure {
+                    if let Ok(mut processors) = self.processors.lock() {
+                        processors.remove(&instance_id);
+                    }
+                    match self
+                        .audio_engine
+                        .replace_plugin_processor(&instance_id, None)
+                    {
+                        Ok(Some(graph)) => {
+                            queue_background_graph_build(&self.background_sender, graph);
+                        }
+                        Ok(None) => {}
+                        Err(error) => self.publish_plugin_runtime_failure(
+                            &instance_id,
+                            "clap-retire",
+                            error.to_string(),
+                        ),
+                    }
+                }
+                if let Some(plugin) = self.ara_graph.as_mut().and_then(|graph| {
+                    graph
+                        .plugins
+                        .iter_mut()
+                        .find(|plugin| plugin.instance_id == instance_id)
+                }) {
+                    plugin.latency_samples = latency;
+                    plugin.tail_samples = tail;
+                }
+                if let Ok(Some(graph)) =
+                    self.audio_engine
+                        .apply_plugin_timing(&instance_id, latency, tail)
+                {
+                    queue_background_graph_build(&self.background_sender, graph);
+                }
+                if request.restart
+                    || request.parameter_rescan != 0
+                    || request.audio_port_rescan != 0
+                    || request.latency_changed
+                    || request.tail_changed
+                {
+                    let _ = self.host_events.try_send(HostEvent::PluginRuntime {
+                        instance_id,
+                        kind: "clap-reconfigure-requested".to_owned(),
+                        value: format!(
+                            "restart={};params={};ports={};latency={};tail={}",
+                            request.restart,
+                            request.parameter_rescan,
+                            request.audio_port_rescan,
+                            request.latency_changed,
+                            request.tail_changed,
+                        ),
+                    });
+                }
+            }
+            let completions = self
+                .clap
+                .as_mut()
+                .map(clap::ClapRuntime::complete_reconfigures)
+                .unwrap_or_default();
+            for completion in completions {
+                match completion.result {
+                    Ok(processor) => {
+                        if let Ok(mut processors) = self.processors.lock() {
+                            processors.insert(completion.instance_id.clone(), processor.clone());
+                        }
+                        match self
+                            .audio_engine
+                            .replace_plugin_processor(&completion.instance_id, Some(processor))
+                        {
+                            Ok(Some(graph)) => {
+                                queue_background_graph_build(&self.background_sender, graph);
+                            }
+                            Ok(None) => {}
+                            Err(error) => self.publish_plugin_runtime_failure(
+                                &completion.instance_id,
+                                "clap-reactivate-publish",
+                                error.to_string(),
+                            ),
+                        }
+                        if let Some(warning) = completion.warning {
+                            let _ = self.host_events.try_send(HostEvent::PluginRuntime {
+                                instance_id: completion.instance_id,
+                                kind: "clap-reconfigure-warning".to_owned(),
+                                value: warning,
+                            });
+                        }
+                    }
+                    Err(error) => self.publish_plugin_runtime_failure(
+                        &completion.instance_id,
+                        "clap-reactivate",
+                        error,
+                    ),
+                }
+            }
+        }
         let Some(runtime) = self.vst3.as_mut() else {
             let _ = reply.send(control_error! {
                 message: "VST3 UI runtime is shutting down".into(),

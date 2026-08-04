@@ -3,7 +3,12 @@ import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { UiDropdownMenu } from "@heron/ui"
 import type { UiMenuEntry } from "@heron/ui"
-import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@heron/contracts"
+import {
+  pluginCategoriesLabel,
+  pluginDescriptorKey,
+  pluginLocator,
+  type PluginDescriptor
+} from "@heron/contracts"
 import {
   pluginAudioModeInputWidth,
   pluginAudioModeOptions,
@@ -59,7 +64,7 @@ const pickerMenu = computed(() => {
         id: `plugin:${descriptorKey}`,
         label: plugin.name,
         ariaLabel: t("mixer.pluginPicker.choosePlugin", { name: plugin.name }),
-        title: `${plugin.name} · ${plugin.vendor} · ${categoryLabel}`,
+        title: `${plugin.name} · ${pluginLocator(plugin).format.toUpperCase()} · ${plugin.vendor} · ${categoryLabel}`,
         children: pluginAudioModeOptions(plugin.kind, props.inputWidth, t).map((option) => {
           const id = JSON.stringify([descriptorKey, option.value])
           selections.set(id, { descriptor: plugin, audioMode: option.value })
@@ -71,7 +76,14 @@ const pickerMenu = computed(() => {
             ariaLabel: `${plugin.name}: ${option.label}`,
             leading: option.badge,
             metadata: option.detail,
-            keywords: [plugin.name, plugin.vendor, vendor, categoryLabel, option.label],
+            keywords: [
+              plugin.name,
+              plugin.vendor,
+              vendor,
+              pluginLocator(plugin).format,
+              categoryLabel,
+              option.label
+            ],
             disabled: !supported,
             disabledReason: supported
               ? undefined

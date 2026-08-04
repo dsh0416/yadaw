@@ -17,7 +17,7 @@ export interface AudioHostApplicationEventOptions {
     | "resolvePluginSidechainRoute"
     | "setAraCallbackHandler"
     | "setPluginSidechainRouteRequestHandler"
-    | "setVst3HostNotificationHandler"
+    | "setPluginHostNotificationHandler"
   >
   projectCommands: Pick<ProjectCommandService, "currentWorkspace" | "execute">
   plugins: Pick<PluginCatalogService, "openEditor">
@@ -62,7 +62,7 @@ export class AudioHostApplicationEventBridge {
       }
     })
 
-    this.options.audioHost.setVst3HostNotificationHandler(async (notification) => {
+    this.options.audioHost.setPluginHostNotificationHandler(async (notification) => {
       if (this.disposed) return
       if (notification.kind === "dirty-changed" && notification.value === "true") {
         await this.options.markProjectDirty()
@@ -91,15 +91,15 @@ export class AudioHostApplicationEventBridge {
       }
 
       const sidechainInputs = plugin.sidechainInputs.filter(
-        (route) => route.inputBusIndex !== request.inputBusIndex
+        (route) => route.inputPortKey !== request.inputPortKey
       )
       if (request.sourceChannelId) {
         sidechainInputs.push({
-          inputBusIndex: request.inputBusIndex,
+          inputPortKey: request.inputPortKey,
           sourceChannelId: request.sourceChannelId
         })
       }
-      sidechainInputs.sort((left, right) => left.inputBusIndex - right.inputBusIndex)
+      sidechainInputs.sort((left, right) => left.inputPortKey.localeCompare(right.inputPortKey))
       const operationId = `native-sidechain:${randomUUID()}`
       const result = await this.options.projectCommands.execute(
         {

@@ -271,11 +271,10 @@ describe("ApplicationStateStore", () => {
       channelId: "channel",
       role: "insert",
       slotOrder: 0,
-      classId: "plugin-class",
+      locator: { format: "vst3", artifactPath: "plugin.vst3", nativeId: "plugin-class" },
       descriptor: {
         source: { kind: "external" },
-        classId: "plugin-class",
-        modulePath: "plugin.vst3",
+        locator: { format: "vst3", artifactPath: "plugin.vst3", nativeId: "plugin-class" },
         name: "Plugin",
         vendor: "Heron Studio",
         version: "1",
@@ -291,8 +290,7 @@ describe("ApplicationStateStore", () => {
       audioMode: "stereo",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     }
     const graph = { plugins: [instance] } as ProjectGraphSnapshot
     store.setWorkspace({

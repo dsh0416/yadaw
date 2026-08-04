@@ -31,11 +31,14 @@ function effectInstance(id: string): PluginInstanceState {
     channelId: "audio-1",
     role: "insert",
     slotOrder: 0,
-    classId: "class-1",
+    locator: { format: "vst3", artifactPath: "/plugins/reverb.vst3", nativeId: "class-1" },
     descriptor: {
       source: { kind: "external" },
-      classId: "class-1",
-      modulePath: "/plugins/reverb.vst3",
+      locator: {
+        format: "vst3",
+        artifactPath: "/plugins/reverb.vst3",
+        nativeId: "class-1"
+      },
       name: "Reverb",
       vendor: "Vendor",
       version: "1.0",
@@ -51,8 +54,7 @@ function effectInstance(id: string): PluginInstanceState {
     audioMode: "stereo",
     enabled: true,
     sidechainInputs: [],
-    componentState: new Uint8Array(),
-    controllerState: new Uint8Array()
+    state: { version: 1, chunks: [] }
   }
 }
 

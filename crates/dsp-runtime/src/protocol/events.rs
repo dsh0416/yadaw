@@ -42,7 +42,7 @@ pub enum HostEvent {
         event: AraCallbackEvent,
     },
     PluginEditorPreferenceChanged {
-        class_id: String,
+        plugin_type_key: String,
         preference: PluginEditorPreference,
     },
     /// Native editor windows closed without a matching ClosePluginEditor RPC
@@ -55,7 +55,7 @@ pub enum HostEvent {
     PluginSidechainRouteRequested {
         request_id: u64,
         instance_id: String,
-        input_bus_index: u32,
+        input_port_key: String,
         source_channel_id: Option<String>,
     },
     MidiInputSnapshot {

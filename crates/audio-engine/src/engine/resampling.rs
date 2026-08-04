@@ -442,13 +442,14 @@ where
                             callback_metrics
                                 .published_graph_build_generation
                                 .store(replacement.build_generation, Ordering::Release);
-                            if let Some(retired) = mixer.replace(replacement)
-                                && let Err(retired) = retired_mixers.try_push(retired)
-                            {
-                                // Graph retirement should never block the audio callback. A
-                                // saturated queue means the control thread has stopped polling;
-                                // leaking is safer than deallocating a large graph here.
-                                std::mem::forget(retired);
+                            if let Some(mut retired) = mixer.replace(replacement) {
+                                retired.retire_plugin_processors();
+                                if let Err(retired) = retired_mixers.try_push(retired) {
+                                    // Graph retirement should never block the audio callback. A
+                                    // saturated queue means the control thread has stopped polling;
+                                    // leaking is safer than deallocating a large graph here.
+                                    std::mem::forget(retired);
+                                }
                             }
                         }
                     } else if let EngineCommand::LoadMixer(mut runtime) = command {

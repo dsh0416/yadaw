@@ -4,8 +4,7 @@ import { AudioGraphCompiler } from "./audio-graph-compiler"
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "effect-class",
-  modulePath: "/plugins/Effect.vst3",
+  locator: { format: "vst3", artifactPath: "/plugins/Effect.vst3", nativeId: "effect-class" },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -24,13 +23,18 @@ const plugin: PluginInstanceState = {
   channelId: "audio-1",
   role: "insert",
   slotOrder: 0,
-  classId: descriptor.classId,
+  locator: descriptor.locator,
   descriptor,
   audioMode: "stereo",
   enabled: true,
   sidechainInputs: [],
-  componentState: new Uint8Array([1]),
-  controllerState: new Uint8Array([2])
+  state: {
+    version: 1,
+    chunks: [
+      { key: "component", bytes: new Uint8Array([1]) },
+      { key: "controller", bytes: new Uint8Array([2]) }
+    ]
+  }
 }
 
 function snapshot(overrides: Partial<ProjectGraphSnapshot> = {}): ProjectGraphSnapshot {

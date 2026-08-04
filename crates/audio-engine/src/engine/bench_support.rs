@@ -263,6 +263,7 @@ impl PluginAdapterHarness {
             context: ProcessContext {
                 project_time_samples: 0,
                 continuous_time_samples: 0,
+                steady_time_samples: 0,
                 project_time_quarters: 0.0,
                 bar_position_quarters: 0.0,
                 tempo: 120.0,
@@ -270,6 +271,9 @@ impl PluginAdapterHarness {
                 time_signature_denominator: 4,
                 playing: false,
                 recording: false,
+                loop_active: false,
+                loop_start_quarters: 0.0,
+                loop_end_quarters: 0.0,
             },
         }
     }

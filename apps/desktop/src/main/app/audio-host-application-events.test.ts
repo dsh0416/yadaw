@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type {
   AraHostCallback,
   PluginSidechainRouteRequest,
-  Vst3HostNotification
+  PluginHostNotification
 } from "../audio-host"
 import { bindAudioHostApplicationEvents } from "./audio-host-application-events"
 
 describe("AudioHostApplicationEventBridge", () => {
   let araHandler: (callback: AraHostCallback) => void | Promise<void>
-  let vst3Handler: (notification: Vst3HostNotification) => void | Promise<void>
+  let pluginHandler: (notification: PluginHostNotification) => void | Promise<void>
   let sidechainHandler: (request: PluginSidechainRouteRequest) => void | Promise<void>
   let send: ReturnType<typeof vi.fn<(channel: string, event: unknown) => void>>
   let resolvePluginSidechainRoute: ReturnType<
@@ -39,8 +39,8 @@ describe("AudioHostApplicationEventBridge", () => {
         setAraCallbackHandler: (handler) => {
           araHandler = handler
         },
-        setVst3HostNotificationHandler: (handler) => {
-          vst3Handler = handler
+        setPluginHostNotificationHandler: (handler) => {
+          pluginHandler = handler
         },
         setPluginSidechainRouteRequestHandler: (handler) => {
           sidechainHandler = handler
@@ -103,8 +103,8 @@ describe("AudioHostApplicationEventBridge", () => {
   })
 
   it("reconciles VST3 dirty and open-editor notifications", async () => {
-    await vst3Handler({ instanceId: "plugin-1", kind: "dirty-changed", value: "true" })
-    await vst3Handler({ instanceId: "plugin-1", kind: "open-editor", value: "editor" })
+    await pluginHandler({ instanceId: "plugin-1", kind: "dirty-changed", value: "true" })
+    await pluginHandler({ instanceId: "plugin-1", kind: "open-editor", value: "editor" })
 
     expect(markProjectDirty).toHaveBeenCalledOnce()
     expect(openEditor).toHaveBeenCalledWith("plugin-1")
@@ -120,8 +120,8 @@ describe("AudioHostApplicationEventBridge", () => {
             id: "plugin-1",
             descriptor: { classId: "effect" },
             sidechainInputs: [
-              { inputBusIndex: 2, sourceChannelId: "old" },
-              { inputBusIndex: 3, sourceChannelId: "audio-3" }
+              { inputPortKey: "vst3:audio:input:2", sourceChannelId: "old" },
+              { inputPortKey: "vst3:audio:input:3", sourceChannelId: "audio-3" }
             ]
           }
         ]
@@ -137,7 +137,7 @@ describe("AudioHostApplicationEventBridge", () => {
     await sidechainHandler({
       requestId: 17,
       instanceId: "plugin-1",
-      inputBusIndex: 2,
+      inputPortKey: "vst3:audio:input:2",
       sourceChannelId: "audio-2"
     })
 
@@ -147,8 +147,8 @@ describe("AudioHostApplicationEventBridge", () => {
       patch: {
         descriptor: { classId: "effect" },
         sidechainInputs: [
-          { inputBusIndex: 2, sourceChannelId: "audio-2" },
-          { inputBusIndex: 3, sourceChannelId: "audio-3" }
+          { inputPortKey: "vst3:audio:input:2", sourceChannelId: "audio-2" },
+          { inputPortKey: "vst3:audio:input:3", sourceChannelId: "audio-3" }
         ]
       }
     })
@@ -177,7 +177,7 @@ describe("AudioHostApplicationEventBridge", () => {
     await sidechainHandler({
       requestId: 18,
       instanceId: "missing",
-      inputBusIndex: 1,
+      inputPortKey: "vst3:audio:input:1",
       sourceChannelId: null
     })
 
@@ -202,7 +202,7 @@ describe("AudioHostApplicationEventBridge", () => {
     await sidechainHandler({
       requestId: 19,
       instanceId: "plugin-1",
-      inputBusIndex: 1,
+      inputPortKey: "vst3:audio:input:1",
       sourceChannelId: null
     })
 

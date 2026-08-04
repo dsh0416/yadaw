@@ -29,6 +29,7 @@ use super::{
 use crate::recording::{
     NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
 };
+use heron_audio_plugin::ProcessContext;
 use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 use heron_dsp_render::{RenderMeter, RenderRuntime};
 use heron_dsp_runtime::protocol::{
@@ -36,7 +37,6 @@ use heron_dsp_runtime::protocol::{
     CompiledGraphSignalWidth, LiveMixerSendTap, LiveMixerSystemRole, PluginAudioMode,
 };
 use heron_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
-use heron_vst3_host::HostProcessContext as ProcessContext;
 use ringbuf::{
     HeapRb,
     traits::{Producer, Split},
@@ -74,6 +74,7 @@ fn test_process_context() -> ProcessContext {
     ProcessContext {
         project_time_samples: 0,
         continuous_time_samples: 0,
+        steady_time_samples: 0,
         project_time_quarters: 0.0,
         bar_position_quarters: 0.0,
         tempo: 120.0,
@@ -81,6 +82,9 @@ fn test_process_context() -> ProcessContext {
         time_signature_denominator: 4,
         playing: false,
         recording: false,
+        loop_active: false,
+        loop_start_quarters: 0.0,
+        loop_end_quarters: 0.0,
     }
 }
 

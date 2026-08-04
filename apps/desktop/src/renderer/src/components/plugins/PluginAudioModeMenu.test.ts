@@ -5,8 +5,7 @@ import PluginAudioModeMenu from "./PluginAudioModeMenu.vue"
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "mono-effect",
-  modulePath: "mono-effect.vst3",
+  locator: { format: "vst3", artifactPath: "mono-effect.vst3", nativeId: "mono-effect" },
   name: "Mono Effect",
   vendor: "Heron Studio",
   version: "1.0",

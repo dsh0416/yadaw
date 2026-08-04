@@ -111,11 +111,11 @@ export class AudioGraphCompiler {
               (bus.channels === 1 || bus.channels === 2)
           )
           .map((bus) => ({
-            input_bus_index: bus.index,
+            input_port_key: bus.portKey,
             name: bus.name,
             channels: bus.channels,
             source_channel_id: plugin.sidechainInputs.find(
-              (route) => route.inputBusIndex === bus.index
+              (route) => route.inputPortKey === bus.portKey
             )?.sourceChannelId
           })),
         latency_samples: 0,

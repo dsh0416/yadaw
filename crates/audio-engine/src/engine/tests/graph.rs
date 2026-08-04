@@ -346,7 +346,8 @@ fn sidechain_pdc_aligns_at_the_target_plugin_slot() {
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
             aux_input_buses: vec![NativePluginAuxInputBus {
-                input_bus_index: 1,
+                input_port_key: "test:audio:input:1".into(),
+                input_port_token: 1,
                 name: "Side-chain".into(),
                 channels: 2,
                 source_index: Some(0),
@@ -363,7 +364,10 @@ fn sidechain_pdc_aligns_at_the_target_plugin_slot() {
         .iter()
         .find(|edge| edge.kind == CompiledGraphEdgeKind::SidechainRoute)
         .expect("side-chain diagnostic edge");
-    assert_eq!(route.target_input_bus_index, Some(1));
+    assert_eq!(
+        route.target_input_port_key.as_deref(),
+        Some("test:audio:input:1")
+    );
     assert_eq!(route.signal_width, CompiledGraphSignalWidth::Stereo);
     assert!(
         snapshot
@@ -421,7 +425,8 @@ fn sidechain_pdc_delays_an_earlier_aux_source_at_a_later_slot() {
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
             aux_input_buses: vec![NativePluginAuxInputBus {
-                input_bus_index: 2,
+                input_port_key: "test:audio:input:2".into(),
+                input_port_token: 2,
                 name: "Key".into(),
                 channels: 1,
                 source_index: Some(0),
@@ -441,7 +446,10 @@ fn sidechain_pdc_delays_an_earlier_aux_source_at_a_later_slot() {
         .iter()
         .find(|edge| edge.kind == CompiledGraphEdgeKind::SidechainRoute)
         .expect("side-chain diagnostic edge");
-    assert_eq!(route.target_input_bus_index, Some(2));
+    assert_eq!(
+        route.target_input_port_key.as_deref(),
+        Some("test:audio:input:2")
+    );
     assert_eq!(route.signal_width, CompiledGraphSignalWidth::Mono);
     assert!(route.source.starts_with("pdc:sidechain:"));
 
@@ -469,7 +477,8 @@ fn sidechain_graph_validation_rejects_every_invalid_bus_shape() {
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
             aux_input_buses: vec![NativePluginAuxInputBus {
-                input_bus_index: 1,
+                input_port_key: "test:audio:input:1".into(),
+                input_port_token: 1,
                 name: "Invalid".into(),
                 channels,
                 source_index: Some(source),
@@ -500,7 +509,8 @@ fn sidechain_graph_validation_rejects_every_invalid_bus_shape() {
         audio_mode: PluginAudioMode::Stereo,
         enabled: true,
         aux_input_buses: vec![NativePluginAuxInputBus {
-            input_bus_index: 1,
+            input_port_key: "test:audio:input:1".into(),
+            input_port_token: 1,
             name: "Disconnected".into(),
             channels: 2,
             source_index: None,

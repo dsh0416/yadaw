@@ -11,8 +11,7 @@ import {
 
 const descriptor = {
   source: { kind: "external" },
-  classId: "effect",
-  modulePath: "/Effect.vst3",
+  locator: { format: "vst3", artifactPath: "/Effect.vst3", nativeId: "effect" },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",

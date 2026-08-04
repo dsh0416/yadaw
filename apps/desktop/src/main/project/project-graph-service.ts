@@ -306,9 +306,7 @@ export class ProjectGraphService {
       for (const plugin of next.plugins) {
         const state = byId.get(plugin.id)
         if (!state) continue
-        plugin.componentState = new Uint8Array(state.componentState)
-        plugin.controllerState = new Uint8Array(state.controllerState)
-        plugin.araDocumentState = new Uint8Array(state.araDocumentState ?? [])
+        plugin.state = structuredClone(state.state)
       }
       this.commit(projectId, next)
     })

@@ -57,8 +57,8 @@ export class AudioHostTransportClient {
     private readonly coalesceParameter: (value: {
       targetKind: "plugin" | "mixer-channel" | "mixer-send"
       runtimeHandle: number
-      parameterId: number
-      normalized: number
+      parameterToken: number
+      value: number
     }) => void,
     private readonly directTelemetry: () => boolean = () => true
   ) {}
@@ -302,16 +302,16 @@ export class AudioHostTransportClient {
     const result = client.enqueueParameter({
       targetKind,
       runtimeHandle: stableRuntimeHandle(preview.target === "channel" ? 1 : 2, preview.id),
-      parameterId,
-      normalized: Math.max(0, Math.min(1, normalized)),
+      parameterToken: parameterId,
+      value: Math.max(0, Math.min(1, normalized)),
       gesture: "perform"
     })
     if (result.outcome === "soft-full" || result.outcome === "full") {
       this.coalesceParameter({
         targetKind,
         runtimeHandle: stableRuntimeHandle(preview.target === "channel" ? 1 : 2, preview.id),
-        parameterId,
-        normalized
+        parameterToken: parameterId,
+        value: normalized
       })
     }
   }
@@ -384,9 +384,9 @@ export class AudioHostTransportClient {
         target: edge.target,
         kind: edge.kind,
         signalWidth: edge.signal_width,
-        ...(edge.target_input_bus_index === undefined
+        ...(edge.target_input_port_key === undefined
           ? {}
-          : { targetInputBusIndex: edge.target_input_bus_index })
+          : { targetInputPortKey: edge.target_input_port_key })
       }))
     }
   }

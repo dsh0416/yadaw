@@ -1,5 +1,9 @@
 import { randomBytes } from "node:crypto"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import {
+  INITIAL_AUDIO_RUNTIME_SNAPSHOT,
+  IPC_PROTOCOL_VERSION,
+  pluginTypeKey
+} from "@heron/contracts"
 import type {
   ApplicationSettingsRef,
   ApplicationSettings,
@@ -287,11 +291,12 @@ export class ApplicationStateStore {
     }
     const existing = this.pluginInstances.get(instanceId)
     if (existing) {
-      const resolved = this.resources.resolve<{ classId: string }>(existing)
+      const resolved = this.resources.resolve<{ pluginTypeKey: string }>(existing)
       if (
         resolved.ok &&
         resolved.value.parent?.generation === workspace.projectGraph.generation &&
-        resolved.value.committedSnapshot?.classId === instance.classId
+        resolved.value.committedSnapshot?.pluginTypeKey ===
+          pluginTypeKey(instance.locator ?? instance.descriptor)
       ) {
         return {
           plugin: structuredClone(existing),
@@ -311,7 +316,7 @@ export class ApplicationStateStore {
     })
     if (!candidate.ok) throw new Error(candidate.error.code)
     const committed = this.resources.commit(candidate.value.ref, {
-      classId: instance.classId
+      pluginTypeKey: pluginTypeKey(instance.locator ?? instance.descriptor)
     })
     if (!committed.ok) throw new Error(committed.error.code)
     const plugin = committed.value.ref as PluginInstanceRef

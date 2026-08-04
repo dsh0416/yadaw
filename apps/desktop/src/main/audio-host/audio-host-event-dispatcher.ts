@@ -2,7 +2,7 @@ import { AraCallbackSequenceTracker } from "./audio-host-events"
 import type {
   AraHostCallback,
   PluginSidechainRouteRequest,
-  Vst3HostNotification
+  PluginHostNotification
 } from "./audio-host-events"
 
 export interface AudioHostEventOperations {
@@ -14,7 +14,7 @@ export class AudioHostEventDispatcher {
   private readonly pending = new Set<Promise<void>>()
   private readonly araSequences = new AraCallbackSequenceTracker()
   private araHandler: (callback: AraHostCallback) => void | Promise<void> = () => {}
-  private vst3Handler: (notification: Vst3HostNotification) => void | Promise<void> = () => {}
+  private pluginHandler: (notification: PluginHostNotification) => void | Promise<void> = () => {}
   private sidechainHandler: (request: PluginSidechainRouteRequest) => void | Promise<void> =
     () => {}
 
@@ -24,8 +24,8 @@ export class AudioHostEventDispatcher {
     this.araHandler = handler
   }
 
-  setVst3Handler(handler: (notification: Vst3HostNotification) => void | Promise<void>): void {
-    this.vst3Handler = handler
+  setPluginHandler(handler: (notification: PluginHostNotification) => void | Promise<void>): void {
+    this.pluginHandler = handler
   }
 
   setSidechainHandler(
@@ -46,12 +46,12 @@ export class AudioHostEventDispatcher {
     )
   }
 
-  dispatchVst3(notification: Vst3HostNotification): void {
+  dispatchPlugin(notification: PluginHostNotification): void {
     this.track(
       Promise.resolve()
-        .then(() => this.vst3Handler(notification))
+        .then(() => this.pluginHandler(notification))
         .catch((error: unknown) => {
-          console.error("Could not reconcile a VST3 host notification", error)
+          console.error("Could not reconcile an audio plug-in host notification", error)
         })
     )
   }

@@ -8,7 +8,7 @@ import type {
   ProjectGraphSnapshot,
   TrackState
 } from "@heron/contracts"
-import { DEFAULT_PROJECT_END_TICK } from "@heron/contracts"
+import { DEFAULT_PROJECT_END_TICK, pluginLocator } from "@heron/contracts"
 
 export function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
   if (!Number.isFinite(value) || value < minimum || value > maximum) {
@@ -851,26 +851,32 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
     ) {
       throw new Error("Insert slots only accept effect plug-ins with a valid audio mode")
     }
-    if (plugin.classId !== plugin.descriptor.classId) {
-      throw new Error("Plugin class ID must match its descriptor snapshot")
+    const locator = plugin.locator ?? pluginLocator(plugin.descriptor)
+    const descriptorLocator = pluginLocator(plugin.descriptor)
+    if (
+      locator.format !== descriptorLocator.format ||
+      locator.artifactPath !== descriptorLocator.artifactPath ||
+      locator.nativeId !== descriptorLocator.nativeId
+    ) {
+      throw new Error("Plugin locator must match its descriptor snapshot")
     }
     if (!plugin.descriptor.supportedAudioModes.includes(plugin.audioMode)) {
       throw new Error("Plugin audio mode must be supported by its descriptor snapshot")
     }
-    const sidechainBusIndices = new Set<number>()
+    const sidechainPortKeys = new Set<string>()
     for (const route of plugin.sidechainInputs) {
-      if (!Number.isSafeInteger(route.inputBusIndex) || route.inputBusIndex < 0) {
-        throw new Error("Plugin side-chain bus indices must be non-negative safe integers")
+      if (!route.inputPortKey.trim()) {
+        throw new Error("Plugin side-chain port keys cannot be empty")
       }
-      if (sidechainBusIndices.has(route.inputBusIndex)) {
-        throw new Error("Each plugin aux input bus can have at most one side-chain source")
+      if (sidechainPortKeys.has(route.inputPortKey)) {
+        throw new Error("Each plugin aux input port can have at most one side-chain source")
       }
-      sidechainBusIndices.add(route.inputBusIndex)
+      sidechainPortKeys.add(route.inputPortKey)
       const bus = plugin.descriptor.buses.find(
         (candidate) =>
           candidate.direction === "input" &&
           candidate.kind === "aux" &&
-          candidate.index === route.inputBusIndex
+          candidate.portKey === route.inputPortKey
       )
       if (!bus || (bus.channels !== 1 && bus.channels !== 2)) {
         throw new Error("Plugin side-chain routes must target an exposed mono or stereo aux bus")

@@ -16,8 +16,7 @@ const emptyCatalog = (): PluginCatalogSnapshot => ({
 function descriptor(modulePath: string, classId = "class-id"): PluginDescriptor {
   return {
     source: { kind: "external" },
-    classId,
-    modulePath,
+    locator: { format: "vst3", artifactPath: modulePath, nativeId: classId },
     name: classId,
     vendor: "Acme",
     version: "1",
@@ -67,7 +66,11 @@ describe("PluginDiscoveryService", () => {
     await expect(service.loadCachedCatalog()).resolves.toMatchObject({
       scannedAt: 12,
       scanning: false,
-      plugins: [expect.objectContaining({ classId: "class-id" })]
+      plugins: [
+        expect.objectContaining({
+          locator: expect.objectContaining({ format: "vst3", nativeId: "class-id" })
+        })
+      ]
     })
   })
 
@@ -97,7 +100,10 @@ describe("PluginDiscoveryService", () => {
     const catalog = await service.scan(emptyCatalog(), { paths: [root] }, vi.fn())
 
     expect(probe.probe).not.toHaveBeenCalled()
-    expect(catalog.plugins[0]).toMatchObject({ classId: "sidechain", name: "Sidechain" })
+    expect(catalog.plugins[0]).toMatchObject({
+      locator: { format: "vst3", artifactPath: bundle, nativeId: "sidechain" },
+      name: "Sidechain"
+    })
   })
 
   it("keeps quarantine cached until an explicit retry succeeds", async () => {
@@ -121,7 +127,7 @@ describe("PluginDiscoveryService", () => {
     expect(retried.plugins[0]?.compatibility).toBe("compatible")
   })
 
-  it("deduplicates Class IDs and preserves successful bundles after a partial failure", async () => {
+  it("keeps distinct locators with the same native ID after a partial failure", async () => {
     const { root, probe, service } = await harness()
     const good = join(root, "Good.vst3")
     const duplicate = join(root, "Duplicate.vst3")
@@ -146,7 +152,9 @@ describe("PluginDiscoveryService", () => {
 
     const catalog = await service.scan(emptyCatalog(), { paths: [root] }, vi.fn())
 
-    expect(catalog.plugins.filter((plugin) => plugin.classId === "shared-id")).toHaveLength(1)
+    expect(
+      catalog.plugins.filter((plugin) => plugin.locator?.nativeId === "shared-id")
+    ).toHaveLength(2)
     expect(catalog.plugins.some((plugin) => plugin.compatibility === "quarantined")).toBe(true)
   })
 

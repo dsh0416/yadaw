@@ -22,8 +22,11 @@ describe("serialization helpers", () => {
   it("parses plugin descriptor snapshots", () => {
     const descriptor = {
       source: { kind: "external" },
-      classId: "ABCDEF0123456789ABCDEF0123456789",
-      modulePath: "/plugin.vst3",
+      locator: {
+        format: "vst3",
+        artifactPath: "/plugin.vst3",
+        nativeId: "ABCDEF0123456789ABCDEF0123456789"
+      },
       name: "Effect",
       vendor: "Heron Studio",
       version: "1.0",
@@ -39,7 +42,7 @@ describe("serialization helpers", () => {
     }
 
     expect(pluginDescriptor(JSON.stringify(descriptor))).toMatchObject({
-      classId: descriptor.classId,
+      locator: descriptor.locator,
       name: "Effect",
       kind: "effect"
     })

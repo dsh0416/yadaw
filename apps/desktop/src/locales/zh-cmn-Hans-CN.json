@@ -1126,17 +1126,19 @@
         "plugins": "插件"
       },
       "headings": {
-        "instruments": "VST3 乐器",
-        "effects": "VST3 音频效果",
+        "instruments": "音频插件乐器",
+        "effects": "音频插件效果",
         "samples": "工程音频",
         "catalog": "插件目录"
       },
       "empty": {
-        "instruments": "未找到兼容的 VST3 乐器。",
-        "effects": "未找到兼容的 VST3 效果。"
+        "instruments": "未找到兼容的音频插件乐器。",
+        "effects": "未找到兼容的音频插件效果。"
       },
       "builtIn": "内置 · ",
-      "rescan": "重新扫描 VST3",
+      "rescan": "重新扫描音频插件",
+      "formatFilter": "按格式筛选音频插件",
+      "allFormats": "全部",
       "scanning": "正在扫描…"
     },
     "trackInspector": {
@@ -1393,6 +1395,7 @@
     },
     "pluginPicker": {
       "vst3": "VST3",
+      "audioPlugins": "音频插件",
       "searchPlaceholder": "搜索插件",
       "clearSearch": "清除插件搜索",
       "addPlugin": "添加 {name}",

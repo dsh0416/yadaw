@@ -8,8 +8,7 @@ import MixerConsole from "./MixerConsole.vue"
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "effect",
-  modulePath: "effect.vst3",
+  locator: { format: "vst3", artifactPath: "effect.vst3", nativeId: "effect" },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -76,13 +75,12 @@ describe("MixerConsole", () => {
         channelId: "audio",
         role: "insert" as const,
         slotOrder: index,
-        classId: descriptor.classId,
+        locator: descriptor.locator,
         descriptor,
         audioMode: "stereo",
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array(),
-        controllerState: new Uint8Array()
+        state: { version: 1, chunks: [] }
       })),
       midiClips: [],
       keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
@@ -110,13 +108,12 @@ describe("MixerConsole", () => {
           channelId: "audio",
           role: "insert",
           slotOrder: 5,
-          classId: descriptor.classId,
+          locator: descriptor.locator,
           descriptor,
           audioMode: "stereo",
           enabled: true,
           sidechainInputs: [],
-          componentState: new Uint8Array(),
-          controllerState: new Uint8Array()
+          state: { version: 1, chunks: [] }
         }
       ],
       sends: [

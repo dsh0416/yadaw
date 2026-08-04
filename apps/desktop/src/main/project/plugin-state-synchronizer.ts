@@ -17,17 +17,15 @@ export async function synchronizePluginStatesAtomically(
       const state = await audioHost.savePluginState(plugin.id)
       states.push({
         id: plugin.id,
-        componentState: state.componentState,
-        controllerState: state.controllerState,
-        araDocumentState: state.araDocumentState
+        state
       })
     } catch (error) {
-      console.error(`Could not synchronize VST3 state for ${plugin.id}:`, error)
+      console.error(`Could not synchronize AudioPlugin state for ${plugin.id}:`, error)
       failures.push(error)
     }
   }
   if (failures.length > 0) {
-    throw new AggregateError(failures, "Could not synchronize every VST3 plug-in state")
+    throw new AggregateError(failures, "Could not synchronize every audio plug-in state")
   }
   if (states.length > 0) await projectGraph.savePluginStates(states)
 }

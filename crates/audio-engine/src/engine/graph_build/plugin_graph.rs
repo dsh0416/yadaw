@@ -51,7 +51,7 @@ pub(super) fn build_plugin_graph(input: PluginGraphInput<'_>) -> Result<PluginGr
                 source,
                 target,
                 plugin.instance_id.clone(),
-                bus.input_bus_index,
+                bus.input_port_key.clone(),
             ));
         }
     }
@@ -106,7 +106,7 @@ pub(super) fn build_plugin_graph(input: PluginGraphInput<'_>) -> Result<PluginGr
                 .into_iter()
                 .filter_map(|bus| {
                     bus.source_index.map(|source_index| LivePluginAuxInput {
-                        bus_index: bus.input_bus_index,
+                        port_token: bus.input_port_token,
                         channels: bus.channels,
                         source_index: source_index as usize,
                         delay: StereoDelayLine::new(0),

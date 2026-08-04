@@ -12,6 +12,7 @@ import {
   mixerSends,
   pluginInstances,
   pluginSidechainRoutes,
+  pluginStateChunks,
   PROJECT_ID,
   project,
   tempoEvents,
@@ -34,6 +35,7 @@ export async function readMixerSnapshot(
     sendRows,
     pluginRows,
     pluginSidechainRouteRows,
+    pluginStateChunkRows,
     midiClipRows,
     midiNoteRows,
     midiEventRows,
@@ -78,7 +80,11 @@ export async function readMixerSnapshot(
     db
       .select()
       .from(pluginSidechainRoutes)
-      .orderBy(asc(pluginSidechainRoutes.pluginId), asc(pluginSidechainRoutes.inputBusIndex)),
+      .orderBy(asc(pluginSidechainRoutes.pluginId), asc(pluginSidechainRoutes.inputPortKey)),
+    db
+      .select()
+      .from(pluginStateChunks)
+      .orderBy(asc(pluginStateChunks.pluginId), asc(pluginStateChunks.chunkKey)),
     db.select().from(midiClips).orderBy(asc(midiClips.startTick), asc(midiClips.id)),
     db
       .select()
@@ -117,10 +123,16 @@ export async function readMixerSnapshot(
     string,
     ProjectGraphSnapshot["plugins"][number]["sidechainInputs"]
   >()
+  const stateChunksByPlugin = new Map<string, Array<{ key: string; bytes: Uint8Array }>>()
+  for (const chunk of pluginStateChunkRows) {
+    const chunks = stateChunksByPlugin.get(chunk.pluginId) ?? []
+    chunks.push({ key: chunk.chunkKey, bytes: bytes(chunk.bytes) })
+    stateChunksByPlugin.set(chunk.pluginId, chunks)
+  }
   for (const route of pluginSidechainRouteRows) {
     const routes = sidechainRoutesByPlugin.get(route.pluginId) ?? []
     routes.push({
-      inputBusIndex: route.inputBusIndex,
+      inputPortKey: route.inputPortKey,
       sourceChannelId: route.sourceChannelId
     })
     sidechainRoutesByPlugin.set(route.pluginId, routes)
@@ -201,20 +213,25 @@ export async function readMixerSnapshot(
       fadeOutFrames: Number(clip.fadeOutFrames)
     })),
     sends: sendRows,
-    plugins: pluginRows.map((plugin) => ({
-      id: plugin.id,
-      channelId: plugin.channelId,
-      role: plugin.role,
-      slotOrder: plugin.slotOrder,
-      classId: plugin.classId,
-      descriptor: pluginDescriptor(plugin.descriptorSnapshot),
-      audioMode: plugin.audioMode,
-      enabled: plugin.enabled,
-      sidechainInputs: sidechainRoutesByPlugin.get(plugin.id) ?? [],
-      componentState: bytes(plugin.componentState),
-      controllerState: bytes(plugin.controllerState),
-      araDocumentState: bytes(plugin.araDocumentState)
-    })),
+    plugins: pluginRows.map((plugin) => {
+      const chunks = stateChunksByPlugin.get(plugin.id) ?? []
+      return {
+        id: plugin.id,
+        channelId: plugin.channelId,
+        role: plugin.role,
+        slotOrder: plugin.slotOrder,
+        locator: {
+          format: plugin.locatorFormat,
+          artifactPath: plugin.artifactPath,
+          nativeId: plugin.nativeId
+        },
+        descriptor: pluginDescriptor(plugin.descriptorSnapshot),
+        audioMode: plugin.audioMode,
+        enabled: plugin.enabled,
+        sidechainInputs: sidechainRoutesByPlugin.get(plugin.id) ?? [],
+        state: { version: 1 as const, chunks }
+      }
+    }),
     midiClips: midiClipRows.map((clip) => ({
       id: clip.id,
       sourceId: clip.sourceId,

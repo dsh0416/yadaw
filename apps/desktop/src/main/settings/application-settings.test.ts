@@ -84,7 +84,7 @@ describe("ApplicationSettingsStore", () => {
 
     await store.setPluginEditorPreference(classId, { mode: "native", zoomPercent: 200 })
     const reloaded = await new ApplicationSettingsStore(userData).get()
-    expect(reloaded.pluginEditors["0123456789ABCDEF0123456789ABCDEF"]).toEqual({
+    expect(reloaded.pluginEditors["vst3:0123456789ABCDEF0123456789ABCDEF"]).toEqual({
       mode: "native",
       zoomPercent: 200
     })
@@ -93,7 +93,7 @@ describe("ApplicationSettingsStore", () => {
     ).rejects.toThrow("50 to 400")
     await expect(
       store.setPluginEditorPreference("not-a-class-id", { mode: "native", zoomPercent: 100 })
-    ).rejects.toThrow("class ID")
+    ).rejects.toThrow("Plugin type key")
   })
 
   it("persists validated embedded runtime thread settings through the dedicated path", async () => {

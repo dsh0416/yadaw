@@ -208,8 +208,8 @@ export interface MidiImportPreview {
 
 export type MidiImportTrackTarget =
   | { type: "ignore" }
-  | { type: "existing"; trackId: string; instrumentClassId?: string }
-  | { type: "new"; name?: string; instrumentClassId?: string }
+  | { type: "existing"; trackId: string; instrumentTypeKey?: string }
+  | { type: "new"; name?: string; instrumentTypeKey?: string }
 
 export interface MidiImportPlan {
   token: string

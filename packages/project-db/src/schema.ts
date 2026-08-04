@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm"
-import type { ApplicationCaptureTarget, PluginAudioMode } from "@heron/contracts"
+import type { ApplicationCaptureTarget, PluginAudioMode, PluginFormat } from "@heron/contracts"
 import {
   boolean,
   check,
@@ -402,19 +402,12 @@ export const pluginInstances = pgTable(
       .references(() => mixerChannels.id, { onDelete: "cascade" }),
     role: text("role").$type<"instrument" | "insert">().notNull(),
     slotOrder: integer("slot_order").notNull(),
-    classId: text("class_id").notNull(),
+    locatorFormat: text("locator_format").$type<PluginFormat>().notNull(),
+    artifactPath: text("artifact_path").notNull(),
+    nativeId: text("native_id").notNull(),
     descriptorSnapshot: text("descriptor_snapshot").notNull(),
     audioMode: text("audio_mode").$type<PluginAudioMode>().notNull().default("stereo"),
-    enabled: boolean("enabled").notNull().default(true),
-    componentState: bytea("component_state")
-      .notNull()
-      .default(sql`''::bytea`),
-    controllerState: bytea("controller_state")
-      .notNull()
-      .default(sql`''::bytea`),
-    araDocumentState: bytea("ara_document_state")
-      .notNull()
-      .default(sql`''::bytea`)
+    enabled: boolean("enabled").notNull().default(true)
   },
   (table) => [
     uniqueIndex("plugin_instances_channel_role_slot_unique").on(
@@ -427,6 +420,7 @@ export const pluginInstances = pgTable(
       .where(sql`${table.role} = 'instrument'`),
     index("plugin_instances_channel_order").on(table.channelId, table.role, table.slotOrder),
     check("plugin_instances_role_check", sql`${table.role} in ('instrument', 'insert')`),
+    check("plugin_instances_format_check", sql`${table.locatorFormat} in ('vst3', 'clap')`),
     check(
       "plugin_instances_audio_mode_check",
       sql`${table.audioMode} in ('mono', 'mono-to-stereo', 'stereo', 'dual-mono')`
@@ -439,21 +433,38 @@ export const pluginInstances = pgTable(
   ]
 )
 
+export const pluginStateChunks = pgTable(
+  "plugin_state_chunks",
+  {
+    pluginId: text("plugin_id")
+      .notNull()
+      .references(() => pluginInstances.id, { onDelete: "cascade" }),
+    chunkKey: text("chunk_key").notNull(),
+    bytes: bytea("bytes")
+      .notNull()
+      .default(sql`''::bytea`)
+  },
+  (table) => [
+    primaryKey({ columns: [table.pluginId, table.chunkKey] }),
+    check("plugin_state_chunks_key_check", sql`length(${table.chunkKey}) > 0`)
+  ]
+)
+
 export const pluginSidechainRoutes = pgTable(
   "plugin_sidechain_routes",
   {
     pluginId: text("plugin_id")
       .notNull()
       .references(() => pluginInstances.id, { onDelete: "cascade" }),
-    inputBusIndex: integer("input_bus_index").notNull(),
+    inputPortKey: text("input_port_key").notNull(),
     sourceChannelId: text("source_channel_id")
       .notNull()
       .references(() => mixerChannels.id, { onDelete: "cascade" })
   },
   (table) => [
-    primaryKey({ columns: [table.pluginId, table.inputBusIndex] }),
+    primaryKey({ columns: [table.pluginId, table.inputPortKey] }),
     index("plugin_sidechain_routes_source_channel").on(table.sourceChannelId),
-    check("plugin_sidechain_routes_bus_index_check", sql`${table.inputBusIndex} >= 0`)
+    check("plugin_sidechain_routes_port_key_check", sql`length(${table.inputPortKey}) > 0`)
   ]
 )
 
@@ -671,7 +682,15 @@ export const pluginInstancesRelations = relations(pluginInstances, ({ many, one 
     fields: [pluginInstances.channelId],
     references: [mixerChannels.id]
   }),
-  sidechainRoutes: many(pluginSidechainRoutes)
+  sidechainRoutes: many(pluginSidechainRoutes),
+  stateChunks: many(pluginStateChunks)
+}))
+
+export const pluginStateChunksRelations = relations(pluginStateChunks, ({ one }) => ({
+  plugin: one(pluginInstances, {
+    fields: [pluginStateChunks.pluginId],
+    references: [pluginInstances.id]
+  })
 }))
 
 export const pluginSidechainRoutesRelations = relations(pluginSidechainRoutes, ({ one }) => ({
@@ -725,6 +744,7 @@ export type Track = typeof tracks.$inferSelect
 export type AudioClip = typeof audioClips.$inferSelect
 export type MixerSend = typeof mixerSends.$inferSelect
 export type PluginInstance = typeof pluginInstances.$inferSelect
+export type PluginStateChunk = typeof pluginStateChunks.$inferSelect
 export type PluginSidechainRoute = typeof pluginSidechainRoutes.$inferSelect
 export type TempoEvent = typeof tempoEvents.$inferSelect
 export type TimeSignatureEvent = typeof timeSignatureEvents.$inferSelect

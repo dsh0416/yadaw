@@ -6,8 +6,7 @@ import MixerInstrumentInput from "./MixerInstrumentInput.vue"
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "synth",
-  modulePath: "synth.vst3",
+  locator: { format: "vst3", artifactPath: "synth.vst3", nativeId: "synth" },
   name: "Synth",
   vendor: "Heron Studio",
   version: "1.0",
@@ -26,13 +25,12 @@ const instrument: PluginInstanceState = {
   channelId: "instrument",
   role: "instrument",
   slotOrder: 0,
-  classId: descriptor.classId,
+  locator: descriptor.locator,
   descriptor,
   audioMode: "stereo",
   enabled: true,
   sidechainInputs: [],
-  componentState: new Uint8Array(),
-  controllerState: new Uint8Array()
+  state: { version: 1, chunks: [] }
 }
 
 afterEach(() => {

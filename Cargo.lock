@@ -612,6 +612,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a76abbdb2907f6fd97fb6bc0b7be96b77d328f2dd9669d1075cc03369ed22154"
+
+[[package]]
 name = "clap_builder"
 version = "4.5.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1564,10 +1570,10 @@ version = "0.4.1"
 dependencies = [
  "bwavfile",
  "cpal",
+ "heron-audio-plugin",
  "heron-dsp-core",
  "heron-dsp-render",
  "heron-dsp-runtime",
- "heron-vst3-host",
  "midir",
  "ringbuf",
  "rubato",
@@ -1584,12 +1590,32 @@ dependencies = [
  "ara2-bridge-host",
  "ara2-bridge-sys",
  "bwavfile",
+ "clap-sys",
  "heron-audio-engine",
+ "heron-audio-plugin",
+ "heron-clap-host",
  "heron-dsp-runtime",
  "heron-vst3-host",
  "midir",
  "sha2",
  "tokio",
+]
+
+[[package]]
+name = "heron-audio-plugin"
+version = "0.4.1"
+
+[[package]]
+name = "heron-clap-host"
+version = "0.4.1"
+dependencies = [
+ "clap-sys",
+ "heron-audio-plugin",
+ "libc",
+ "libloading 0.8.9",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -1622,6 +1648,7 @@ name = "heron-dsp-render"
 version = "0.4.1"
 dependencies = [
  "criterion",
+ "heron-audio-plugin",
  "heron-dsp-core",
  "heron-dsp-runtime",
 ]
@@ -1699,6 +1726,7 @@ version = "0.4.1"
 dependencies = [
  "bitflags 2.13.1",
  "cc",
+ "heron-audio-plugin",
  "heron-vst3-host-sys",
  "libc",
  "libloading 0.8.9",

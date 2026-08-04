@@ -263,7 +263,10 @@ describe("ProjectDatabase", () => {
     })
     expect(seeded.plugins.find(({ id }) => id === "metronome-instrument")).toMatchObject({
       channelId: "metronome",
-      classId: "8CD16A11027ACC7FDF0C1419E86D1024",
+      locator: {
+        format: "vst3",
+        nativeId: "8CD16A11027ACC7FDF0C1419E86D1024"
+      },
       role: "instrument",
       descriptor: {
         source: { kind: "builtin", id: "live.minori.heron.metronome" }
@@ -553,11 +556,18 @@ describe("ProjectDatabase", () => {
             channelId: "audio-1",
             role: "insert" as const,
             slotOrder,
-            classId: "0123456789ABCDEFFEDCBA9876543210",
+            locator: {
+              format: "vst3",
+              artifactPath: "effect.vst3",
+              nativeId: "0123456789ABCDEFFEDCBA9876543210"
+            },
             descriptor: {
               source: { kind: "external" as const },
-              classId: "0123456789ABCDEFFEDCBA9876543210",
-              modulePath: "effect.vst3",
+              locator: {
+                format: "vst3" as const,
+                artifactPath: "effect.vst3",
+                nativeId: "0123456789ABCDEFFEDCBA9876543210"
+              },
               name: "Effect",
               vendor: "Heron Studio",
               version: "1.0",
@@ -573,8 +583,7 @@ describe("ProjectDatabase", () => {
             audioMode,
             enabled: true,
             sidechainInputs: [],
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
+            state: { version: 1 as const, chunks: [] }
           }
         }))
       },
@@ -590,15 +599,28 @@ describe("ProjectDatabase", () => {
     await database.savePluginStates([
       {
         id: "effect-stereo",
-        componentState: new Uint8Array([1, 2]),
-        controllerState: new Uint8Array([3]),
-        araDocumentState: new Uint8Array([4, 5, 6])
+        state: {
+          version: 1,
+          chunks: [
+            { key: "component", bytes: new Uint8Array([1, 2]) },
+            { key: "controller", bytes: new Uint8Array([3]) },
+            { key: "ara-document", bytes: new Uint8Array([4, 5, 6]) }
+          ]
+        }
       }
     ])
     const stored = (await database.mixerSnapshot()).plugins.find(
       (plugin) => plugin.id === "effect-stereo"
     )
-    expect(Array.from(stored?.araDocumentState ?? [])).toEqual([4, 5, 6])
+    expect(stored?.state).toEqual({
+      version: 1,
+      chunks: expect.arrayContaining([
+        { key: "component", bytes: new Uint8Array([1, 2]) },
+        { key: "controller", bytes: new Uint8Array([3]) },
+        { key: "ara-document", bytes: new Uint8Array([4, 5, 6]) }
+      ])
+    })
+    expect(stored?.state?.chunks).toHaveLength(3)
   })
 
   it.skip("does not migrate legacy bus channels into aux routing", async () => {
@@ -740,11 +762,18 @@ describe("ProjectDatabase", () => {
           channelId: "audio-1",
           role: "insert",
           slotOrder: 0,
-          classId: "0123456789ABCDEFFEDCBA9876543210",
+          locator: {
+            format: "vst3",
+            artifactPath: "sidechain.vst3",
+            nativeId: "0123456789ABCDEFFEDCBA9876543210"
+          },
           descriptor: {
             source: { kind: "external" },
-            classId: "0123456789ABCDEFFEDCBA9876543210",
-            modulePath: "sidechain.vst3",
+            locator: {
+              format: "vst3",
+              artifactPath: "sidechain.vst3",
+              nativeId: "0123456789ABCDEFFEDCBA9876543210"
+            },
             name: "Side-chain Effect",
             vendor: "Heron Studio",
             version: "1.0",
@@ -753,7 +782,7 @@ describe("ProjectDatabase", () => {
             architecture: "x86_64",
             buses: [
               {
-                index: 1,
+                portKey: "vst3:audio:input:1",
                 direction: "input",
                 kind: "aux",
                 name: "Side-chain",
@@ -768,9 +797,8 @@ describe("ProjectDatabase", () => {
           },
           audioMode: "stereo",
           enabled: true,
-          sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: aux.id }],
-          componentState: new Uint8Array(),
-          controllerState: new Uint8Array()
+          sidechainInputs: [{ inputPortKey: "vst3:audio:input:1", sourceChannelId: aux.id }],
+          state: { version: 1, chunks: [] }
         }
       },
       "output-1-2"
@@ -778,7 +806,7 @@ describe("ProjectDatabase", () => {
     expect(
       (await database.mixerSnapshot()).plugins.find(({ id }) => id === "sidechain-effect")
         ?.sidechainInputs
-    ).toEqual([{ inputBusIndex: 1, sourceChannelId: aux.id }])
+    ).toEqual([{ inputPortKey: "vst3:audio:input:1", sourceChannelId: aux.id }])
     await database.applyCommand({ type: "delete-channel", channelId: aux.id }, "output-1-2")
     expect(
       (await database.mixerSnapshot()).plugins.find(({ id }) => id === "sidechain-effect")
@@ -1351,7 +1379,10 @@ describe("ProjectDatabase", () => {
     expect(snapshot.plugins.filter((plugin) => plugin.channelId === "metronome")).toEqual([
       expect.objectContaining({
         id: "metronome-instrument",
-        classId: "8CD16A11027ACC7FDF0C1419E86D1024",
+        locator: expect.objectContaining({
+          format: "vst3",
+          nativeId: "8CD16A11027ACC7FDF0C1419E86D1024"
+        }),
         audioMode: "stereo"
       })
     ])

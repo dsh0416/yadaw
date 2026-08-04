@@ -29,7 +29,10 @@ describe("PluginProbeClient", () => {
       ["--soft", "effect.vst3"],
       expect.objectContaining({ windowsHide: true, encoding: "utf8" })
     )
-    expect(descriptors[0]).toMatchObject({ classId: "effect-id", vendor: "Acme" })
+    expect(descriptors[0]).toMatchObject({
+      locator: { format: "vst3", artifactPath: "effect.vst3", nativeId: "effect-id" },
+      vendor: "Acme"
+    })
   })
 
   it("rejects probe payloads without audio module classes", async () => {
@@ -41,7 +44,7 @@ describe("PluginProbeClient", () => {
     )
 
     await expect(client.probe("empty.vst3")).rejects.toThrow(
-      "Module has no VST3 Audio Module classes"
+      "Artifact has no supported audio plug-ins"
     )
   })
 })
