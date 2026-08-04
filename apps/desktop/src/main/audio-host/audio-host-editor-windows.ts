@@ -491,7 +491,7 @@ function toolbarAction(action: string): PluginEditorToolbarAction | null {
     case "redo":
       return { type: action }
     default: {
-      const sidechain = /^sidechain-(\d+)-(.+)$/.exec(action)
+      const sidechain = action.match(/^sidechain-(\d+)-(.+)$/)
       if (sidechain?.[1] && sidechain[2]) {
         const inputBusIndex = Number.parseInt(sidechain[1], 10)
         const encodedSource = sidechain[2]
@@ -501,7 +501,7 @@ function toolbarAction(action: string): PluginEditorToolbarAction | null {
           source_channel_id: encodedSource === "_" ? null : decodeURIComponent(encodedSource)
         }
       }
-      const zoom = /^zoom-(\d+)$/.exec(action)?.[1]
+      const zoom = action.match(/^zoom-(\d+)$/)?.[1]
       if (!zoom) return null
       const zoomPercent = Number.parseInt(zoom, 10)
       return zoomPercent >= 50 && zoomPercent <= 400
@@ -516,7 +516,7 @@ function parameterAction(action: string): {
   normalized: number
   gesture: ParameterGesture
 } | null {
-  const match = /^parameter-(begin|perform|end)-(\d+)-(\d+(?:\.\d+)?)$/.exec(action)
+  const match = action.match(/^parameter-(begin|perform|end)-(\d+)-(\d+(?:\.\d+)?)$/)
   if (!match?.[1] || !match[2] || !match[3]) return null
   const normalized = Number.parseFloat(match[3])
   if (!Number.isFinite(normalized)) return null
