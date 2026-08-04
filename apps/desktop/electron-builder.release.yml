@@ -1,0 +1,7 @@
+extends: ./electron-builder.yml
+
+# Release artifacts must never silently fall back to an unsigned build.
+forceCodeSigning: true
+
+mac:
+  notarize: true

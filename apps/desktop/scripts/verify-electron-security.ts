@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import { access, readdir } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { FuseState, FuseV1Options, getCurrentFuseWire, type FuseConfig } from "@electron/fuses"
@@ -64,6 +65,55 @@ const resourcesDirectory =
 const asarPath = join(resourcesDirectory, "app.asar")
 if (!(await exists(asarPath))) {
   throw new Error(`Packaged application archive is missing: ${asarPath}`)
+}
+
+if (process.platform === "darwin") {
+  const appBundle = resolve(dirname(executable), "../..")
+  const verification = spawnSync(
+    "codesign",
+    ["--verify", "--deep", "--strict", "--all-architectures", "--verbose=2", appBundle],
+    { encoding: "utf8" }
+  )
+  if (verification.status !== 0) {
+    const details = verification.stderr.trim() || verification.stdout.trim() || "unknown error"
+    throw new Error(`Packaged macOS application has an invalid code signature: ${details}`)
+  }
+
+  if (process.env.HERON_REQUIRE_DEVELOPER_ID_SIGNATURE === "true") {
+    const inspection = spawnSync("codesign", ["--display", "--verbose=4", appBundle], {
+      encoding: "utf8"
+    })
+    const details = `${inspection.stdout}\n${inspection.stderr}`
+    if (
+      inspection.status !== 0 ||
+      !/^Authority=Developer ID Application:/m.test(details) ||
+      !/^TeamIdentifier=(?!not set$).+/m.test(details)
+    ) {
+      throw new Error(
+        `Packaged macOS application is not signed with Developer ID: ${details.trim()}`
+      )
+    }
+  }
+
+  if (process.env.HERON_REQUIRE_NOTARIZATION === "true") {
+    const assessment = spawnSync(
+      "spctl",
+      ["--assess", "--type", "execute", "--verbose=2", appBundle],
+      { encoding: "utf8" }
+    )
+    if (assessment.status !== 0) {
+      const details = assessment.stderr.trim() || assessment.stdout.trim() || "unknown error"
+      throw new Error(`Gatekeeper rejected the packaged macOS application: ${details}`)
+    }
+
+    const stapling = spawnSync("xcrun", ["stapler", "validate", appBundle], {
+      encoding: "utf8"
+    })
+    if (stapling.status !== 0) {
+      const details = stapling.stderr.trim() || stapling.stdout.trim() || "unknown error"
+      throw new Error(`Packaged macOS application has no valid stapled ticket: ${details}`)
+    }
+  }
 }
 
 const fuses = await getCurrentFuseWire(executable)
