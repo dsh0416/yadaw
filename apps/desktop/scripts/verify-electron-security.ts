@@ -94,6 +94,26 @@ if (process.platform === "darwin") {
       )
     }
   }
+
+  if (process.env.HERON_REQUIRE_NOTARIZATION === "true") {
+    const assessment = spawnSync(
+      "spctl",
+      ["--assess", "--type", "execute", "--verbose=2", appBundle],
+      { encoding: "utf8" }
+    )
+    if (assessment.status !== 0) {
+      const details = assessment.stderr.trim() || assessment.stdout.trim() || "unknown error"
+      throw new Error(`Gatekeeper rejected the packaged macOS application: ${details}`)
+    }
+
+    const stapling = spawnSync("xcrun", ["stapler", "validate", appBundle], {
+      encoding: "utf8"
+    })
+    if (stapling.status !== 0) {
+      const details = stapling.stderr.trim() || stapling.stdout.trim() || "unknown error"
+      throw new Error(`Packaged macOS application has no valid stapled ticket: ${details}`)
+    }
+  }
 }
 
 const fuses = await getCurrentFuseWire(executable)
