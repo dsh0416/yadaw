@@ -157,6 +157,10 @@ export const IPC_CHANNELS = {
   operationAcknowledge: "operation:acknowledge"
 } as const
 
+export interface HeronSplashApi {
+  subscribeStartupProgress(listener: (event: RpcEvent<StartupProgressSnapshot>) => void): () => void
+}
+
 export interface HeronDesktopApi {
   readonly platform: DesktopPlatform
   bootstrap(meta: RpcRequestMeta): Promise<RpcResult<ApplicationBootstrapSnapshot>>
@@ -202,7 +206,6 @@ export interface HeronDesktopApi {
   transportSnapshot(meta: RpcRequestMeta): Promise<RpcResult<TransportSnapshot>>
   lifecycleSnapshot(meta: RpcRequestMeta): Promise<RpcResult<DesktopLifecycleSnapshot>>
   subscribeLifecycle(listener: (event: RpcEvent<DesktopLifecycleEvent>) => void): () => void
-  subscribeStartupProgress(listener: (event: RpcEvent<StartupProgressSnapshot>) => void): () => void
   systemPerformanceSnapshot(meta: RpcRequestMeta): Promise<RpcResult<SystemPerformanceSnapshot>>
   runAudioBenchmark(meta: RpcRequestMeta): Promise<RpcResult<AudioBenchmarkReport>>
   compiledAudioGraphSnapshot(

@@ -1,11 +1,17 @@
 import { app } from "electron"
-import { configureApplicationIdentity, deferProjectClose, quitWhenAllWindowsAreClosed } from "./app"
+import {
+  configureApplicationIdentity,
+  deferProjectClose,
+  quitWhenAllWindowsAreClosed,
+  registerRendererScheme
+} from "./app"
 import { AudioHostService } from "./audio-host"
 import { ProjectService } from "./project"
 import { startApplication, type StartedApplicationServices } from "./app"
 import { mainWindow } from "./app"
 
 configureApplicationIdentity(app, process.platform)
+registerRendererScheme()
 quitWhenAllWindowsAreClosed(app)
 
 if (process.env.HERON_TEST_USER_DATA) {

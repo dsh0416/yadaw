@@ -82,5 +82,5 @@ describe("useStartupStore", () => {
 })
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heronSplash as unknown as Record<string, unknown>, overrides)
 }

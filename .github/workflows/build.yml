@@ -171,6 +171,9 @@ jobs:
           --publish never
           --${{ matrix.builder-arch }}
 
+      - name: Verify packaged Electron security
+        run: pnpm --filter @heron/desktop verify:package-security
+
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:

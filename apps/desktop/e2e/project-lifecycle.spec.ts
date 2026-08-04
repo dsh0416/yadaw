@@ -30,6 +30,13 @@ test("records into a Large Object and reopens the PGlite project archive", async
   try {
     const splash = await application.firstWindow()
     await splash.waitForLoadState("domcontentloaded")
+    expect(splash.url()).toBe("heron-app://bundle/splash.html")
+    expect(
+      await splash.evaluate(() => ({
+        heron: typeof (window as unknown as Record<string, unknown>).heron,
+        heronSplash: typeof (window as unknown as Record<string, unknown>).heronSplash
+      }))
+    ).toEqual({ heron: "undefined", heronSplash: "object" })
     await expect(splash.getByRole("heading", { name: "Heron" })).toBeVisible()
     await expect(splash.getByRole("progressbar")).toBeVisible()
     const page =
@@ -40,6 +47,13 @@ test("records into a Large Object and reopens the PGlite project archive", async
     page.on("console", (message) => console.log(`renderer ${message.type()}: ${message.text()}`))
     page.on("pageerror", (error) => console.log(`renderer error: ${error.message}`))
     await page.waitForLoadState("domcontentloaded")
+    expect(page.url()).toMatch(/^heron-app:\/\/bundle\/index\.html(?:#.*)?$/)
+    expect(
+      await page.evaluate(() => ({
+        heron: typeof (window as unknown as Record<string, unknown>).heron,
+        heronSplash: typeof (window as unknown as Record<string, unknown>).heronSplash
+      }))
+    ).toEqual({ heron: "object", heronSplash: "undefined" })
     console.log(`renderer url: ${page.url()}`)
 
     async function expectSettingsLayoutToFit(): Promise<void> {

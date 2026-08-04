@@ -8,6 +8,16 @@ asarUnpack:
   - "**/@electric-sql/pglite/dist/*.wasm"
   - "**/@electric-sql/pglite/dist/*.data"
 npmRebuild: false
+# Fuses and ASAR integrity harden loading but do not replace platform code signing.
+# CI artifacts remain unsigned until release signing is configured separately.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
 
 directories:
   output: ../../release

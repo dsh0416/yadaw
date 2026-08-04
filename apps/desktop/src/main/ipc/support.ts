@@ -2,8 +2,7 @@ import { app } from "electron"
 import type { IpcMainInvokeEvent } from "electron"
 import { statfs } from "node:fs/promises"
 import { cpus, freemem, totalmem } from "node:os"
-import { isAbsolute, join, relative } from "node:path"
-import { fileURLToPath } from "node:url"
+import { join } from "node:path"
 import { APPLICATION_WINDOW_COMMAND_IDS, AUDIO_BACKENDS } from "@heron/contracts"
 import type {
   ApplicationWindowCommandId,
@@ -21,9 +20,9 @@ import type {
   WaveformWindowRequest
 } from "@heron/contracts"
 import { isAppLocale } from "../../shared/i18n"
+import { isTrustedMainRendererUrl } from "../../shared/renderer-security"
 import type { ApplicationSettingsStore } from "../settings"
 import type { AudioHostService } from "../audio-host"
-import { rendererDirectory } from "../app"
 
 interface CpuTicks {
   idle: number
@@ -229,25 +228,14 @@ export function assertTrustedSender(event: IpcMainInvokeEvent): void {
   if (!event.senderFrame) {
     throw new Error("Rejected IPC call without a sender frame")
   }
-
-  const senderUrl = new URL(event.senderFrame.url)
-  const developmentUrl = process.env.HERON_RENDERER_URL
-
-  if (developmentUrl && senderUrl.origin === new URL(developmentUrl).origin) {
-    return
+  if (event.senderFrame !== event.sender.mainFrame) {
+    throw new Error("Rejected IPC call from a subframe")
   }
 
-  if (senderUrl.protocol === "file:") {
-    const senderPath = fileURLToPath(senderUrl)
-    const relativeSenderPath = relative(rendererDirectory, senderPath)
-    if (
-      relativeSenderPath &&
-      relativeSenderPath !== ".." &&
-      !relativeSenderPath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) &&
-      !isAbsolute(relativeSenderPath)
-    ) {
-      return
-    }
+  if (
+    isTrustedMainRendererUrl(event.senderFrame.url, app.isPackaged, process.env.HERON_RENDERER_URL)
+  ) {
+    return
   }
 
   throw new Error("Rejected IPC call from an untrusted renderer")

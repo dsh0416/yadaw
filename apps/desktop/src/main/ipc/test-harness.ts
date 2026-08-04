@@ -1,6 +1,4 @@
 import type { IpcMainInvokeEvent } from "electron"
-import { join } from "node:path"
-import { pathToFileURL } from "node:url"
 import { vi } from "vitest"
 import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import type {
@@ -14,7 +12,6 @@ import type {
 import { LifecycleCoordinator } from "../kernel"
 import { OperationRegistry } from "../kernel"
 import { OperationService } from "../kernel"
-import { rendererDirectory } from "../app"
 import type { IpcHandlerContext } from "./context"
 import type { ElectronMocks } from "./electron-test-mock"
 
@@ -134,10 +131,11 @@ export function registeredHandler(mocks: ElectronMocks, channel: string) {
 }
 
 export function trustedEvent(): IpcMainInvokeEvent {
-  const rendererUrl = pathToFileURL(join(rendererDirectory, "index.html")).href
+  const senderFrame = { url: "heron-app://bundle/index.html" }
   return {
-    senderFrame: { url: rendererUrl },
+    senderFrame,
     sender: {
+      mainFrame: senderFrame,
       undo: vi.fn(),
       redo: vi.fn(),
       cut: vi.fn(),

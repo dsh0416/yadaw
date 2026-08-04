@@ -1,12 +1,9 @@
 import type { IpcMainInvokeEvent } from "electron"
-import { basename, dirname, join } from "node:path"
-import { pathToFileURL } from "node:url"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AUDIO_BACKENDS } from "@heron/contracts"
 import type { CreateProjectRequest } from "@heron/contracts"
 import type { ApplicationSettingsStore } from "../settings"
 import type { AudioHostService } from "../audio-host"
-import { rendererDirectory } from "../app"
 import {
   assertTrustedSender,
   sampleSystemPerformance,
@@ -21,33 +18,41 @@ import {
   validateWaveformRequest
 } from "./support"
 
+const electron = vi.hoisted(() => ({ isPackaged: true }))
+
 vi.mock("electron", () => ({
-  app: { getPath: vi.fn(() => "") }
+  app: {
+    getPath: vi.fn(() => ""),
+    get isPackaged() {
+      return electron.isPackaged
+    }
+  }
 }))
 
-function eventFrom(url: string): IpcMainInvokeEvent {
-  return { senderFrame: { url } } as unknown as IpcMainInvokeEvent
+function eventFrom(url: string, mainFrameUrl = url): IpcMainInvokeEvent {
+  const senderFrame = { url }
+  const mainFrame = mainFrameUrl === url ? senderFrame : { url: mainFrameUrl }
+  return { senderFrame, sender: { mainFrame } } as unknown as IpcMainInvokeEvent
 }
 
 describe("assertTrustedSender", () => {
   beforeEach(() => {
-    vi.stubEnv("HERON_RENDERER_URL", "")
+    electron.isPackaged = true
+    vi.stubEnv("HERON_RENDERER_URL", undefined)
   })
 
-  it("accepts a packaged renderer loaded from the shared runtime directory", () => {
-    const rendererUrl = pathToFileURL(join(rendererDirectory, "index.html")).href
-
-    expect(() => assertTrustedSender(eventFrom(rendererUrl))).not.toThrow()
-  })
-
-  it("rejects a file from a sibling directory with the same path prefix", () => {
-    const siblingUrl = pathToFileURL(
-      join(dirname(rendererDirectory), `${basename(rendererDirectory)}-spoof`, "index.html")
-    ).href
-
-    expect(() => assertTrustedSender(eventFrom(siblingUrl))).toThrow(
+  it("accepts only the packaged custom-protocol main entry", () => {
+    expect(() => assertTrustedSender(eventFrom("heron-app://bundle/index.html"))).not.toThrow()
+    expect(() => assertTrustedSender(eventFrom("heron-app://bundle/splash.html"))).toThrow(
       "Rejected IPC call from an untrusted renderer"
     )
+  })
+
+  it("rejects a forged custom-protocol host and wrong entry", () => {
+    expect(() => assertTrustedSender(eventFrom("heron-app://bundle.evil/index.html"))).toThrow(
+      "Rejected IPC call from an untrusted renderer"
+    )
+    expect(() => assertTrustedSender(eventFrom("heron-app://bundle/other.html"))).toThrow()
   })
 
   it("rejects a call that arrives without a sender frame", () => {
@@ -56,29 +61,31 @@ describe("assertTrustedSender", () => {
     )
   })
 
-  it("accepts the Vite dev server only when it matches HERON_RENDERER_URL", () => {
-    vi.stubEnv("HERON_RENDERER_URL", "http://localhost:5173")
+  it("accepts only the fixed Vite main entry in development", () => {
+    electron.isPackaged = false
+    vi.stubEnv("HERON_RENDERER_URL", "http://127.0.0.1:5173/")
 
-    expect(() => assertTrustedSender(eventFrom("http://localhost:5173/index.html"))).not.toThrow()
-    expect(() => assertTrustedSender(eventFrom("http://localhost:5174/index.html"))).toThrow(
+    expect(() => assertTrustedSender(eventFrom("http://127.0.0.1:5173/"))).not.toThrow()
+    expect(() => assertTrustedSender(eventFrom("http://127.0.0.1:5173/splash.html"))).toThrow(
       "Rejected IPC call from an untrusted renderer"
     )
   })
 
   it("rejects remote origins even when a dev server is configured", () => {
-    vi.stubEnv("HERON_RENDERER_URL", "http://localhost:5173")
+    electron.isPackaged = false
+    vi.stubEnv("HERON_RENDERER_URL", "http://127.0.0.1:5173/")
 
     expect(() => assertTrustedSender(eventFrom("https://example.com/index.html"))).toThrow(
       "Rejected IPC call from an untrusted renderer"
     )
   })
 
-  it("rejects a file outside the renderer directory", () => {
-    const outsideUrl = pathToFileURL(join(dirname(rendererDirectory), "index.html")).href
-
-    expect(() => assertTrustedSender(eventFrom(outsideUrl))).toThrow(
-      "Rejected IPC call from an untrusted renderer"
-    )
+  it("rejects subframes even when their URL is trusted", () => {
+    expect(() =>
+      assertTrustedSender(
+        eventFrom("heron-app://bundle/index.html", "heron-app://bundle/splash.html")
+      )
+    ).toThrow("Rejected IPC call from a subframe")
   })
 })
 

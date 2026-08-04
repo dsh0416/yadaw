@@ -38,7 +38,7 @@ export const useStartupStore = defineStore("startup", () => {
   }
 
   function load(): void {
-    unsubscribe ??= window.heron.subscribeStartupProgress(receiveEvent)
+    unsubscribe ??= window.heronSplash.subscribeStartupProgress(receiveEvent)
   }
 
   function dispose(): void {

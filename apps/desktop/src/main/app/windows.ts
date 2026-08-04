@@ -1,8 +1,20 @@
-import { BrowserWindow, shell, type BrowserWindowConstructorOptions } from "electron"
+import {
+  app,
+  BrowserWindow,
+  shell,
+  type BrowserWindowConstructorOptions,
+  type WebPreferences
+} from "electron"
 import { join } from "node:path"
 import { deferProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "../project"
-import { applicationIconPath, rendererDirectory } from "./runtime-paths"
+import { applicationIconPath } from "./runtime-paths"
+import { resolveRendererEntrypoints } from "../../shared/renderer-security"
+
+const EXTERNAL_URL_ALLOWLIST = new Set([
+  "https://github.com/minori-live/heron",
+  "https://heron.minori.live/manual/"
+])
 
 let projectService: ProjectService | null = null
 
@@ -40,31 +52,35 @@ export function mainWindowPlatformOptions(
 }
 
 export function openExternalUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
-    void shell.openExternal(parsed.toString()).catch((error: unknown) => {
-      console.error("Heron could not open an external URL", error)
-    })
-    return true
-  } catch {
-    return false
-  }
+  if (!EXTERNAL_URL_ALLOWLIST.has(url)) return false
+  void shell.openExternal(url).catch((error: unknown) => {
+    console.error("Heron could not open an external URL", error)
+  })
+  return true
 }
 
 export function loadMainWindow(window: BrowserWindow): void {
-  if (process.env.HERON_RENDERER_URL) {
-    void window.loadURL(process.env.HERON_RENDERER_URL)
-  } else {
-    void window.loadFile(join(rendererDirectory, "index.html"))
-  }
+  const entrypoints = resolveRendererEntrypoints(app.isPackaged, process.env.HERON_RENDERER_URL)
+  void window.loadURL(entrypoints.main)
 }
 
 export function loadSplashWindow(window: BrowserWindow): void {
-  if (process.env.HERON_RENDERER_URL) {
-    void window.loadURL(new URL("splash.html", process.env.HERON_RENDERER_URL).toString())
-  } else {
-    void window.loadFile(join(rendererDirectory, "splash.html"))
+  const entrypoints = resolveRendererEntrypoints(app.isPackaged, process.env.HERON_RENDERER_URL)
+  void window.loadURL(entrypoints.splash)
+}
+
+export function secureWebPreferences(): WebPreferences {
+  return {
+    preload: join(import.meta.dirname, "../preload/index.cjs"),
+    contextIsolation: true,
+    nodeIntegration: false,
+    nodeIntegrationInWorker: false,
+    nodeIntegrationInSubFrames: false,
+    sandbox: true,
+    webSecurity: true,
+    allowRunningInsecureContent: false,
+    experimentalFeatures: false,
+    webviewTag: false
   }
 }
 
@@ -81,12 +97,7 @@ export function createSplashWindow(): BrowserWindow {
     frame: false,
     transparent: false,
     backgroundColor: "#0b0e13",
-    webPreferences: {
-      preload: join(import.meta.dirname, "../preload/index.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    }
+    webPreferences: secureWebPreferences()
   })
   splashWindow = window
   window.once("closed", () => {
@@ -96,8 +107,8 @@ export function createSplashWindow(): BrowserWindow {
     if (!window.isDestroyed()) window.show()
   })
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
-  window.webContents.on("will-navigate", (event, url) => {
-    if (url !== window.webContents.getURL()) event.preventDefault()
+  window.webContents.on("will-navigate", (event) => {
+    event.preventDefault()
   })
   loadSplashWindow(window)
   return window
@@ -119,12 +130,7 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     minHeight: 640,
     backgroundColor: "#0b0e13",
     ...mainWindowPlatformOptions(process.platform),
-    webPreferences: {
-      preload: join(import.meta.dirname, "../preload/index.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    }
+    webPreferences: secureWebPreferences()
   })
   mainWindow = window
   window.on("close", (event) => {
@@ -143,10 +149,8 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     openExternalUrl(url)
     return { action: "deny" }
   })
-  window.webContents.on("will-navigate", (event, url) => {
-    if (url !== window.webContents.getURL()) {
-      event.preventDefault()
-    }
+  window.webContents.on("will-navigate", (event) => {
+    event.preventDefault()
   })
   window.webContents.on("render-process-gone", (_event, details) => {
     console.error("Heron renderer process exited", details)

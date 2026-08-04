@@ -5,11 +5,19 @@ import { heronFontsOptions } from "@heron/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig } from "vite"
 import { appVersionDefine } from "./build/app-version"
+import { injectRendererContentSecurityPolicy } from "./src/shared/renderer-csp"
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: "./",
   root: resolve(import.meta.dirname, "src/renderer"),
   plugins: [
+    {
+      name: "heron-renderer-content-security-policy",
+      transformIndexHtml: {
+        order: "pre",
+        handler: (html) => injectRendererContentSecurityPolicy(html, command === "build")
+      }
+    },
     vue(),
     Unfonts(heronFontsOptions),
     VueI18nPlugin({
@@ -37,4 +45,4 @@ export default defineConfig({
     port: 5173,
     strictPort: true
   }
-})
+}))
