@@ -85,7 +85,7 @@ describe("assertTrustedSender", () => {
       assertTrustedSender(
         eventFrom("heron-app://bundle/index.html", "heron-app://bundle/splash.html")
       )
-    ).toThrow("Rejected IPC call without a sender frame")
+    ).toThrow("Rejected IPC call from a subframe")
   })
 })
 
