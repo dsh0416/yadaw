@@ -43,7 +43,8 @@ import {
 } from "./test-harness"
 import { registerProjectHandlers } from "./project-handlers"
 
-vi.mock("../i18n", () => ({
+vi.mock("../app", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../app")>()),
   t: (key: string) => key
 }))
 

@@ -26,7 +26,7 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(import.meta.dirname, "src/main/index.ts"),
-        "project-worker": resolve(import.meta.dirname, "src/main/project-worker.ts")
+        "project-worker": resolve(import.meta.dirname, "src/main/project/project-worker.ts")
       },
       formats: ["es"],
       fileName: (_format, entryName) =>

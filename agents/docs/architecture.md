@@ -25,6 +25,15 @@ Electron main process and deliberately excluded from the renderer bundle.
 `contextIsolation` and Chromium sandboxing remain enabled, and the preload only
 exposes named, validated operations.
 
+The Electron main source is organized by ownership boundary. `app/` owns
+startup and desktop-shell composition; `ipc/` adapts the preload contract;
+`audio-host/`, `audio/`, `plugins/`, `project/`, `recording/`, and `settings/`
+own their respective application domains; and `kernel/` owns resource,
+operation, and lifecycle state. Cross-domain imports use each directory's
+explicit `index.ts` surface. Domain internals use direct sibling imports so a
+barrel cannot hide a dependency cycle. The main root remains a thin executable
+entry point.
+
 VST3 editor windows are not Electron windows. Clicking a plug-in sends one
 typed request through preload and Electron main; `audio-host` creates or focuses
 one winit top-level window per instance. The winit main thread also owns the

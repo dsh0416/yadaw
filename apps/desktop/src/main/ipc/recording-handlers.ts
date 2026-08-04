@@ -1,7 +1,7 @@
 import { IPC_CHANNELS } from "@heron/contracts"
 import type { OperationStatusSnapshot } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
-import type { OperationRecord } from "../kernel/operation-registry"
+import type { OperationRecord } from "../kernel"
 import { registerRpcHandler } from "./rpc"
 import {
   validationFailure,

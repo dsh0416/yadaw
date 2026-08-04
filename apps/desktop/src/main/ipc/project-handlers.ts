@@ -2,8 +2,8 @@ import { dialog } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type { ProjectCloseDisposition, RpcRequestMeta } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
-import { t } from "../i18n"
-import { isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project-service"
+import { t } from "../app"
+import { isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project"
 import { registerRpcHandler } from "./rpc"
 import {
   validationFailure as resourceValidationFailure,

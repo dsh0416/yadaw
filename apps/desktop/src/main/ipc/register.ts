@@ -13,8 +13,8 @@ import { registerSettingsRpcHandlers } from "./settings-rpc-handlers"
 import { registerSystemHandlers } from "./system-handlers"
 import { registerTransportHandlers } from "./transport-handlers"
 import { sampleSystemPerformance } from "./support"
-import { ProjectLifecycleService } from "../project-lifecycle-service"
-import { synchronizePluginStatesAtomically } from "../plugin-state-synchronizer"
+import { ProjectLifecycleService } from "../project"
+import { synchronizePluginStatesAtomically } from "../plugins"
 
 export function registerIpcHandlers(services: ApplicationServices): void {
   const { plugins, audioHost, projectGraph, settings } = services

@@ -11,10 +11,10 @@ import type {
   ResourceRef,
   RpcRequestMeta
 } from "@heron/contracts"
-import { LifecycleCoordinator } from "../lifecycle-coordinator"
-import { OperationRegistry } from "../kernel/operation-registry"
-import { OperationService } from "../operation-service"
-import { rendererDirectory } from "../runtime-paths"
+import { LifecycleCoordinator } from "../kernel"
+import { OperationRegistry } from "../kernel"
+import { OperationService } from "../kernel"
+import { rendererDirectory } from "../app"
 import type { IpcHandlerContext } from "./context"
 import type { ElectronMocks } from "./electron-test-mock"
 

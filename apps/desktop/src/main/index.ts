@@ -1,10 +1,10 @@
 import { app } from "electron"
-import { configureApplicationIdentity, quitWhenAllWindowsAreClosed } from "./application-shell"
-import { AudioHostService } from "./audio-host-service"
-import { deferProjectClose } from "./dirty-project-close"
-import { ProjectService } from "./project-service"
-import { startApplication } from "./startup"
-import { mainWindow } from "./windows"
+import { configureApplicationIdentity, quitWhenAllWindowsAreClosed } from "./app"
+import { AudioHostService } from "./audio-host"
+import { deferProjectClose } from "./project"
+import { ProjectService } from "./project"
+import { startApplication } from "./app"
+import { mainWindow } from "./app"
 
 configureApplicationIdentity(app, process.platform)
 quitWhenAllWindowsAreClosed(app)

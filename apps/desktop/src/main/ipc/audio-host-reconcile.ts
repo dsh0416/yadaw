@@ -1,6 +1,6 @@
-import type { AudioHostService } from "../audio-host-service"
-import type { LifecycleCoordinator } from "../lifecycle-coordinator"
-import type { RecordingService } from "../recording-service"
+import type { AudioHostService } from "../audio-host"
+import type { LifecycleCoordinator } from "../kernel"
+import type { RecordingService } from "../recording"
 
 export async function reconcileAudioHostEpoch(options: {
   audioHost: Pick<AudioHostService, "helperEpoch">

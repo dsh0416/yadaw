@@ -21,9 +21,9 @@ import type {
   WaveformWindowRequest
 } from "@heron/contracts"
 import { isAppLocale } from "../../shared/i18n"
-import type { ApplicationSettingsStore } from "../application-settings"
-import type { AudioHostService } from "../audio-host-service"
-import { rendererDirectory } from "../runtime-paths"
+import type { ApplicationSettingsStore } from "../settings"
+import type { AudioHostService } from "../audio-host"
+import { rendererDirectory } from "../app"
 
 interface CpuTicks {
   idle: number
