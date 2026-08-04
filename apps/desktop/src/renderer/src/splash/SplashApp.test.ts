@@ -17,7 +17,7 @@ describe("SplashApp", () => {
         return vi.fn()
       }
     )
-    Object.defineProperty(window, "heron", {
+    Object.defineProperty(window, "heronSplash", {
       configurable: true,
       value: {
         subscribeStartupProgress

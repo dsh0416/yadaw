@@ -13,6 +13,7 @@ import { StartupProgress } from "./startup-progress"
 import { registerIpcHandlers } from "../ipc"
 import { applicationIconPath } from "./runtime-paths"
 import { PluginStartupScanCoordinator } from "./plugin-startup-scan-coordinator"
+import { denyChromiumPermissions, installRendererProtocol } from "./renderer-security"
 import {
   createStartedApplicationServices,
   type StartedApplicationServices
@@ -33,6 +34,8 @@ export function startApplication(
   onServices: (services: StartedApplicationServices) => void
 ): void {
   void app.whenReady().then(async () => {
+    installRendererProtocol()
+    denyChromiumPermissions()
     if (!app.isPackaged) app.dock?.setIcon(applicationIconPath)
     const settings = new ApplicationSettingsStore(app.getPath("userData"))
     const applicationSettings = await settings.get()

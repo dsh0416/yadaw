@@ -13,9 +13,11 @@ import type {
   ProjectConfiguration,
   ShortcutPreferences,
   WaveformWindowRequest,
-  HeronDesktopApi
+  HeronDesktopApi,
+  HeronSplashApi
 } from "@heron/contracts"
 import { invokeRpc } from "./rpc"
+import { classifyRendererEntrypoint } from "../shared/renderer-security"
 
 const api: HeronDesktopApi = {
   platform: process.platform as HeronDesktopApi["platform"],
@@ -57,12 +59,6 @@ const api: HeronDesktopApi = {
     ) => listener(lifecycleEvent)
     ipcRenderer.on(IPC_CHANNELS.lifecycleEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.lifecycleEvent, handler)
-  },
-  subscribeStartupProgress: (listener) => {
-    const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) =>
-      listener(progress)
-    ipcRenderer.on(IPC_CHANNELS.startupProgressEvent, handler)
-    return () => ipcRenderer.removeListener(IPC_CHANNELS.startupProgressEvent, handler)
   },
   systemPerformanceSnapshot: (meta) => invokeRpc(IPC_CHANNELS.systemPerformanceSnapshot, meta),
   runAudioBenchmark: (meta) => invokeRpc(IPC_CHANNELS.audioBenchmarkRun, meta),
@@ -171,4 +167,18 @@ const api: HeronDesktopApi = {
   acknowledgeOperation: (meta, id) => invokeRpc(IPC_CHANNELS.operationAcknowledge, meta, id)
 }
 
-contextBridge.exposeInMainWorld("heron", api)
+const splashApi: HeronSplashApi = {
+  subscribeStartupProgress: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) =>
+      listener(progress)
+    ipcRenderer.on(IPC_CHANNELS.startupProgressEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.startupProgressEvent, handler)
+  }
+}
+
+const entrypoint = classifyRendererEntrypoint(globalThis.location.href)
+if (entrypoint === "splash") {
+  contextBridge.exposeInMainWorld("heronSplash", splashApi)
+} else if (entrypoint === "main") {
+  contextBridge.exposeInMainWorld("heron", api)
+}

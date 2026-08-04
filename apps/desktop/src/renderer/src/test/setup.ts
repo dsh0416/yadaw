@@ -1,6 +1,6 @@
 import { config } from "@vue/test-utils"
 import { afterEach, vi } from "vitest"
-import type { HeronDesktopApi } from "@heron/contracts"
+import type { HeronDesktopApi, HeronSplashApi } from "@heron/contracts"
 import { i18n } from "../i18n"
 import { rpcSuccess, testBootstrap } from "./ipc"
 
@@ -19,6 +19,12 @@ const api = {
 } as unknown as HeronDesktopApi
 
 Object.defineProperty(window, "heron", { configurable: true, value: api })
+Object.defineProperty(window, "heronSplash", {
+  configurable: true,
+  value: {
+    subscribeStartupProgress: vi.fn(() => () => undefined)
+  } satisfies HeronSplashApi
+})
 
 if (!config.global.plugins.includes(i18n)) {
   config.global.plugins.push(i18n)
