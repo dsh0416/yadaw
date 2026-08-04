@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import logoUrl from "../assets/heron-logo.png"
 
 const props = withDefaults(
   defineProps<{
@@ -23,25 +24,13 @@ const classes = computed(() => ["heron-logo", `heron-logo--${props.variant}`])
     :aria-hidden="props.decorative ? 'true' : undefined"
     :data-variant="props.variant"
   >
-    <svg
+    <img
       v-if="props.variant !== 'wordmark'"
       class="heron-logo__mark"
-      viewBox="0 0 32 32"
-      aria-hidden="true"
-    >
-      <rect class="heron-logo__bar" x="2" y="11" width="4" height="10" rx="2" />
-      <rect class="heron-logo__bar" x="8" y="6" width="4" height="20" rx="2" />
-      <rect
-        class="heron-logo__bar heron-logo__bar--center"
-        x="14"
-        y="1"
-        width="4"
-        height="30"
-        rx="2"
-      />
-      <rect class="heron-logo__bar" x="20" y="6" width="4" height="20" rx="2" />
-      <rect class="heron-logo__bar" x="26" y="11" width="4" height="10" rx="2" />
-    </svg>
+      :src="logoUrl"
+      alt=""
+      draggable="false"
+    />
     <span v-if="props.variant !== 'mark'" class="heron-logo__wordmark" aria-hidden="true">
       Heron
     </span>
@@ -67,15 +56,7 @@ const classes = computed(() => ["heron-logo", `heron-logo--${props.variant}`])
   width: 1em;
   height: 1em;
   flex: none;
-  overflow: visible;
-}
-
-.heron-logo__bar {
-  fill: currentColor;
-}
-
-.heron-logo__bar--center {
-  fill: var(--heron-logo-highlight, currentColor);
+  object-fit: contain;
 }
 
 .heron-logo__wordmark {

@@ -108,7 +108,6 @@ onMounted(() => void startup.load())
 }
 
 .brand-logo {
-  --heron-logo-highlight: var(--ui-signal-midi);
   --heron-logo-lockup-wordmark-size: 0.62em;
 
   color: var(--ui-color-text);

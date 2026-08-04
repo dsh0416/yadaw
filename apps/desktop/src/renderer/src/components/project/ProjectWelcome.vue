@@ -284,8 +284,6 @@ function createProject(): void {
 }
 
 .project-welcome__logo {
-  --heron-logo-highlight: var(--signal-cyan);
-
   justify-self: start;
   color: var(--text-secondary);
   font-size: var(--ui-font-size-xl);
