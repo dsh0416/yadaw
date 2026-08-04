@@ -43,8 +43,8 @@ turn monitoring off to prevent feedback.
 ## Prepare an instrument track
 
 1. Open the **Mixer** and add an **Instrument** track.
-2. Choose a MIDI input port and channel in the track's MIDI input control, or
-   leave the defaults for all inputs / omni.
+2. Open the **Inspector**, select the track, and choose its MIDI input port and channel, or leave
+   **All Inputs** and **Omni** selected.
 3. Turn on **Record enable** for the track.
 4. Turn on **Input monitoring** if you want live MIDI to reach the instrument
    while you play.

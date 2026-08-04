@@ -44,6 +44,7 @@ defineProps<{
   tempoMap: TempoMapSnapshot
   keySignatureEvents: KeySignatureEventState[]
   soundBrowserOpen: boolean
+  inspectorOpen: boolean
   notesPanelOpen: boolean
   mixerDockOpen: boolean
   pianoRollDockOpen: boolean
@@ -58,6 +59,7 @@ defineProps<{
 }>()
 const emit = defineEmits<{
   toggleSoundBrowser: []
+  toggleInspector: []
   toggleNotesPanel: []
   toggleMixerDock: []
   togglePianoRollDock: []
@@ -89,7 +91,13 @@ const { t } = useI18n()
       >
         <Library :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.inspector')" unavailable compact-hidden>
+      <StudioControlButton
+        :label="t('studio.topbar.inspector')"
+        :pressed="inspectorOpen"
+        tone="accent"
+        compact-hidden
+        @activate="emit('toggleInspector')"
+      >
         <SlidersHorizontal :size="15" />
       </StudioControlButton>
       <StudioControlButton :label="t('studio.topbar.quickHelp')" unavailable compact-hidden>

@@ -23,6 +23,17 @@ const channel: MixerChannelState = {
   hardwareOutputChannels: []
 }
 
+const instrumentChannel: MixerChannelState = {
+  ...channel,
+  id: "instrument",
+  kind: "instrument",
+  name: "Instrument 1",
+  inputSource: null,
+  inputFormat: null,
+  midiInput: { portId: "port-a", portName: "Keyboard", channel: 3 },
+  inputChannels: []
+}
+
 describe("MixerInputSection", () => {
   it("renders the audio input capsule and forwards its complete routing patch", async () => {
     const wrapper = mount(MixerInputSection, {
@@ -44,5 +55,19 @@ describe("MixerInputSection", () => {
     expect(wrapper.emitted("updateChannel")).toEqual([
       [{ inputSource: "hardware", inputFormat: "mono", inputChannels: [1] }]
     ])
+  })
+
+  it("renders only the instrument plug-in input for instrument channels", () => {
+    const wrapper = mount(MixerInputSection, {
+      props: {
+        channel: instrumentChannel,
+        instrument: null,
+        pluginRuntime: {},
+        instrumentPlugins: []
+      }
+    })
+
+    expect(wrapper.find("select").exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="Assign VST3 instrument input"]')).toBeDefined()
   })
 })

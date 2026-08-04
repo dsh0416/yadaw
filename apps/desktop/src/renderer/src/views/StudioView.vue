@@ -27,6 +27,7 @@ import { usePianoRollStore } from "../stores/pianoRoll"
 import { useLowLatencyModeStore } from "../stores/lowLatencyMode"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
 import NotesPanel from "../components/notes/NotesPanel.vue"
+import TrackInspector from "../components/inspector/TrackInspector.vue"
 import {
   replaceTempoEventAtTick,
   replaceTimeSignatureEventAtTick,
@@ -215,7 +216,7 @@ onBeforeUnmount(() => {
     :class="[
       'studio-shell',
       {
-        'sound-browser-open': workspaceStore.soundBrowserOpen,
+        'left-panel-open': workspaceStore.activeLeftPanel !== null,
         'notes-panel-open': workspaceStore.notesPanelOpen
       }
     ]"
@@ -234,6 +235,7 @@ onBeforeUnmount(() => {
       :tempo-map="mixerStore.graph.tempoMap"
       :key-signature-events="mixerStore.graph.keySignatureEvents"
       :sound-browser-open="workspaceStore.soundBrowserOpen"
+      :inspector-open="workspaceStore.inspectorOpen"
       :notes-panel-open="workspaceStore.notesPanelOpen"
       :mixer-dock-open="workspaceStore.mixerDockOpen"
       :piano-roll-dock-open="workspaceStore.pianoRollDockOpen"
@@ -246,6 +248,7 @@ onBeforeUnmount(() => {
       :low-latency-mode-disabled="!lowLatencyModeStore.canConfigure"
       :low-latency-mode-tooltip="lowLatencyTooltip"
       @toggle-sound-browser="workspaceStore.toggleSoundBrowser"
+      @toggle-inspector="workspaceStore.toggleInspector"
       @toggle-notes-panel="workspaceStore.toggleNotesPanel"
       @toggle-mixer-dock="workspaceStore.toggleMixerDock"
       @toggle-piano-roll-dock="workspaceStore.togglePianoRollDock"
@@ -263,6 +266,7 @@ onBeforeUnmount(() => {
       @update-master="updateMaster"
     />
     <SoundBrowser v-show="workspaceStore.soundBrowserOpen" :assets="projectAssets" />
+    <TrackInspector v-show="workspaceStore.inspectorOpen" />
     <StudioWorkspace
       :recording-id="activeRecording?.id ?? null"
       :recording-started-at="activeRecording?.startedAt ?? null"
@@ -293,13 +297,13 @@ onBeforeUnmount(() => {
   -webkit-user-select: none;
   user-select: none;
 }
-.studio-shell.sound-browser-open {
+.studio-shell.left-panel-open {
   grid-template-columns: 214px minmax(0, 1fr);
 }
 .studio-shell.notes-panel-open {
   grid-template-columns: minmax(0, 1fr) 292px;
 }
-.studio-shell.sound-browser-open.notes-panel-open {
+.studio-shell.left-panel-open.notes-panel-open {
   grid-template-columns: 214px minmax(0, 1fr) 292px;
 }
 .studio-shell
@@ -308,13 +312,13 @@ onBeforeUnmount(() => {
   user-select: text;
 }
 @media (max-width: 1100px) {
-  .studio-shell.sound-browser-open {
+  .studio-shell.left-panel-open {
     grid-template-columns: 184px minmax(0, 1fr);
   }
   .studio-shell.notes-panel-open {
     grid-template-columns: minmax(0, 1fr) 264px;
   }
-  .studio-shell.sound-browser-open.notes-panel-open {
+  .studio-shell.left-panel-open.notes-panel-open {
     grid-template-columns: 184px minmax(0, 1fr) 264px;
   }
 }

@@ -1139,6 +1139,40 @@
       "rescan": "重新扫描 VST3",
       "scanning": "正在扫描…"
     },
+    "trackInspector": {
+      "ariaLabel": "所选轨道检查器",
+      "eyebrow": "检查器",
+      "title": "轨道",
+      "selectedTrack": "所选轨道",
+      "types": {
+        "audio": "音频",
+        "instrument": "乐器"
+      },
+      "identity": {
+        "title": "属性",
+        "name": "名称",
+        "color": "颜色",
+        "type": "类型"
+      },
+      "midi": {
+        "title": "MIDI 输入",
+        "port": "输入端口",
+        "portAria": "MIDI 输入端口",
+        "allInputs": "所有输入",
+        "unknownPort": "未知 MIDI 输入",
+        "missing": "未连接",
+        "missingDescription": "所选 MIDI 输入当前未连接。",
+        "channel": "通道",
+        "channelAria": "MIDI 输入通道",
+        "omni": "全通道",
+        "channelOption": "通道 {channel}",
+        "description": "选择此轨道接收的 MIDI 输入端口与通道。"
+      },
+      "empty": {
+        "title": "选择一条轨道",
+        "description": "在时间线中选择音频轨或乐器轨以查看轨道属性。"
+      }
+    },
     "notes": {
       "ariaLabel": "工程与轨道笔记",
       "eyebrow": "会话笔记",

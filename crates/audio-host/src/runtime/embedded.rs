@@ -841,7 +841,12 @@ where
         return work.await;
     }
     tokio::select! {
-        result = &mut work => result,
+        result = &mut work => {
+            if submitted_at.elapsed() >= slow_threshold {
+                record_slow_request(slow_requests, request_id, slow_threshold);
+            }
+            result
+        },
         () = tokio::time::sleep(slow_threshold - elapsed) => {
             record_slow_request(slow_requests, request_id, slow_threshold);
             work.await
