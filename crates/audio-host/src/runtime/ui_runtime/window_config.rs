@@ -2,6 +2,9 @@ use super::{
     HashMap, LiveMixerGraph, LogicalSize, Vst3HostRequest, WindowAttributes, WinitHost, engine,
 };
 
+#[cfg(target_os = "linux")]
+use crate::editor_platform;
+
 impl WinitHost {}
 
 pub(in crate::runtime) fn replace_owned_popup<Id>(
