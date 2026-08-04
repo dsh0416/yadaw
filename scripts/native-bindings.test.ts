@@ -12,11 +12,17 @@ type NativeHostResponse = {
 type AudioHostRuntime = {
   request: (request: Buffer) => Promise<NativeHostResponse>
   heartbeat: (request: Buffer) => Promise<NativeHostResponse>
+  drainUiWork: () => boolean
   close: () => void
 }
 
 type NativeBindings = {
-  AudioHostRuntime: new (workerThreads?: number, maxBlockingThreads?: number) => AudioHostRuntime
+  AudioHostRuntime: new (
+    workerThreads?: number,
+    maxBlockingThreads?: number,
+    editorOwnerWindowHandle?: Buffer,
+    uiWakeCallback?: () => unknown
+  ) => AudioHostRuntime
   analyzeWaveform: (path: string) => Promise<{
     channels: number
     frameCount: number
