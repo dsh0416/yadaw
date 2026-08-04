@@ -165,10 +165,15 @@ struct EmbeddedNativeEditor {
     container: Rc<RefCell<NativeContainer>>,
     size: Rc<Cell<ViewRect>>,
     strategy: ScaleStrategy,
-    zoom: f64,
-    display_scale: f64,
-    top_inset: u32,
+    scale: Rc<Cell<EditorScale>>,
     resizable: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EditorScale {
+    zoom: f64,
+    display: f64,
+    top_inset: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -190,6 +195,11 @@ impl EmbeddedNativeEditor {
     ) -> Result<Self, String> {
         let view = runtime.create_view(instance_id)?;
         let zoom = f64::from(preference.zoom_percent) / 100.0;
+        let scale = EditorScale {
+            zoom,
+            display: display_scale,
+            top_inset,
+        };
         let plugin_scaled = view
             .set_content_scale_factor(plugin_content_scale(display_scale, zoom))
             .map_err(|error| format!("Could not set the plug-in UI scale: {error}"))?;
@@ -217,18 +227,24 @@ impl EmbeddedNativeEditor {
         let callback_container = Rc::clone(&container);
         let attached_size = Rc::new(Cell::new(size));
         let callback_size = Rc::clone(&attached_size);
+        // resizeView may arrive after a monitor-DPI or user-zoom update. Keep
+        // the callback on the attachment's live scale instead of the values
+        // captured when the plug-in was first attached.
+        let scale = Rc::new(Cell::new(scale));
+        let callback_scale = Rc::clone(&scale);
         let callback_instance_id = instance_id.to_owned();
         let callback_strategy = strategy;
         let mut frame = PlugFrame::new(move |raw_view, mut requested| {
             if rect_extent(requested).is_none() {
                 return false;
             }
+            let scale = callback_scale.get();
             callback_container.borrow_mut().resize(geometry(
                 requested,
                 callback_strategy,
-                display_scale,
-                zoom,
-                top_inset,
+                scale.display,
+                scale.zoom,
+                scale.top_inset,
             ));
             let accepted = unsafe {
                 // SAFETY: VST3 supplied the live IPlugView associated with this boxed frame.
@@ -237,7 +253,7 @@ impl EmbeddedNativeEditor {
             if accepted {
                 callback_size.set(requested);
                 let (width, height) =
-                    electron_extent(requested, callback_strategy, display_scale, zoom);
+                    electron_extent(requested, callback_strategy, scale.display, scale.zoom);
                 events.borrow_mut().push_back(EmbeddedEditorHostEvent {
                     instance_id: callback_instance_id.clone(),
                     width,
@@ -293,34 +309,30 @@ impl EmbeddedNativeEditor {
             container,
             size: attached_size,
             strategy,
-            zoom,
-            display_scale,
-            top_inset,
+            scale,
         })
     }
 
     fn electron_extent(&self) -> (u32, u32) {
-        electron_extent(
-            self.size.get(),
-            self.strategy,
-            self.display_scale,
-            self.zoom,
-        )
+        let scale = self.scale.get();
+        electron_extent(self.size.get(), self.strategy, scale.display, scale.zoom)
     }
 
     fn resize(&mut self, width: u32, height: u32, top_inset: u32, display_scale: f64) {
-        self.display_scale = display_scale.max(0.01);
-        self.top_inset = top_inset;
+        let mut scale = self.scale.get();
+        scale.display = display_scale.max(0.01);
+        scale.top_inset = top_inset;
+        self.scale.set(scale);
         let _ = self
             .view
-            .set_content_scale_factor(plugin_content_scale(self.display_scale, self.zoom));
+            .set_content_scale_factor(plugin_content_scale(scale.display, scale.zoom));
         if self.resizable {
-            let scale = frame_scale(self.strategy, self.display_scale, self.zoom).max(0.01);
+            let frame_scale = frame_scale(self.strategy, scale.display, scale.zoom).max(0.01);
             let mut requested = ViewRect {
                 left: 0,
                 top: 0,
-                right: (f64::from(width) / scale).round() as i32,
-                bottom: (f64::from(height) / scale).round() as i32,
+                right: (f64::from(width) / frame_scale).round() as i32,
+                bottom: (f64::from(height) / frame_scale).round() as i32,
             };
             if self.view.constrain_size(&mut requested).is_ok()
                 && rect_extent(requested).is_some()
@@ -332,17 +344,19 @@ impl EmbeddedNativeEditor {
         self.container.borrow_mut().resize(geometry(
             self.size.get(),
             self.strategy,
-            self.display_scale,
-            self.zoom,
-            self.top_inset,
+            scale.display,
+            scale.zoom,
+            scale.top_inset,
         ));
     }
 
     fn set_zoom(&mut self, zoom_percent: u16) {
-        self.zoom = f64::from(zoom_percent) / 100.0;
+        let mut scale = self.scale.get();
+        scale.zoom = f64::from(zoom_percent) / 100.0;
+        self.scale.set(scale);
         let _ = self
             .view
-            .set_content_scale_factor(plugin_content_scale(self.display_scale, self.zoom));
+            .set_content_scale_factor(plugin_content_scale(scale.display, scale.zoom));
         if let Ok(size) = self.view.size()
             && rect_extent(size).is_some()
         {
@@ -351,9 +365,9 @@ impl EmbeddedNativeEditor {
         self.container.borrow_mut().resize(geometry(
             self.size.get(),
             self.strategy,
-            self.display_scale,
-            self.zoom,
-            self.top_inset,
+            scale.display,
+            scale.zoom,
+            scale.top_inset,
         ));
     }
 
