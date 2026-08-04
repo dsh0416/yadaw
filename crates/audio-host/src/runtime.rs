@@ -65,8 +65,6 @@ use tokio::{
     sync::{Semaphore, mpsc, oneshot, watch},
     task::JoinSet,
 };
-#[cfg(target_os = "macos")]
-use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
