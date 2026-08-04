@@ -19,9 +19,9 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aho-corasick"
-version = "1.1.4"
+version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301"
+checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
 dependencies = [
  "memchr",
 ]
@@ -673,9 +673,9 @@ dependencies = [
 
 [[package]]
 name = "coremidi"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1fa14fb8c3ca83d0d7f22f4afc9ecfe5f40947f01ce639a638a9377c2662dde"
+checksum = "a57ede822fdaf19280cf1320a5a5d3a522c75c910d01750af1e8122b6ad2595b"
 dependencies = [
  "block2",
  "core-foundation",
@@ -1489,7 +1489,7 @@ dependencies = [
 
 [[package]]
 name = "heron-audio-engine"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "bwavfile",
  "cpal",
@@ -1505,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "heron-audio-host"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "ara2-bridge-core",
  "ara2-bridge-host",
@@ -1521,14 +1521,14 @@ dependencies = [
 
 [[package]]
 name = "heron-dsp-core"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "criterion",
 ]
 
 [[package]]
 name = "heron-dsp-node"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "bwavfile",
  "criterion",
@@ -1546,7 +1546,7 @@ dependencies = [
 
 [[package]]
 name = "heron-dsp-render"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "heron-dsp-core",
@@ -1555,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "heron-dsp-runtime"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "midly",
  "rmp-serde",
@@ -1566,7 +1566,7 @@ dependencies = [
 
 [[package]]
 name = "heron-gain"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "heron-plugin-ui",
  "truce",
@@ -1578,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "heron-iced-ui"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "iced_core",
  "iced_widget",
@@ -1586,7 +1586,7 @@ dependencies = [
 
 [[package]]
 name = "heron-metronome"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "heron-plugin-ui",
  "truce",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "heron-plugin-ui"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "heron-iced-ui",
  "iced_core",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "heron-sine"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "heron-plugin-ui",
  "truce",
@@ -1622,7 +1622,7 @@ dependencies = [
 
 [[package]]
 name = "heron-vst3-host"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "bitflags 2.13.1",
  "cc",
@@ -1637,7 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "heron-vst3-host-sys"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "bindgen",
  "cc",
@@ -3042,9 +3042,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.16"
+version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fcfdb36bda0c880c5931cdc7a2bcdc8ba4556847b9d912bca70bc94708711ad"
+checksum = "ca71a6a1a566e01ad6b3b87edcbf9bd3374c27e31978c1b4e38c9fa6412557d2"
 dependencies = [
  "aho-corasick",
  "memchr",
