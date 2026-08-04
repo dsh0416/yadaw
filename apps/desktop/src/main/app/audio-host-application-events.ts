@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
-import type { AudioHostService } from "../audio-host"
+import type { AudioHostService, PluginSidechainRouteRequest } from "../audio-host"
 import type { PluginCatalogService } from "../plugins"
 import type { ProjectCommandService } from "../project"
 
@@ -28,12 +28,14 @@ export interface AudioHostApplicationEventOptions {
 
 export class AudioHostApplicationEventBridge {
   private araSequence = 0
+  private disposed = false
   private projectCommandSequence = 0
 
   constructor(private readonly options: AudioHostApplicationEventOptions) {}
 
   bind(): void {
     this.options.audioHost.setAraCallbackHandler(async (callback) => {
+      if (this.disposed) return
       if (
         callback.event.kind === "content-changed" ||
         callback.event.kind === "document-data-changed"
@@ -61,6 +63,7 @@ export class AudioHostApplicationEventBridge {
     })
 
     this.options.audioHost.setVst3HostNotificationHandler(async (notification) => {
+      if (this.disposed) return
       if (notification.kind === "dirty-changed" && notification.value === "true") {
         await this.options.markProjectDirty()
       } else if (notification.kind === "open-editor") {
@@ -69,6 +72,10 @@ export class AudioHostApplicationEventBridge {
     })
 
     this.options.audioHost.setPluginSidechainRouteRequestHandler(async (request) => {
+      if (this.disposed) {
+        await this.rejectSidechainDuringShutdown(request)
+        return
+      }
       const workspace = this.options.projectCommands.currentWorkspace()
       const plugin = workspace?.graph.plugins.find(
         (candidate) => candidate.id === request.instanceId
@@ -111,6 +118,10 @@ export class AudioHostApplicationEventBridge {
           patch: { descriptor: plugin.descriptor, sidechainInputs }
         }
       )
+      if (this.disposed) {
+        await this.rejectSidechainDuringShutdown(request)
+        return
+      }
       if (!result.ok) {
         await this.options.audioHost.resolvePluginSidechainRoute(
           request.requestId,
@@ -145,7 +156,21 @@ export class AudioHostApplicationEventBridge {
     })
   }
 
+  dispose(): void {
+    this.disposed = true
+  }
+
+  private async rejectSidechainDuringShutdown(request: PluginSidechainRouteRequest): Promise<void> {
+    await this.options.audioHost.resolvePluginSidechainRoute(
+      request.requestId,
+      request.instanceId,
+      false,
+      "The application is shutting down."
+    )
+  }
+
   private broadcast(channel: string, event: unknown): void {
+    if (this.disposed) return
     for (const target of this.options.targets()) target.webContents.send(channel, event)
   }
 }

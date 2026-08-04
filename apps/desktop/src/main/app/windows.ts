@@ -6,7 +6,7 @@ import { applicationIconPath, rendererDirectory } from "./runtime-paths"
 
 let projectService: ProjectService | null = null
 
-export function setWindowProjectService(service: ProjectService): void {
+export function setWindowProjectService(service: ProjectService | null): void {
   projectService = service
 }
 

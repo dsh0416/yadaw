@@ -1,5 +1,5 @@
 import { app, BrowserWindow, nativeTheme } from "electron"
-import { basename, join, resolve } from "node:path"
+import { join, resolve } from "node:path"
 import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import { ApplicationSettingsStore } from "../settings"
@@ -12,6 +12,11 @@ import { ProjectService } from "../project"
 import { StartupProgress } from "./startup-progress"
 import { registerIpcHandlers } from "../ipc"
 import { applicationIconPath } from "./runtime-paths"
+import { PluginStartupScanCoordinator } from "./plugin-startup-scan-coordinator"
+import {
+  createStartedApplicationServices,
+  type StartedApplicationServices
+} from "./started-application-services"
 import {
   createMainWindow,
   createSplashWindow,
@@ -21,10 +26,7 @@ import {
   splashWindow
 } from "./windows"
 
-export interface StartedApplicationServices {
-  audioHostService: AudioHostService
-  projectService: ProjectService
-}
+export type { StartedApplicationServices } from "./started-application-services"
 
 export function startApplication(
   isShuttingDown: () => boolean,
@@ -86,47 +88,8 @@ export function startApplication(
       )
       await plugins.initialize()
 
-      let scanTotal = 0
-      let scanWarnings = 0
-      const unsubscribeScan = plugins.subscribe((event) => {
-        if (event.type === "started") {
-          scanTotal = event.total
-          startup.update({
-            phase: "scanning-plugins",
-            progress: 0.16,
-            label: t("startup.scanningPlugins"),
-            detail:
-              event.total === 0
-                ? t("startup.noBundles")
-                : t("startup.foundBundles", { count: event.total }),
-            completed: 0,
-            total: event.total
-          })
-        } else if (event.type === "progress") {
-          const ratio = event.total > 0 ? event.completed / event.total : 1
-          startup.update({
-            phase: "scanning-plugins",
-            progress: 0.18 + ratio * 0.58,
-            label: t("startup.scanningPlugins"),
-            detail: basename(event.path),
-            completed: event.completed,
-            total: event.total
-          })
-        } else if (event.type === "quarantined") {
-          scanWarnings += 1
-          startup.update({
-            detail: t("startup.quarantined", { name: basename(event.path) }),
-            warnings: scanWarnings
-          })
-        } else {
-          startup.update({
-            progress: 0.78,
-            detail: t("startup.pluginsAvailable", { count: event.catalog.plugins.length }),
-            completed: scanTotal,
-            total: scanTotal
-          })
-        }
-      })
+      const scanProgress = new PluginStartupScanCoordinator(startup)
+      const unsubscribeScan = plugins.subscribe((event) => scanProgress.handle(event))
       startup.update({
         phase: "scanning-plugins",
         progress: 0.12,
@@ -139,15 +102,7 @@ export function startApplication(
         // Fingerprint-cached descriptors are reused; quarantined modules retry.
         await plugins.scan({ retryQuarantined: true })
       } catch (error) {
-        scanWarnings += 1
-        startup.update({
-          progress: 0.78,
-          detail:
-            error instanceof Error
-              ? t("startup.scanError", { message: error.message })
-              : t("startup.scanUnknownError"),
-          warnings: scanWarnings
-        })
+        scanProgress.fail(error)
         console.error("Startup VST3 scan failed:", error)
       } finally {
         unsubscribeScan()
@@ -217,7 +172,6 @@ export function startApplication(
       )
       const projectService = new ProjectService(app.getPath("userData"), settings)
       setWindowProjectService(projectService)
-      onServices({ audioHostService, projectService })
       const services = await createApplicationServices({
         userDataPath: app.getPath("userData"),
         sourceEpoch: startupEpoch,
@@ -228,7 +182,7 @@ export function startApplication(
         eventTargets: () => BrowserWindow.getAllWindows(),
         allowRecordingWithoutAudio: process.env.HERON_TEST_CAPTURE_SOURCE === "1"
       })
-      registerIpcHandlers({
+      const ipcRegistration = registerIpcHandlers({
         settings,
         projects: projectService,
         recordings: services.recordings,
@@ -261,14 +215,27 @@ export function startApplication(
       loadMainWindow(window)
       installApplicationMenu(process.platform, applicationSettings.shortcuts)
 
-      app.on("activate", () => {
+      const handleActivate = (): void => {
         if (!mainWindow || mainWindow.isDestroyed()) {
           createMainWindow()
         } else {
           mainWindow.show()
           mainWindow.focus()
         }
-      })
+      }
+      app.on("activate", handleActivate)
+      onServices(
+        createStartedApplicationServices(audioHostService, projectService, [
+          {
+            dispose(): void {
+              app.removeListener("activate", handleActivate)
+              setWindowProjectService(null)
+            }
+          },
+          ipcRegistration,
+          services
+        ])
+      )
     } catch (error) {
       console.error("Heron startup failed:", error)
       startup.fail(error)

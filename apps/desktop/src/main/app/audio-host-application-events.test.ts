@@ -21,6 +21,7 @@ describe("AudioHostApplicationEventBridge", () => {
   let currentWorkspace: ReturnType<typeof vi.fn>
   let openEditor: ReturnType<typeof vi.fn>
   let markProjectDirty: ReturnType<typeof vi.fn<() => Promise<void>>>
+  let bridge: ReturnType<typeof bindAudioHostApplicationEvents>
 
   beforeEach(() => {
     send = vi.fn<(channel: string, event: unknown) => void>()
@@ -31,7 +32,7 @@ describe("AudioHostApplicationEventBridge", () => {
     currentWorkspace = vi.fn()
     openEditor = vi.fn(async () => ({ editorMode: "native", open: true }))
     markProjectDirty = vi.fn<() => Promise<void>>(async () => {})
-    bindAudioHostApplicationEvents({
+    bridge = bindAudioHostApplicationEvents({
       audioHost: {
         helperEpoch: () => "helper-epoch",
         resolvePluginSidechainRoute,
@@ -186,6 +187,32 @@ describe("AudioHostApplicationEventBridge", () => {
       "missing",
       false,
       "The plug-in or project is no longer available."
+    )
+  })
+
+  it("stops broadcasting and rejects new side-chain work after disposal", async () => {
+    bridge.dispose()
+
+    await araHandler({
+      helperEpoch: "helper-epoch",
+      instanceId: "ara-1",
+      sequence: 1,
+      event: { kind: "archive-progress", direction: "store", progress: 1 }
+    })
+    await sidechainHandler({
+      requestId: 19,
+      instanceId: "plugin-1",
+      inputBusIndex: 1,
+      sourceChannelId: null
+    })
+
+    expect(send).not.toHaveBeenCalled()
+    expect(execute).not.toHaveBeenCalled()
+    expect(resolvePluginSidechainRoute).toHaveBeenCalledWith(
+      19,
+      "plugin-1",
+      false,
+      "The application is shutting down."
     )
   })
 })

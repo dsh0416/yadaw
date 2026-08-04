@@ -30,6 +30,7 @@ export interface ApplicationServices {
   operations: OperationService
   recordings: RecordingService
   waveforms: WaveformService
+  dispose(): void
 }
 
 export interface CreateApplicationServicesOptions {
@@ -106,7 +107,7 @@ export async function createApplicationServices(
     lifecycle.applicationState.desktopSession
   )
   projectCommands.attachKernel(lifecycle, operations)
-  bindAudioHostApplicationEvents({
+  const applicationEvents = bindAudioHostApplicationEvents({
     audioHost,
     projectCommands,
     plugins,
@@ -134,6 +135,7 @@ export async function createApplicationServices(
     lifecycle,
     operations,
     recordings,
-    waveforms
+    waveforms,
+    dispose: () => applicationEvents.dispose()
   }
 }
