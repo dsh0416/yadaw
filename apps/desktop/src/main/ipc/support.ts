@@ -225,8 +225,11 @@ export function validateSettingsPatch(value: unknown): ApplicationSettingsPatch 
 }
 
 export function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
+  if (!event.senderFrame) {
     throw new Error("Rejected IPC call without a sender frame")
+  }
+  if (event.senderFrame !== event.sender.mainFrame) {
+    throw new Error("Rejected IPC call from a subframe")
   }
 
   if (
