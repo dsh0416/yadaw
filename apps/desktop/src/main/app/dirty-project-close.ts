@@ -1,5 +1,5 @@
 import type { ApplicationCommandId, ProjectSession, RpcEvent } from "@heron/contracts"
-import { sendApplicationCommand } from "../app"
+import { sendApplicationCommand } from "./application-command-events"
 
 export type ProjectCloseCommand = Extract<ApplicationCommandId, "application.quit" | "window.close">
 

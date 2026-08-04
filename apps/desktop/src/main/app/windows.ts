@@ -1,6 +1,6 @@
 import { BrowserWindow, shell, type BrowserWindowConstructorOptions } from "electron"
 import { join } from "node:path"
-import { deferProjectClose } from "../project"
+import { deferProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "../project"
 import { applicationIconPath, rendererDirectory } from "./runtime-paths"
 

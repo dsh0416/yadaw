@@ -7,7 +7,7 @@ import type {
   ShortcutPreferences
 } from "@heron/contracts"
 import { sendApplicationCommand } from "./application-command-events"
-import { t } from "./i18n"
+import { t } from "../settings"
 
 function requestApplicationCommand(command: ApplicationCommandId): void {
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]

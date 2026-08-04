@@ -10,7 +10,7 @@ function graph(...plugins: PluginInstanceState[]): ProjectGraphSnapshot {
   return { sampleRate: 48_000, plugins } as ProjectGraphSnapshot
 }
 
-describe("synchronizePluginStatesAtomically", () => {
+describe("project plugin state synchronization", () => {
   it("does not persist a partial snapshot when any plug-in fails", async () => {
     const failure = new Error("state unavailable")
     const audioHost = {

@@ -4,7 +4,7 @@ import type {
   AraHostCallback,
   PluginSidechainRouteRequest,
   Vst3HostNotification
-} from "./audio-host-events"
+} from "../audio-host"
 import { bindAudioHostApplicationEvents } from "./audio-host-application-events"
 
 describe("AudioHostApplicationEventBridge", () => {

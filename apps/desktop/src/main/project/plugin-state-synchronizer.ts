@@ -1,5 +1,5 @@
 import type { AudioHostService } from "../audio-host"
-import type { ProjectGraphService } from "../project"
+import type { ProjectGraphService } from "./project-graph-service"
 
 type PluginStateAudioHost = Pick<AudioHostService, "loadPlugin" | "savePluginState">
 type PluginStateGraph = Pick<ProjectGraphService, "snapshot" | "savePluginStates">

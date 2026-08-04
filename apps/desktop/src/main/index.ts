@@ -1,7 +1,6 @@
 import { app } from "electron"
-import { configureApplicationIdentity, quitWhenAllWindowsAreClosed } from "./app"
+import { configureApplicationIdentity, deferProjectClose, quitWhenAllWindowsAreClosed } from "./app"
 import { AudioHostService } from "./audio-host"
-import { deferProjectClose } from "./project"
 import { ProjectService } from "./project"
 import { startApplication } from "./app"
 import { mainWindow } from "./app"

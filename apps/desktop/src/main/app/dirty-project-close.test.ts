@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import { deferProjectClose } from "./dirty-project-close"
 
-describe("deferProjectClose", () => {
+describe("application project close deferral", () => {
   it.each(["window.close", "application.quit"] as const)(
     "defers %s to the renderer while the project is dirty",
     (command) => {

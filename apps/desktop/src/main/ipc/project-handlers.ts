@@ -2,7 +2,7 @@ import { dialog } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type { ProjectCloseDisposition, RpcRequestMeta } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
-import { t } from "../app"
+import { t } from "../settings"
 import { isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project"
 import { registerRpcHandler } from "./rpc"
 import {

@@ -23,7 +23,7 @@ import type { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
 import type { ApplicationSettingsStore } from "../settings"
 import type { WaveformService } from "./waveform-service"
-import { t } from "../app"
+import { t } from "../settings"
 
 interface ProjectCandidateResources {
   project: ProjectSessionRef

@@ -1,5 +1,5 @@
 import type { StartupProgressSnapshot } from "@heron/contracts"
-import { t } from "./i18n"
+import { t } from "../settings"
 
 type StartupProgressListener = (snapshot: StartupProgressSnapshot) => void
 

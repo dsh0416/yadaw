@@ -13,9 +13,13 @@ import type {
 import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
 import { validateMutationTarget, validateReadTarget } from "./resource-validation"
-import { validateAudioHostRuntimePreferences, validateShortcutPreferences } from "../settings"
+import {
+  setMainLocale,
+  t,
+  validateAudioHostRuntimePreferences,
+  validateShortcutPreferences
+} from "../settings"
 import { installApplicationMenu } from "../app"
-import { setMainLocale, t } from "../app"
 import { validateSettingsPatch } from "./support"
 
 function operationFailure(

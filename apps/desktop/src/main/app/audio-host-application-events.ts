@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
-import type { AudioHostService } from "./audio-host-service"
+import type { AudioHostService } from "../audio-host"
 import type { PluginCatalogService } from "../plugins"
 import type { ProjectCommandService } from "../project"
 

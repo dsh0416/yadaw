@@ -11,7 +11,7 @@ import type {
   RpcResult
 } from "@heron/contracts"
 import { validateMidiSyncPreferences } from "../settings"
-import { t } from "../app"
+import { t } from "../settings"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"

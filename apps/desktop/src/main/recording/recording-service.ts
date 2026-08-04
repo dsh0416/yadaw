@@ -14,7 +14,7 @@ import type {
 import { repairRecordingHeader, writeDeterministicTestRecording } from "@heron/dsp-node"
 import type { AudioHostService } from "../audio-host"
 import type { ApplicationSettingsStore } from "../settings"
-import { t } from "../app"
+import { t } from "../settings"
 import { commitMidiRecordingTakes } from "./midi-recording-commit"
 import type { OperationService } from "../kernel"
 import type { ProjectCommandService } from "../project"
