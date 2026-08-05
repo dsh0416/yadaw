@@ -62,7 +62,8 @@ pnpm --filter @heron/desktop run test:vst3-runtime \
   "$again_id" \
   "$synth_id"
 pnpm --filter @heron/desktop run test:clap-runtime "$CLAP_PLUGIN_FIXTURE"
-HERON_EDITOR_SMOKE_DELAY_MS=0 xvfb-run --auto-servernum \
+HERON_EDITOR_SMOKE_DELAY_MS=0 HERON_EDITOR_SMOKE_NO_SANDBOX=1 \
+  xvfb-run --auto-servernum \
   pnpm --filter @heron/desktop run test:vst3-editor \
   "$VST3_SYNTH_FIXTURE" \
   "$synth_id" \

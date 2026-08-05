@@ -7,11 +7,13 @@ if (typeof electronModule !== "string") {
   throw new TypeError("electron did not resolve to its executable path")
 }
 
-const child = spawn(
-  electronModule,
-  [resolve(import.meta.dirname, "vst3-editor-smoke-app"), ...process.argv.slice(2)],
-  { stdio: "inherit" }
-)
+const electronArguments = [
+  ...(process.env.HERON_EDITOR_SMOKE_NO_SANDBOX === "1" ? ["--no-sandbox"] : []),
+  resolve(import.meta.dirname, "vst3-editor-smoke-app"),
+  ...process.argv.slice(2)
+]
+
+const child = spawn(electronModule, electronArguments, { stdio: "inherit" })
 
 const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
   child.once("error", rejectExit)
