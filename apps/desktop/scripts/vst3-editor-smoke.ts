@@ -60,7 +60,13 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const [pluginArgument, classIdArgument, pluginKindArgument] = process.argv.slice(2)
+const smokeArgumentsMarker = "heron-editor-smoke-arguments:"
+const smokeArgumentsMarkerIndex = process.argv.indexOf(smokeArgumentsMarker)
+const smokeArguments =
+  smokeArgumentsMarkerIndex === -1
+    ? process.argv.slice(2)
+    : process.argv.slice(smokeArgumentsMarkerIndex + 1)
+const [pluginArgument, classIdArgument, pluginKindArgument] = smokeArguments
 const pluginPath =
   pluginArgument ??
   resolve(
