@@ -137,7 +137,7 @@ function checkVersions(expected: string): void {
         `Version mismatch against VERSION (${expected}):`,
         ...mismatches,
         "",
-        "Run `pnpm sync:version` to synchronize manifests."
+        "Run `mise run version:sync` to synchronize manifests."
       ].join("\n")
     )
   }

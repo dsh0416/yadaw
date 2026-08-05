@@ -32,9 +32,9 @@ with:
 mise run install
 ```
 
-The `dev`, `check`, `check-fast`, `build`, `pack`, `format`, `format-check`, `lint`, and
-`native` tasks depend on the `install` task, so they install locked pnpm
-dependencies when necessary.
+JavaScript, N-API, Electron, and documentation tasks depend on `install` when
+they need workspace packages. Rust-only tasks such as `check-fast` and the
+`rust:*` task family do not install pnpm dependencies.
 
 Windows native builds always include cpal's ASIO backend. Windows development
 hosts therefore require Visual Studio's Desktop development with C++ workload
@@ -59,6 +59,8 @@ mise run build
 mise run format
 mise run format-check
 mise run lint
+mise run test
+mise run coverage
 ```
 
 Other repository tasks include:
@@ -66,6 +68,8 @@ Other repository tasks include:
 ```sh
 mise run pack
 mise run native
+mise run bench:quick
+mise run version:check
 ```
 
 AI agents, automation, IDE subprocesses, and other non-interactive shells may
@@ -98,7 +102,12 @@ mise exec -- pnpm --filter @heron/project-db test:integration
 mise exec -- pnpm --filter @heron/dsp-node build
 mise exec -- pnpm format:check
 mise exec -- pnpm lint
+mise exec -- cargo xtask test
 ```
+
+pnpm scripts are JavaScript ecosystem leaf tasks. Use `cargo xtask` for direct
+Rust workspace work and root mise tasks whenever JavaScript, Rust, N-API, or
+packaging steps must be composed.
 
 Prefer the root `mise run check` task before handing off a completed change
 because it is the repository's full validation path.
@@ -107,10 +116,12 @@ because it is the repository's full validation path.
 Clippy, and library tests. It deliberately skips NAPI builds, integration tests,
 examples, and benchmark compilation; `mise run check` remains the merge gate.
 
-Repository native commands discover `rustc -vV`'s host triple and build into
-`target/<host-triple>/<profile>`. The native build script builds the unified
-`@heron/dsp-node` addon and stages only `heron-vst3-probe` into
-`target/debug` or `target/release` for its stable subprocess path.
+The Rust xtask discovers `rustc -vV`'s host triple and builds into
+`target/<host-triple>/<profile>`. The `native:*` mise tasks combine the
+package-local `@heron/dsp-node` napi-rs build with xtask's VST3 probe and
+bundled plug-in build. xtask stages `heron-vst3-probe` into `target/debug` or
+`target/release` and plug-in bundles into `target/bundles` for stable runtime
+and packaging paths.
 
 VST3 SDK bindings are generated into Cargo's `OUT_DIR` by
 `heron-vst3-host-sys/build.rs` and are not checked into Git. A clean build
@@ -118,9 +129,9 @@ therefore requires the pinned LLVM/Clang toolchain, including on non-Windows
 hosts. Cargo reruns Bindgen when the wrapper or its VST3/ARA header inputs
 change.
 
-`pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
-type-aware Oxlint, residual Vue ESLint, package TypeScript checks, and tests
-that resolve `@heron/dsp-node`, so the gitignored
+`mise run check`, `mise run lint`, and the platform-native CI task build debug
+N-API bindings before type-aware Oxlint, residual Vue ESLint, package
+TypeScript checks, and tests that resolve `@heron/dsp-node`, so the gitignored
 loaders and typings exist in CI and clean checkouts.
 
 Oxfmt formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,
@@ -155,14 +166,14 @@ Commit the resulting `mise.lock` update together with the `mise.toml` change so
 the runtime policy and its resolution stay synchronized.
 
 Product version is lockstep across the monorepo. The repository-root `VERSION`
-file is the single source of truth; `pnpm sync:version` copies it into root
-`Cargo.toml` (`[workspace.package].version`) and every workspace
-`package.json`, then runs `pnpm sync:napi-bindings` to rebuild the napi-rs
-addons. That rebuild regenerates the gitignored JavaScript loaders and typings
+file is the single source of truth; `mise run version:sync` copies it into root
+`Cargo.toml` (`[workspace.package].version`) and every versioned workspace
+`package.json`, then rebuilds the N-API bindings. That rebuild regenerates the
+gitignored JavaScript loaders and typings
 (`crates/*/index.js`, `crates/*/index.d.ts`) from each package manifest, so
-those files are never committed. `pnpm check:version` (part of `pnpm check`)
-fails if any mirrored manifest version drifts. Do not edit those mirrored
-version fields by hand.
+those files are never committed. `mise run version:check` (part of
+`mise run check`) fails if any mirrored manifest version drifts. Do not edit
+those mirrored version fields by hand.
 
 JavaScript dependency versions belong in the applicable `package.json`, with
 resolved dependency changes committed in `pnpm-lock.yaml`. Use the

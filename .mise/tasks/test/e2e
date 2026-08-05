@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Build the debug native runtime and run Electron end-to-end tests"
+#MISE depends=["native:debug"]
+set -euo pipefail
+
+pnpm test:e2e

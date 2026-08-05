@@ -13,8 +13,8 @@ builds, and tagged releases.
   the documentation artifact to GitHub Pages. Configure the `Gate` check (shown
   under the `CI` workflow) as the only required status check for pull requests.
 - **Test** (`.github/workflows/test.yml`) runs repository checks on Linux x64,
-  Windows x64, and macOS. Linux runs `pnpm check:coverage`, a variant of
-  `pnpm check` that swaps every test invocation for its coverage-producing
+  Windows x64, and macOS. Linux runs `mise run ci:check:coverage`, a variant of
+  the full check graph that swaps every test invocation for its coverage-producing
   counterpart, so each test suite runs exactly once. The reports are uploaded
   to Codecov. It is reusable through `workflow_call` and can also be started
   manually. Callers must pass `CODECOV_TOKEN` when available (see `CI` and
@@ -50,7 +50,7 @@ uses sccache's GitHub Actions backend. Check jobs may restore a Cargo `target`
 cache; packaging jobs leave it disabled because the directory is large and can
 retain stale platform-specific build state. On Linux, coverage is collected in
 the Checks test pass itself. The coverage orchestrator uses cargo-llvm-cov's
-external-test environment to run Cargo tests, build the two napi-rs modules with
+external-test environment to run Cargo tests, build the napi-rs module with
 instrumentation, run the JavaScript tests, and export the merged Rust profiles
 after Node exits. Each test suite runs once. Instrumented artifacts stay in
 `target-coverage/`, outside the shared Checks `target` cache. cargo-llvm-cov chains
@@ -59,7 +59,7 @@ those builds and repeat runs reuse them.
 
 ## Coverage
 
-On the Linux Checks leg, CI runs `pnpm check:coverage`: `pnpm check` with the
+On the Linux Checks leg, CI runs `mise run ci:check:coverage` with the
 combined coverage orchestrator in place of the plain Rust and Vitest runs, so
 every test suite executes exactly once with coverage enabled. The orchestrator
 first runs the Rust tests and builds instrumented napi-rs modules. That preparation
@@ -67,8 +67,7 @@ also generates the gitignored package loaders and typings required by type-aware
 Oxlint on a clean checkout. The check then runs the JavaScript linters before the
 orchestrator resumes with the JavaScript tests and merged report; no test suite or
 native build is repeated. Doc tests do not run under it and remain exercised by
-the Windows and macOS legs. The same `pnpm check:coverage` command reproduces the
-Linux leg locally.
+the Windows and macOS legs. The same mise task reproduces the Linux leg locally.
 
 The workspace and `heron-dsp-node/bench-internals` feature selectors apply when
 Cargo creates the instrumented test binaries and napi-rs modules. The final
@@ -81,9 +80,8 @@ For ad-hoc local coverage, use the dedicated scripts:
 
 ```sh
 pnpm test:coverage:js
-pnpm test:coverage:rust
-# or the combined cross-language pass:
-pnpm test:coverage
+# or the combined cross-language pass, including native calls:
+mise run coverage
 ```
 
 JavaScript coverage requires `@vitest/coverage-v8` (installed with the
@@ -115,8 +113,8 @@ version must match before `Test` and `Build` can pass. Prepare and publish a
 release with:
 
 ```sh
-pnpm sync:version
-pnpm check:version
+mise run version:sync
+mise run version:check
 git tag "v$(cat VERSION)"
 git push origin "v$(cat VERSION)"
 ```

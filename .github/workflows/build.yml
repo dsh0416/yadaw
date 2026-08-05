@@ -69,21 +69,25 @@ jobs:
           - name: Windows x64
             os: windows-latest
             builder-arch: x64
+            mise-task: ci:package:windows-x64
             artifact: windows-x64
             package-glob: release/*.exe
           - name: Linux x64
             os: ubuntu-24.04
             builder-arch: x64
+            mise-task: ci:package:linux-x64
             artifact: linux-x64
             package-glob: release/*.AppImage
           - name: Linux arm64
             os: ubuntu-24.04-arm
             builder-arch: arm64
+            mise-task: ci:package:linux-arm64
             artifact: linux-arm64
             package-glob: release/*.AppImage
           - name: macOS universal
             os: macos-latest
             builder-arch: universal
+            mise-task: ci:package:macos-universal
             artifact: macos-universal
             package-glob: release/*.dmg
     steps:
@@ -204,108 +208,15 @@ jobs:
           github-token: >-
             ${{ github.event_name == 'pull_request' && '' || github.token }}
 
-      - name: Build native binaries and bundled plug-ins
-        if: matrix.builder-arch != 'universal'
-        run: pnpm build:native
-
-      - name: Build universal macOS binaries and bundled plug-ins
-        if: matrix.builder-arch == 'universal'
-        shell: bash
+      - name: Build and package application
         env:
-          ARM_TARGET: aarch64-apple-darwin
-          X64_TARGET: x86_64-apple-darwin
-        run: |
-          rustup target add "$ARM_TARGET" "$X64_TARGET"
-          test "$(plutil -extract LSUIElement raw build/macos-agent-info.plist)" = "true"
-
-          for package in @heron/dsp-node; do
-            pnpm --filter "$package" exec napi build \
-              --platform \
-              --release \
-              --target "$ARM_TARGET"
-            pnpm --filter "$package" exec napi build \
-              --platform \
-              --release \
-              --target "$X64_TARGET"
-            pnpm --filter "$package" exec napi universalize
-          done
-
-          rm -f \
-            crates/dsp-node/*.darwin-arm64.node \
-            crates/dsp-node/*.darwin-x64.node
-
-          lipo crates/dsp-node/heron-dsp-node.darwin-universal.node \
-            -verify_arch arm64 x86_64
-          for target in "$ARM_TARGET" "$X64_TARGET"; do
-            cargo build \
-              --release \
-              --target "$target" \
-              -p heron-vst3-host
-            for binary in heron-vst3-probe; do
-              otool -l "target/$target/release/$binary" | \
-                grep -q "sectname __info_plist"
-            done
-            cargo truce build --vst3 --target "$target"
-          done
-
-          mkdir -p target/release
-          for binary in heron-vst3-probe; do
-            lipo -create \
-              "target/$ARM_TARGET/release/$binary" \
-              "target/$X64_TARGET/release/$binary" \
-              -output "target/release/$binary"
-            lipo "target/release/$binary" -verify_arch arm64 x86_64
-          done
-
-          for arm_bundle in "target/bundles/$ARM_TARGET"/*.vst3; do
-            bundle_name="$(basename "$arm_bundle")"
-            x64_bundle="target/bundles/$X64_TARGET/$bundle_name"
-            universal_bundle="target/bundles/$bundle_name"
-            ditto "$arm_bundle" "$universal_bundle"
-
-            while IFS= read -r -d '' arm_binary; do
-              relative_path="${arm_binary#${arm_bundle}/}"
-              lipo -create \
-                "$arm_binary" \
-                "$x64_bundle/$relative_path" \
-                -output "$universal_bundle/$relative_path"
-              lipo "$universal_bundle/$relative_path" \
-                -verify_arch arm64 x86_64
-            done < <(find "$arm_bundle/Contents/MacOS" -type f -print0)
-          done
-
-      - name: Build Electron bundles
-        run: pnpm --filter @heron/desktop build
-
-      - name: Create unsigned installer
-        if: ${{ matrix.builder-arch != 'universal' || !inputs.sign_macos }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: >-
-          pnpm --filter @heron/desktop exec electron-builder
-          --publish never
-          --${{ matrix.builder-arch }}
-
-      - name: Create signed and notarized macOS installer
-        if: ${{ matrix.builder-arch == 'universal' && inputs.sign_macos }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "true"
+          HERON_SIGN_MACOS: ${{ matrix.builder-arch == 'universal' && inputs.sign_macos }}
           CSC_LINK: ${{ steps.macos_release_credentials.outputs.mac_csc_path }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_API_KEY: ${{ steps.macos_release_credentials.outputs.apple_api_key_path }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: >-
-          pnpm --filter @heron/desktop exec electron-builder
-          --config electron-builder.release.yml --universal
-
-      - name: Verify packaged Electron security
-        env:
-          HERON_REQUIRE_DEVELOPER_ID_SIGNATURE: >-
-            ${{ matrix.builder-arch == 'universal' && inputs.sign_macos && 'true' || 'false' }}
-          HERON_REQUIRE_NOTARIZATION: >-
-            ${{ matrix.builder-arch == 'universal' && inputs.sign_macos && 'true' || 'false' }}
-        run: pnpm --filter @heron/desktop verify:package-security
+        run: mise run ${{ matrix.mise-task }}
 
       - name: Remove macOS release credentials
         if: ${{ always() && matrix.builder-arch == 'universal' && inputs.sign_macos }}

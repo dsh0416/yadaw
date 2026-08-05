@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "xtask",
     "crates/dsp-core",
     "crates/dsp-node",
     "crates/dsp-runtime",
@@ -29,6 +30,7 @@ ara2-bridge-sys = "=0.3.0"
 bwavfile = "2.0.1"
 bindgen = "0.72.1"
 cc = "1"
+clap = { version = "4.5.61", features = ["derive"] }
 cpal = "0.18"
 criterion = { version = "0.8.2", features = ["csv_output", "html_reports"] }
 futures-util = "0.3"
