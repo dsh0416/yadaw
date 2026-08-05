@@ -22,7 +22,9 @@ export class AudioHostRecordingClient {
         originator: config.originator,
         origination_date: config.originationDate,
         origination_time: config.originationTime,
-        time_reference: config.timeReference
+        time_reference: config.timeReference,
+        sample_rate: config.sampleRate,
+        channels: config.channels
       }
     }).then(() => undefined)
   }

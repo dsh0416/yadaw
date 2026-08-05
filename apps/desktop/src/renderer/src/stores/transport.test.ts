@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { nextTick } from "vue"
 import { createPinia, setActivePinia } from "pinia"
 import type {
   ProjectGraphSnapshot,
@@ -128,6 +129,37 @@ describe("transport store", () => {
       },
       revision: 0
     })
+  })
+
+  it("clears an audio clip selection when the authoritative graph removes the clip", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      audioClips: [
+        {
+          id: "clip-1",
+          assetId: "asset-1",
+          trackId: "track:audio-1",
+          name: "Clip",
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          lengthFrames: 48_000,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
+          assetSampleRate: 48_000,
+          assetChannels: 2
+        }
+      ]
+    }
+    const transport = useTransportStore()
+    transport.selectClip("clip-1")
+    expect(transport.selectedClipId).toBe("clip-1")
+
+    mixer.graph = { ...structuredClone(emptyGraph) }
+    await nextTick()
+
+    expect(transport.selectedClipId).toBeNull()
   })
 
   it("lays project recordings out consecutively using their real frame durations", () => {

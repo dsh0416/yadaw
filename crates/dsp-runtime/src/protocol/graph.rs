@@ -40,7 +40,17 @@ pub struct LiveMixerChannel {
     pub midi_input_channel: Option<u8>,
     pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
+    #[serde(default)]
+    pub application_capture: Option<ApplicationCaptureTarget>,
     pub hardware_output_channels: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationCaptureTarget {
+    pub platform: String,
+    pub executable_path: String,
+    pub executable_name: String,
+    pub include_process_tree: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -356,6 +366,7 @@ pub enum CompiledGraphPluginState {
 #[serde(rename_all = "kebab-case")]
 pub enum CompiledGraphNodeKind {
     HardwareInput,
+    ApplicationInput,
     BusInput,
     TimelineInput,
     InstrumentInput,

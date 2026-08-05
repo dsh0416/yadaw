@@ -543,6 +543,44 @@ describe("project graph command characterization", () => {
     expect(after.keySignatureEvents).toHaveLength(2)
     expect(applyToGraph(after, inverse)).toEqual(before)
   })
+
+  it("clears application capture when switching to hardware and restores it on undo", () => {
+    const before = graph()
+    const applicationCapture = {
+      platform: "windows" as const,
+      executablePath: "C:\\Program Files\\Player\\player.exe",
+      executableName: "player.exe",
+      includeProcessTree: true
+    }
+    const audioChannel = {
+      ...structuredClone(before.channels[0]!),
+      id: "audio-1",
+      kind: "audio" as const,
+      name: "Audio 1",
+      inputSource: "application" as const,
+      inputFormat: "stereo" as const,
+      inputChannels: [1, 2],
+      applicationCapture
+    }
+    before.channels.push(audioChannel)
+    before.tracks.push({ id: "track:audio-1", channelId: "audio-1", sortOrder: 1 })
+    validateGraph(before)
+
+    const command: ProjectCommand = {
+      type: "update-channel",
+      channelId: audioChannel.id,
+      patch: { inputSource: "hardware", inputFormat: "stereo", inputChannels: [3, 4] }
+    }
+    const after = applyToGraph(before, command)
+
+    expect(after.channels.find(({ id }) => id === audioChannel.id)).toMatchObject({
+      inputSource: "hardware",
+      inputChannels: [3, 4],
+      applicationCapture: null
+    })
+    validateGraph(after)
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
 })
 
 describe("additional project graph commands", () => {

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    AudioBackend, AudioBenchmarkReport, AudioDeviceList, AudioRuntime, BinaryPayload,
-    CompiledAudioGraphSnapshot, GraphTransactionValue, MidiInputSnapshot, MidiRecordingResult,
-    MixerChannelMeter, PluginEditorMode, PluginEditorToolbarState, PluginParameter,
-    RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement, RpcError, RpcResult,
-    TransportState,
+    ApplicationCaptureSnapshot, ApplicationCaptureTargetDescriptor, AudioBackend,
+    AudioBenchmarkReport, AudioDeviceList, AudioRuntime, BinaryPayload, CompiledAudioGraphSnapshot,
+    GraphTransactionValue, MidiInputSnapshot, MidiRecordingResult, MixerChannelMeter,
+    PluginEditorMode, PluginEditorToolbarState, PluginParameter, RecordingResult,
+    RecordingWaveform, RoundTripLatencyMeasurement, RpcError, RpcResult, TransportState,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,6 +73,12 @@ pub enum ControlResult {
     },
     AudioDevices {
         devices: AudioDeviceList,
+    },
+    ApplicationCaptureTargets {
+        targets: Vec<ApplicationCaptureTargetDescriptor>,
+    },
+    ApplicationCaptures {
+        captures: Vec<ApplicationCaptureSnapshot>,
     },
     AudioRuntime {
         runtime: AudioRuntime,

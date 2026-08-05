@@ -165,6 +165,10 @@ export async function readMixerSnapshot(
       sortOrder: channel.sortOrder,
       inputSource: channel.inputSource,
       inputFormat: channel.inputFormat,
+      // Older projects (and graphs produced by the pre-application-input UI)
+      // can contain a stale target after switching back to a hardware/BUS
+      // route. Do not rehydrate that invalid combination into the graph.
+      applicationCapture: channel.inputSource === "application" ? channel.applicationCapture : null,
       midiInput:
         channel.kind === "instrument" && channel.systemRole === null
           ? {

@@ -195,7 +195,7 @@ fn playback_loop_splits_a_block_and_suppresses_project_end_auto_stop() {
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 128];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 128];
 
-    assert!(!runtime.render_block(&inputs, &mut outputs, None));
+    assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
 
     assert_eq!(
         runtime.transport.position_frames.load(Ordering::Relaxed),
@@ -234,7 +234,7 @@ fn playback_loop_is_inert_while_recording_or_using_external_clock() {
         let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 128];
         let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 128];
 
-        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
         assert_eq!(
             runtime.transport.position_frames.load(Ordering::Relaxed),
             1_028
@@ -263,7 +263,7 @@ fn record_count_in_holds_the_playhead_for_one_bar_before_recording() {
     );
 
     for _ in 0..375 {
-        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
     }
 
     assert_eq!(
@@ -275,7 +275,7 @@ fn record_count_in_holds_the_playhead_for_one_bar_before_recording() {
         250
     );
 
-    assert!(!runtime.render_block(&inputs[..64], &mut outputs[..64], None));
+    assert!(!runtime.render_block(&inputs[..64], &mut outputs[..64], None, None));
     assert_eq!(
         runtime.transport.position_frames.load(Ordering::Relaxed),
         314
@@ -292,7 +292,7 @@ fn mixer_reload_preserves_active_record_count_in() {
         TransportAction::Record { count_in: true },
         0,
     ));
-    assert!(!runtime.render_block(&inputs, &mut outputs, None));
+    assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
     let count_in_before = runtime
         .count_in
         .expect("record count-in should have private scheduler state");
@@ -324,7 +324,7 @@ fn mixer_reload_preserves_active_record_count_in() {
         if runtime.transport.state.load(Ordering::Relaxed) == TRANSPORT_RECORDING {
             break;
         }
-        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
     }
 
     assert_eq!(
@@ -343,7 +343,7 @@ fn auto_stop_at_project_end_then_play_restarts_from_beginning() {
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
 
-    let underrun = runtime.render_block(&inputs, &mut outputs, None);
+    let underrun = runtime.render_block(&inputs, &mut outputs, None, None);
     assert!(!underrun);
     assert_eq!(
         runtime.transport.state.load(Ordering::Relaxed),
@@ -358,7 +358,7 @@ fn auto_stop_at_project_end_then_play_restarts_from_beginning() {
     );
     assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 0);
 
-    let underrun = runtime.render_block(&inputs[..32], &mut outputs[..32], None);
+    let underrun = runtime.render_block(&inputs[..32], &mut outputs[..32], None, None);
     assert!(!underrun);
     assert_eq!(
         runtime.transport.state.load(Ordering::Relaxed),
@@ -389,7 +389,7 @@ fn record_count_in_plays_the_preceding_timeline_bar_without_advancing_the_playhe
         TransportAction::Record { count_in: true },
         0,
     ));
-    assert!(!runtime.render_block(&inputs, &mut outputs, None));
+    assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
 
     assert!(
         outputs
@@ -431,7 +431,7 @@ fn render_block_consumes_scheduled_midi_exactly_up_to_the_block_end() {
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
 
-    let underrun = runtime.render_block(&inputs, &mut outputs, None);
+    let underrun = runtime.render_block(&inputs, &mut outputs, None, None);
 
     assert!(!underrun);
     // Rendering frames 5..69 consumes every event before the block end —
@@ -644,7 +644,7 @@ fn render_block_auto_stops_when_playhead_reaches_project_end() {
     let mut runtime = transport_test_runtime(48_000, 32, 0, TRANSPORT_PLAYING);
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
-    let underrun = runtime.render_block(&inputs, &mut outputs, None);
+    let underrun = runtime.render_block(&inputs, &mut outputs, None, None);
     assert!(!underrun);
     assert_eq!(
         runtime.transport.state.load(Ordering::Relaxed),
@@ -660,7 +660,7 @@ fn soft_project_end_stops_playback_without_truncating_later_content() {
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
 
-    assert!(!runtime.render_block(&inputs, &mut outputs, None));
+    assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
     assert_eq!(runtime.content_end_frame, 128);
     assert_eq!(runtime.project_end_frame, 32);
     assert_eq!(

@@ -46,12 +46,6 @@ const peakHold = computed<MeterPeakHold>(
 const returnRate = computed<MeterReturnRate>(
   () => props.displayOptions?.meterReturnRate ?? settings.value?.meterReturnRate ?? "iec-type-i"
 )
-const softwareMonitoringEnabled = computed(
-  () =>
-    props.displayOptions?.softwareMonitoringEnabled ??
-    settings.value?.softwareMonitoringEnabled ??
-    false
-)
 const meterDisplay = usePeakMeterDisplay({ meter, peakHold, returnRate })
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
@@ -72,9 +66,9 @@ const maximumPeakState = computed(() => ({
 const monitoringAvailable = computed(
   () =>
     (props.channel.kind === "instrument" && props.channel.systemRole === null) ||
-    (softwareMonitoringEnabled.value &&
-      props.channel.kind === "audio" &&
-      props.channel.inputSource === "hardware")
+    ((props.channel.kind === "audio" || props.channel.kind === "aux") &&
+      (props.channel.inputSource === "hardware" ||
+        (props.channel.inputSource === "application" && props.channel.applicationCapture != null)))
 )
 const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
 const faderStyle = computed(() => ({
@@ -84,6 +78,17 @@ const gainInputValue = shallowRef(String(props.channel.gainDb))
 const gainInputEditing = shallowRef(false)
 const faderTooltipVisible = shallowRef(false)
 const gainInput = useTemplateRef<HTMLInputElement>("gainInput")
+
+function updateChannel(patch: MixerChannelPatch): void {
+  // Keep the logical application identity in the same transaction as input
+  // monitoring/record-arm changes. This repairs older renderer state that
+  // selected the application source without persisting its target.
+  if (props.channel.inputSource === "application" && props.channel.applicationCapture) {
+    emit("updateChannel", { ...patch, applicationCapture: props.channel.applicationCapture })
+    return
+  }
+  emit("updateChannel", patch)
+}
 
 watch(
   () => props.channel.gainDb,
@@ -258,7 +263,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       :channel="channel"
       :monitoring-available="monitoringAvailable"
       :monitoring-active="monitoringActive"
-      @update-channel="emit('updateChannel', $event)"
+      @update-channel="updateChannel"
     />
   </section>
 </template>

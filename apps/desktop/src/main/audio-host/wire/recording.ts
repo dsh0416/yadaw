@@ -7,6 +7,8 @@ export interface AudioHostRecordingConfig {
   originationDate: string
   originationTime: string
   timeReference: number
+  sampleRate: number
+  channels: number
 }
 
 export interface AudioHostRecordingResultWire {

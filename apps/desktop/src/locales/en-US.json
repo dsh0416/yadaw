@@ -1025,7 +1025,7 @@
       "recordEnable": "Record enable",
       "monitor": "Monitor {name}",
       "inputMonitoring": "Input monitoring",
-      "inputMonitoringDisabled": "Enable software monitoring and select a hardware input first",
+      "inputMonitoringDisabled": "Select a hardware or application input first",
       "mute": "Mute {name}",
       "solo": "Solo {name}"
     },
@@ -1116,6 +1116,10 @@
       "linkStereoTitle": "Link adjacent input as stereo",
       "hardwareInputs": "Hardware inputs",
       "buses": "Buses",
+      "applications": "Applications",
+      "mono": "mono",
+      "stereo": "stereo",
+      "targetMissing": "target missing",
       "inPrefix": "IN",
       "busPrefix": "BUS"
     },
@@ -1421,7 +1425,7 @@
       "armAria": "Arm {name}",
       "monitorAria": "Monitor {name}",
       "inputMonitoring": "Input monitoring",
-      "inputMonitoringDisabled": "Enable software monitoring and select a hardware input first"
+      "inputMonitoringDisabled": "Select a hardware or application input first"
     },
     "soundBrowser": {
       "eyebrow": "LIBRARY",

@@ -1,7 +1,11 @@
 import { mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
+import { createPinia } from "pinia"
 import { UiCascadingSelect } from "@heron/ui"
+import { useApplicationCaptureStore } from "../../stores/applicationCapture"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
+
+const pinia = createPinia()
 
 afterEach(() => {
   document.body.innerHTML = ""
@@ -16,14 +20,15 @@ describe("MixerInputCapsule", () => {
         inputSource: "hardware",
         inputFormat: "mono",
         inputChannels: [2]
-      }
+      },
+      global: { plugins: [pinia] }
     })
 
     const select = wrapper.get('button[aria-label="Audio 1 input channel"]')
     expect(select.text()).toBe("IN 2")
     const routeMenu = wrapper.getComponent(UiCascadingSelect)
     expect(routeMenu.props("hoverTreatment")).toBe("host-tint")
-    expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([32, 256])
+    expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([32, 256, 0])
 
     const stereoButton = wrapper.get(
       'button[aria-label="Link adjacent input as stereo for Audio 1"]'
@@ -46,7 +51,8 @@ describe("MixerInputCapsule", () => {
         inputSource: "hardware",
         inputFormat: "stereo",
         inputChannels: [3, 4]
-      }
+      },
+      global: { plugins: [pinia] }
     })
 
     const select = wrapper.get('button[aria-label="Audio 2 input channel"]')
@@ -56,7 +62,7 @@ describe("MixerInputCapsule", () => {
     expect(formatButton.findAll("path")).toHaveLength(2)
     const routeMenu = wrapper.getComponent(UiCascadingSelect)
     expect(routeMenu.props("hoverTreatment")).toBe("host-tint")
-    expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([16, 128])
+    expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([16, 128, 0])
     routeMenu.vm.$emit("update:modelValue", "hardware:5")
     await wrapper.vm.$nextTick()
 
@@ -72,7 +78,8 @@ describe("MixerInputCapsule", () => {
         inputSource: "hardware",
         inputFormat: "mono",
         inputChannels: [1]
-      }
+      },
+      global: { plugins: [pinia] }
     })
 
     wrapper.getComponent(UiCascadingSelect).vm.$emit("update:modelValue", "bus:256")
@@ -80,6 +87,89 @@ describe("MixerInputCapsule", () => {
 
     expect(wrapper.emitted("update")).toEqual([
       [{ inputSource: "bus", inputFormat: "mono", inputChannels: [256] }]
+    ])
+  })
+
+  it("selects an application target from the parallel application group", async () => {
+    const applicationStore = useApplicationCaptureStore(pinia)
+    applicationStore.targets = [
+      {
+        runtimeId: "windows-process-42",
+        processId: 42,
+        displayName: "Player",
+        executablePath: "C:\\Program Files\\Player\\player.exe",
+        logicalTarget: {
+          platform: "windows",
+          executablePath: "C:\\Program Files\\Player\\player.exe",
+          executableName: "player.exe",
+          includeProcessTree: true
+        },
+        channelCount: 2,
+        status: "inactive"
+      }
+    ]
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 4",
+        inputSource: "hardware",
+        inputFormat: "stereo",
+        inputChannels: [1, 2]
+      },
+      global: { plugins: [pinia] }
+    })
+
+    wrapper
+      .getComponent(UiCascadingSelect)
+      .vm.$emit("update:modelValue", "application:C:\\Program Files\\Player\\player.exe")
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted("update")).toEqual([
+      [
+        {
+          inputSource: "application",
+          inputFormat: "stereo",
+          inputChannels: [1, 2],
+          applicationCapture: {
+            platform: "windows",
+            executablePath: "C:\\Program Files\\Player\\player.exe",
+            executableName: "player.exe",
+            includeProcessTree: true
+          }
+        }
+      ]
+    ])
+  })
+
+  it("clears an application target when switching back to a hardware microphone", async () => {
+    const applicationCapture = {
+      platform: "windows" as const,
+      executablePath: "C:\\Program Files\\Player\\player.exe",
+      executableName: "player.exe",
+      includeProcessTree: true
+    }
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 5",
+        inputSource: "application",
+        inputFormat: "stereo",
+        inputChannels: [1, 2],
+        applicationCapture
+      },
+      global: { plugins: [pinia] }
+    })
+
+    wrapper.getComponent(UiCascadingSelect).vm.$emit("update:modelValue", "hardware:3")
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted("update")).toEqual([
+      [
+        {
+          inputSource: "hardware",
+          inputFormat: "stereo",
+          inputChannels: [3, 4],
+          applicationCapture: null
+        }
+      ]
     ])
   })
 })

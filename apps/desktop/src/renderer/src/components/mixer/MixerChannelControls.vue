@@ -13,6 +13,12 @@ const supportsRecording = computed(
     props.channel.kind === "audio" ||
     (props.channel.kind === "instrument" && props.channel.systemRole === null)
 )
+const supportsMonitoring = computed(
+  () =>
+    props.channel.kind === "audio" ||
+    props.channel.kind === "aux" ||
+    (props.channel.kind === "instrument" && props.channel.systemRole === null)
+)
 
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
@@ -34,6 +40,8 @@ const { t } = useI18n()
         >
           R
         </button>
+      </template>
+      <template v-if="supportsMonitoring">
         <button
           :class="['monitor', { active: monitoringActive }]"
           :aria-label="t('mixer.channelControls.monitor', { name: channel.name })"

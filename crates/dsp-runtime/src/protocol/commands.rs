@@ -46,6 +46,8 @@ pub enum ControlCommand {
     ListAudioDevices {
         backend: String,
     },
+    ListApplicationCaptureTargets,
+    ApplicationCaptureSnapshot,
     StartAudioEngine {
         config: AudioEngineConfig,
     },

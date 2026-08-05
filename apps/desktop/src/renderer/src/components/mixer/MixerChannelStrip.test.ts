@@ -171,7 +171,7 @@ describe("MixerChannelStrip", () => {
     await wrapper.get('button[aria-label="Mute Vocal"]').trigger("click")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { muted: true }])
     expect(wrapper.get('button[aria-label="Arm Vocal"]').attributes("aria-pressed")).toBe("false")
-    expect(wrapper.get('button[aria-label="Monitor Vocal"]').attributes("disabled")).toBeDefined()
+    expect(wrapper.get('button[aria-label="Monitor Vocal"]').attributes("disabled")).toBeUndefined()
     expect(wrapper.find(".pan-heading").exists()).toBe(false)
     expect(
       wrapper.findAll("[data-section]").map((section) => section.attributes("data-section"))
@@ -284,6 +284,86 @@ describe("MixerChannelStrip", () => {
     await monitor.trigger("click")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { inputMonitoring: false }])
     expect(wrapper.get(".input-actions").findAll("button")).toHaveLength(2)
+  })
+
+  it("keeps application input monitoring configurable when global software monitoring is off", async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useApplicationSettingsStore().settings = {
+      swapDirectory: "C:/swap",
+      recordingBitDepth: "float32",
+      theme: "system",
+      locale: "en-US",
+      meterPeakHold: "800ms",
+      meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
+      softwareMonitoringEnabled: false,
+      midiSync: {
+        enabled: false,
+        sourcePortId: null,
+        sourcePortName: null,
+        inputOffsetsMs: {}
+      },
+      audioHostRuntime: {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto"
+      },
+      pluginEditors: {},
+      shortcuts: { keyboard: {}, midi: {} },
+      recentProjects: []
+    }
+    const wrapper = mount(MixerChannelStrip, {
+      props: {
+        channel: {
+          ...channel,
+          inputSource: "application",
+          inputFormat: "stereo",
+          inputChannels: [1, 2],
+          applicationCapture: {
+            platform: "windows",
+            executablePath: "C:\\Program Files\\Steam\\steam.exe",
+            executableName: "steam.exe",
+            includeProcessTree: true
+          }
+        },
+        sends: [],
+        meter: {
+          channelId: "audio",
+          preFaderPeak: [0, 0],
+          postFaderPeak: [0, 0],
+          heldPeak: [0, 0],
+          clipped: false
+        },
+        outputs: [],
+        buses: [],
+        outputTargets: [],
+        sendTargets: [],
+        plugins: [],
+        pluginRuntime: {},
+        effectPlugins: [],
+        instrumentPlugins: [],
+        pluginSlotRows: 4,
+        sendSlotRows: 2,
+        selected: false
+      },
+      global: { plugins: [pinia] }
+    })
+
+    const monitor = wrapper.get('button[aria-label="Monitor Vocal"]')
+    expect(monitor.attributes("disabled")).toBeUndefined()
+    await monitor.trigger("click")
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual([
+      "audio",
+      {
+        inputMonitoring: true,
+        applicationCapture: {
+          platform: "windows",
+          executablePath: "C:\\Program Files\\Steam\\steam.exe",
+          executableName: "steam.exe",
+          includeProcessTree: true
+        }
+      }
+    ])
   })
 
   it("keeps Master outside explicit routing and send controls", () => {

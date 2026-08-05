@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm"
-import type { PluginAudioMode } from "@heron/contracts"
+import type { ApplicationCaptureTarget, PluginAudioMode } from "@heron/contracts"
 import {
   boolean,
   check,
@@ -8,6 +8,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   smallint,
@@ -140,8 +141,9 @@ export const mixerChannels = pgTable(
     name: text("name").notNull(),
     color: text("color").notNull(),
     sortOrder: integer("sort_order").notNull(),
-    inputSource: text("input_source").$type<"hardware" | "bus">(),
+    inputSource: text("input_source").$type<"hardware" | "bus" | "application">(),
     inputFormat: text("input_format").$type<"mono" | "stereo">(),
+    applicationCapture: jsonb("application_capture").$type<ApplicationCaptureTarget | null>(),
     midiInputPortId: text("midi_input_port_id"),
     midiInputPortName: text("midi_input_port_name"),
     midiInputChannel: smallint("midi_input_channel"),
@@ -203,7 +205,7 @@ export const mixerChannels = pgTable(
     ),
     check(
       "mixer_channels_input_monitoring_check",
-      sql`(${table.kind} = 'audio' or (${table.kind} = 'instrument' and ${table.systemRole} is null))
+      sql`(${table.kind} in ('audio', 'aux') or (${table.kind} = 'instrument' and ${table.systemRole} is null))
         or not ${table.inputMonitoring}`
     ),
     check(
@@ -273,8 +275,17 @@ export const mixerChannels = pgTable(
           and (
             (${table.inputSource} = 'hardware' and 32 >= all(${table.inputChannels}))
             or (${table.inputSource} = 'bus' and 256 >= all(${table.inputChannels}))
+            or (${table.inputSource} = 'application' and 2 >= all(${table.inputChannels}))
           )
         )
+      )`
+    ),
+    check(
+      "mixer_channels_application_capture_check",
+      sql`(
+        (${table.inputSource} = 'application' and ${table.applicationCapture} is not null)
+        or (${table.inputSource} <> 'application' and ${table.applicationCapture} is null)
+        or (${table.inputSource} is null and ${table.applicationCapture} is null)
       )`
     ),
     check(

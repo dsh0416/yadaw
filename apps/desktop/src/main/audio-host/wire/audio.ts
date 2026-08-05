@@ -8,6 +8,36 @@ export interface AudioHostDevice {
   channel_count: number | null
 }
 
+export interface AudioHostApplicationCaptureLogicalTarget {
+  platform: string
+  executable_path: string
+  executable_name: string
+  include_process_tree: boolean
+}
+
+export interface AudioHostApplicationCaptureTarget {
+  runtime_id: string
+  process_id: number
+  display_name: string
+  executable_path: string
+  logical_target: AudioHostApplicationCaptureLogicalTarget
+  channel_count: number
+  status: string
+}
+
+export interface AudioHostApplicationCaptureSnapshot {
+  runtime_id: string
+  process_id: number | null
+  display_name: string
+  executable_path: string
+  logical_target: AudioHostApplicationCaptureLogicalTarget
+  channel_count: number
+  status: string
+  dropout_frames: number
+  overflow_frames: number
+  underflow_frames: number
+}
+
 export interface AudioHostRuntime {
   state: string
   requested_buffer_size: number | null

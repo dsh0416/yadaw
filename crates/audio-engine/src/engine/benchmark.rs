@@ -92,6 +92,7 @@ fn benchmark_graph(
             input_monitoring: true,
             input_source: Some("hardware".into()),
             input_channels: vec![1, 2],
+            application_capture: None,
             hardware_output_channels: Vec::new(),
             midi_input_port_id: None,
             midi_input_channel: None,
@@ -115,6 +116,7 @@ fn benchmark_graph(
             input_monitoring: false,
             input_source: Some("bus".into()),
             input_channels: vec![(index + 1) as u32, (index + 1) as u32],
+            application_capture: None,
             hardware_output_channels: Vec::new(),
             midi_input_port_id: None,
             midi_input_channel: None,
@@ -137,6 +139,7 @@ fn benchmark_graph(
         input_monitoring: false,
         input_source: None,
         input_channels: Vec::new(),
+        application_capture: None,
         hardware_output_channels: Vec::new(),
         midi_input_port_id: None,
         midi_input_channel: None,
@@ -157,6 +160,7 @@ fn benchmark_graph(
         input_monitoring: false,
         input_source: None,
         input_channels: Vec::new(),
+        application_capture: None,
         hardware_output_channels: vec![1, 2],
         midi_input_port_id: None,
         midi_input_channel: None,
@@ -260,7 +264,7 @@ fn measure_audio_benchmark_spec(
     }
 
     for _ in 0..8 {
-        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs), None));
+        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs), None, None));
     }
 
     let started = Instant::now();
@@ -270,7 +274,7 @@ fn measure_audio_benchmark_spec(
         Vec::with_capacity(max_virtual_frames.div_ceil(spec.block_frames).min(16_384));
     while rendered_frames < max_virtual_frames {
         let block_started = Instant::now();
-        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs), None));
+        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs), None, None));
         block_times_ms.push(block_started.elapsed().as_secs_f64() * 1_000.0);
         rendered_frames += spec.block_frames;
         rendered_blocks += 1;

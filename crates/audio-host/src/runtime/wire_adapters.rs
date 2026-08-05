@@ -1,9 +1,11 @@
 use super::{
-    AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
-    ControlResult, GraphUpdate, HashMap, LiveLatencyPolicy, LiveMixerGraph, MIDI_INPUT,
-    MidiNoteBatch, MixerChannelMeter, NativeRecordingResult, NativeRecordingStartConfig,
-    NativeWaveformSnapshot, RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement,
-    TempoEvent, TimeSignatureEvent, TransportState, device, engine, vst3,
+    ApplicationCaptureLogicalTarget, ApplicationCaptureSnapshot,
+    ApplicationCaptureTargetDescriptor, AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime,
+    BinaryPayload, ControlCommand, ControlResult, GraphUpdate, HashMap, LiveLatencyPolicy,
+    LiveMixerGraph, MIDI_INPUT, MidiNoteBatch, MixerChannelMeter, NativeRecordingResult,
+    NativeRecordingStartConfig, NativeWaveformSnapshot, RecordingResult, RecordingWaveform,
+    RoundTripLatencyMeasurement, TempoEvent, TimeSignatureEvent, TransportState, device, engine,
+    vst3,
 };
 
 fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
@@ -40,6 +42,47 @@ fn round_trip_latency_measurement(
     }
 }
 
+fn application_target(
+    value: engine::application_capture::ApplicationCaptureTargetDescriptor,
+) -> ApplicationCaptureTargetDescriptor {
+    ApplicationCaptureTargetDescriptor {
+        runtime_id: value.runtime_id,
+        process_id: value.process_id,
+        display_name: value.display_name,
+        executable_path: value.executable_path,
+        logical_target: ApplicationCaptureLogicalTarget {
+            platform: value.logical_target.platform,
+            executable_path: value.logical_target.executable_path,
+            executable_name: value.logical_target.executable_name,
+            include_process_tree: value.logical_target.include_process_tree,
+        },
+        channel_count: value.channel_count,
+        status: value.status,
+    }
+}
+
+fn application_snapshot(
+    value: engine::application_capture::ApplicationCaptureSnapshot,
+) -> ApplicationCaptureSnapshot {
+    ApplicationCaptureSnapshot {
+        runtime_id: value.runtime_id,
+        process_id: value.process_id,
+        display_name: value.display_name,
+        executable_path: value.executable_path,
+        logical_target: ApplicationCaptureLogicalTarget {
+            platform: value.logical_target.platform,
+            executable_path: value.logical_target.executable_path,
+            executable_name: value.logical_target.executable_name,
+            include_process_tree: value.logical_target.include_process_tree,
+        },
+        channel_count: value.channel_count,
+        status: value.status,
+        dropout_frames: value.dropout_frames,
+        overflow_frames: value.overflow_frames,
+        underflow_frames: value.underflow_frames,
+    }
+}
+
 pub(super) fn live_graph(
     generation: u64,
     value: &LiveMixerGraph,
@@ -61,6 +104,22 @@ pub(super) fn live_graph(
         .channels
         .iter()
         .map(|channel| {
+            if channel.input_source.as_deref() == Some("application")
+                && channel.application_capture.is_none()
+            {
+                return Err(format!(
+                    "application input channel `{}` is missing its logical capture target",
+                    channel.id
+                ));
+            }
+            if channel.input_source.as_deref() == Some("application")
+                && (channel.input_channels.is_empty() || channel.input_channels.len() > 2)
+            {
+                return Err(format!(
+                    "application input channel `{}` must be mono or stereo",
+                    channel.id
+                ));
+            }
             Ok(engine::NativeMixerChannel {
                 id: channel.id.clone(),
                 name: channel.name.clone(),
@@ -81,6 +140,14 @@ pub(super) fn live_graph(
                 input_monitoring: channel.input_monitoring,
                 input_source: channel.input_source.clone(),
                 input_channels: channel.input_channels.clone(),
+                application_capture: channel.application_capture.as_ref().map(|target| {
+                    engine::NativeApplicationCaptureTarget {
+                        platform: target.platform.clone(),
+                        executable_path: target.executable_path.clone(),
+                        executable_name: target.executable_name.clone(),
+                        include_process_tree: target.include_process_tree,
+                    }
+                }),
                 hardware_output_channels: channel.hardware_output_channels.clone(),
                 midi_input_port_id: channel.midi_input_port_id.clone(),
                 midi_input_channel: channel.midi_input_channel,
@@ -350,6 +417,20 @@ pub(super) fn engine_command(
                 },
             }
         }
+        ControlCommand::ListApplicationCaptureTargets => ControlResult::ApplicationCaptureTargets {
+            targets: audio_engine
+                .list_application_capture_targets()
+                .into_iter()
+                .map(application_target)
+                .collect(),
+        },
+        ControlCommand::ApplicationCaptureSnapshot => ControlResult::ApplicationCaptures {
+            captures: audio_engine
+                .application_capture_snapshot()
+                .into_iter()
+                .map(application_snapshot)
+                .collect(),
+        },
         ControlCommand::StartAudioEngine { config } => {
             match audio_engine.start_audio_engine(engine::NativeAudioEngineConfig {
                 backend: config.backend,
@@ -547,6 +628,8 @@ pub(super) fn engine_command(
                 origination_date: config.origination_date,
                 origination_time: config.origination_time,
                 time_reference: config.time_reference,
+                sample_rate: config.sample_rate,
+                channels: config.channels,
             }) {
                 Ok(()) => ControlResult::Accepted,
                 Err(error) => control_error! {

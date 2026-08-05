@@ -231,6 +231,8 @@ pub(super) fn compiled_graph_snapshot(
             CompiledGraphNodeKind::InstrumentInput
         } else if channel.input_source.as_deref() == Some("hardware") {
             CompiledGraphNodeKind::HardwareInput
+        } else if channel.input_source.as_deref() == Some("application") {
+            CompiledGraphNodeKind::ApplicationInput
         } else if channel.input_source.as_deref() == Some("bus") {
             CompiledGraphNodeKind::BusInput
         } else {
@@ -241,6 +243,7 @@ pub(super) fn compiled_graph_snapshot(
             kind: source_kind,
             label: match source_kind {
                 CompiledGraphNodeKind::HardwareInput => "Hardware input",
+                CompiledGraphNodeKind::ApplicationInput => "Application input",
                 CompiledGraphNodeKind::BusInput => "BUS input",
                 CompiledGraphNodeKind::InstrumentInput => "Instrument input",
                 _ => "Timeline input",

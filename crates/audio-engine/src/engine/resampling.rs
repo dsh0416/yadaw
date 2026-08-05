@@ -3,7 +3,7 @@ use super::{
     HardwareOutputFrame, HeapCons, HeapProd, INPUT_RESAMPLER_OUTPUT_FRAMES, InputFrame,
     InputPeakBank, InterleavedSlice, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
     MAX_PLUGIN_BLOCK_FRAMES, OUTPUT_RESAMPLER_FRAMES, Observer, Ordering, OutputMixerControl,
-    OutputStreamContext, Producer, RecordingTap, Resampler, Result, RoundTripInputDetector,
+    OutputStreamContext, Producer, Resampler, Result, RoundTripInputDetector,
     RoundTripLatencyMeasurement, RoundTripOutputProbe, RuntimeMetrics, Sample,
     SincInterpolationParameters, SizedSample, Stream, StreamConfig, StreamDirection,
     UNKNOWN_LATENCY_US, audio_error, duration_to_micros, frames_to_micros, frames_to_nanos,
@@ -310,7 +310,6 @@ pub(super) fn build_input_stream<T>(
     config: &StreamConfig,
     mut producer: HeapProd<InputFrame>,
     metrics: Arc<RuntimeMetrics>,
-    mut recording_tap: RecordingTap,
     input_peaks: Arc<InputPeakBank>,
     round_trip_latency: Arc<RoundTripLatencyMeasurement>,
 ) -> Result<Stream>
@@ -340,11 +339,8 @@ where
                     for (target, source) in capture[..capture_channels].iter_mut().zip(frame) {
                         *target = f32::from_sample(*source);
                     }
-                    // The recording tap receives the capture independently. Saturating this
-                    // monitor bridge is not evidence of an output dropout.
                     let _ = producer.try_push(capture);
                     input_peaks.observe(&capture[..capture_channels]);
-                    recording_tap.push(&capture[..capture_channels]);
                     round_trip_detector.observe(
                         &capture[..capture_channels],
                         callback_started_ns.saturating_add(frames_to_nanos(
@@ -379,6 +375,7 @@ where
         metrics,
         mixer_control,
         round_trip_latency,
+        mut recording_tap,
     } = context;
     let OutputMixerControl {
         mut commands,
@@ -487,6 +484,7 @@ where
                                     &render_inputs[..session_outputs.len()],
                                     session_outputs,
                                     Some(&mut realtime_midi),
+                                    Some(&mut recording_tap),
                                 )
                             } else {
                                 session_outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);

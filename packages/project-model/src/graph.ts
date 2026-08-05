@@ -235,10 +235,22 @@ export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand)
     }
     case "update-channel": {
       const channel = channelById(graph, command.channelId)
+      const patch = patchFromKeys(channel, command.patch)
+      // Application identities are only meaningful while the channel remains
+      // application-backed. Keep the implicit cleanup invertible so undo can
+      // restore a previous application route even when the UI sends only the
+      // new hardware/BUS input fields.
+      if (
+        command.patch.inputSource !== undefined &&
+        command.patch.inputSource !== "application" &&
+        channel.applicationCapture != null
+      ) {
+        patch.applicationCapture = channel.applicationCapture
+      }
       return {
         type: "update-channel",
         channelId: command.channelId,
-        patch: patchFromKeys(channel, command.patch)
+        patch
       }
     }
     case "create-send":
@@ -441,9 +453,14 @@ export function applyToGraph(
       }
       break
     }
-    case "update-channel":
-      Object.assign(channelById(next, command.channelId), command.patch)
+    case "update-channel": {
+      const channel = channelById(next, command.channelId)
+      Object.assign(channel, command.patch)
+      if (command.patch.inputSource !== undefined && command.patch.inputSource !== "application") {
+        channel.applicationCapture = null
+      }
       break
+    }
     case "create-send":
       next.sends.push(structuredClone(command.send))
       break
@@ -594,21 +611,27 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
       throw new Error("Audio and Aux input mappings must match their input format")
     }
     if (supportsAudioInput) {
-      const maximumInput = channel.inputSource === "bus" ? 256 : 32
+      const maximumInput =
+        channel.inputSource === "bus" ? 256 : channel.inputSource === "application" ? 2 : 32
       if (
         channel.inputSource === null ||
         channel.inputFormat === null ||
+        (channel.inputSource === "application" && !channel.applicationCapture) ||
+        (channel.inputSource !== "application" && channel.applicationCapture != null) ||
         channel.inputChannels.some(
           (input) => !Number.isInteger(input) || input < 1 || input > maximumInput
         ) ||
         new Set(channel.inputChannels).size !== channel.inputChannels.length
       ) {
-        throw new Error("Audio and Aux channels require a valid hardware or BUS input")
+        throw new Error(
+          "Audio and Aux channels require a valid hardware, BUS, or application input"
+        )
       }
     } else if (
       channel.inputSource !== null ||
       channel.inputFormat !== null ||
-      channel.inputChannels.length > 0
+      channel.inputChannels.length > 0 ||
+      channel.applicationCapture != null
     ) {
       throw new Error("Only Audio and Aux channels can map audio inputs")
     }
@@ -640,7 +663,12 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
     if (channel.kind !== "audio" && !supportsMidiInput && channel.recordArmed) {
       throw new Error("Only Audio and ordinary Instrument tracks can arm recording")
     }
-    if (channel.kind !== "audio" && !supportsMidiInput && channel.inputMonitoring) {
+    if (
+      channel.kind !== "audio" &&
+      channel.kind !== "aux" &&
+      !supportsMidiInput &&
+      channel.inputMonitoring
+    ) {
       throw new Error("Only Audio and ordinary Instrument tracks can enable input monitoring")
     }
     if (channel.kind === "master" && channel.soloed) {

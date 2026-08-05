@@ -51,6 +51,7 @@ const inputSummary = computed(() => {
       :input-source="channel.inputSource ?? 'hardware'"
       :input-format="channel.inputFormat ?? 'stereo'"
       :input-channels="channel.inputChannels"
+      :application-capture="channel.applicationCapture"
       @update="emit('updateChannel', $event)"
     />
     <button v-else class="section-control" disabled aria-disabled="true">

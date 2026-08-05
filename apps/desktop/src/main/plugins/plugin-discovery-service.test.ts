@@ -149,4 +149,22 @@ describe("PluginDiscoveryService", () => {
     expect(catalog.plugins.filter((plugin) => plugin.classId === "shared-id")).toHaveLength(1)
     expect(catalog.plugins.some((plugin) => plugin.compatibility === "quarantined")).toBe(true)
   })
+
+  it("ignores malformed cached external entries without a module path", async () => {
+    const { root, service } = await harness()
+    const bundle = join(root, "Valid.vst3")
+    await mkdir(bundle)
+    const malformed = {
+      ...descriptor("ignored.vst3"),
+      modulePath: undefined
+    }
+    const catalog = {
+      ...emptyCatalog(),
+      plugins: [malformed]
+    } as unknown as PluginCatalogSnapshot
+
+    await expect(service.scan(catalog, { paths: [root] }, vi.fn())).resolves.toMatchObject({
+      scanning: false
+    })
+  })
 })

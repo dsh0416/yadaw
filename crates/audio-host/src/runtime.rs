@@ -28,14 +28,15 @@ use crate::{
     workers::WorkerSupervisor,
 };
 use heron_dsp_runtime::protocol::{
-    AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
-    ControlResult, GraphCandidateSnapshot, GraphDeploymentSnapshot, GraphDeploymentStatus,
-    GraphOperationOutcome, GraphOperationSnapshot, GraphTransactionRequest, GraphTransactionValue,
-    GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION, LiveLatencyPolicy, LiveMixerGraph, MidiNoteBatch,
-    MixerChannelMeter, RecordingResult, RecordingWaveform, ResourceKind, ResourceRef,
-    RoundTripLatencyMeasurement, RpcError, RpcErrorCategory, RpcErrorCode, RpcErrorDetails,
-    RpcFailure, RpcMutationOutcome, RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess,
-    TransportState,
+    ApplicationCaptureLogicalTarget, ApplicationCaptureSnapshot,
+    ApplicationCaptureTargetDescriptor, AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime,
+    BinaryPayload, ControlCommand, ControlResult, GraphCandidateSnapshot, GraphDeploymentSnapshot,
+    GraphDeploymentStatus, GraphOperationOutcome, GraphOperationSnapshot, GraphTransactionRequest,
+    GraphTransactionValue, GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION, LiveLatencyPolicy,
+    LiveMixerGraph, MidiNoteBatch, MixerChannelMeter, RecordingResult, RecordingWaveform,
+    ResourceKind, ResourceRef, RoundTripLatencyMeasurement, RpcError, RpcErrorCategory,
+    RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome, RpcRequestMeta, RpcResult,
+    RpcRetry, RpcSuccess, TransportState,
 };
 use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use heron_vst3_host::Vst3HostRequest;

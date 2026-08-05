@@ -46,7 +46,10 @@ describe("TrackQuickControls", () => {
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { soloed: true }])
     await wrapper.get('button[aria-label="Arm Vocal"]').trigger("click")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { recordArmed: true }])
-    expect(wrapper.get('button[aria-label="Monitor Vocal"]').attributes("disabled")).toBeDefined()
+    const monitor = wrapper.get('button[aria-label="Monitor Vocal"]')
+    expect(monitor.attributes("disabled")).toBeUndefined()
+    await monitor.trigger("click")
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { inputMonitoring: true }])
 
     const gain = wrapper.get('input[aria-label="Vocal quick volume"]')
     await gain.trigger("pointerdown")

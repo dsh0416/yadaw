@@ -448,6 +448,67 @@ describe("project graph and command services", () => {
     expect(loadGraph).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps an application target when input monitoring is enabled", async () => {
+    const projects = projectMock()
+    const service = await mixer(projects, {
+      loadGraph: vi.fn().mockResolvedValue(undefined)
+    })
+    await service.load()
+    const target = {
+      platform: "windows" as const,
+      executablePath: "C:\\Program Files\\Steam\\steam.exe",
+      executableName: "steam.exe",
+      includeProcessTree: true
+    }
+
+    const selected = await service.execute({
+      type: "update-channel",
+      channelId: "audio",
+      patch: {
+        inputSource: "application",
+        inputFormat: "stereo",
+        inputChannels: [1, 2],
+        applicationCapture: target
+      }
+    })
+    expect(selected.graph.channels.find(({ id }) => id === "audio")).toMatchObject({
+      inputSource: "application",
+      applicationCapture: target
+    })
+
+    const monitored = await service.execute({
+      type: "update-channel",
+      channelId: "audio",
+      patch: { inputMonitoring: true }
+    })
+    expect(monitored.graph.channels.find(({ id }) => id === "audio")).toMatchObject({
+      inputSource: "application",
+      applicationCapture: target,
+      inputMonitoring: true
+    })
+
+    const restored = await service.execute({
+      type: "update-channel",
+      channelId: "audio",
+      patch: { inputSource: "hardware", inputFormat: "stereo", inputChannels: [1, 2] }
+    })
+    expect(restored.graph.channels.find(({ id }) => id === "audio")).toMatchObject({
+      inputSource: "hardware",
+      applicationCapture: null
+    })
+
+    const instrument = channel("instrument-2", "instrument", 1)
+    await expect(
+      service.execute({
+        type: "create-track",
+        track: { id: "track:instrument-2", channelId: instrument.id, sortOrder: 1 },
+        channel: instrument
+      })
+    ).resolves.toMatchObject({
+      graph: { channels: expect.arrayContaining([expect.objectContaining({ id: instrument.id })]) }
+    })
+  })
+
   it("keeps the DB commit authoritative when native activation fails", async () => {
     const projects = projectMock()
     const activateGraphDeployment = vi.fn(async (deployment) => ({

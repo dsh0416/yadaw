@@ -95,6 +95,7 @@ fn compiled_snapshot_exposes_adapters_plugin_states_and_route_pdc() {
             input_monitoring: false,
             input_source: (id != "output").then(|| "hardware".to_owned()),
             input_channels,
+            application_capture: None,
             hardware_output_channels: (id == "output").then_some(vec![1, 2]).unwrap_or_default(),
             midi_input_port_id: None,
             midi_input_channel: None,

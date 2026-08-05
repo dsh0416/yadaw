@@ -170,8 +170,7 @@ impl AudioEngine {
             |runtime| Arc::clone(&runtime.transport),
         );
         let (recorder, recording_tap) = RecorderController::new(
-            input_config.sample_rate,
-            usize::from(input_config.channels),
+            session_sample_rate,
             Arc::clone(&transport.state),
             TRANSPORT_RECORDING,
         );
@@ -195,7 +194,6 @@ impl AudioEngine {
             &input_config,
             producer,
             Arc::clone(&metrics),
-            recording_tap,
             Arc::clone(&input_peaks),
             Arc::clone(&round_trip_latency),
         )?;
@@ -215,6 +213,7 @@ impl AudioEngine {
                     retired_mixers: retirement_producer,
                 },
                 round_trip_latency: Arc::clone(&round_trip_latency),
+                recording_tap,
             },
         )?;
 

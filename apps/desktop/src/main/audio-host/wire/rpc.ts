@@ -8,6 +8,8 @@ import type {
   RpcResult
 } from "@heron/contracts"
 import type {
+  AudioHostApplicationCaptureSnapshot,
+  AudioHostApplicationCaptureTarget,
   AudioHostBenchmarkReport,
   AudioHostDevice,
   AudioHostMeter,
@@ -69,6 +71,8 @@ export interface ControlResponse {
       | "accepted"
       | "audio-backends"
       | "audio-devices"
+      | "application-capture-targets"
+      | "application-captures"
       | "audio-runtime"
       | "round-trip-latency-measurement"
       | "mixer-snapshot"
@@ -139,6 +143,8 @@ export interface ControlResponse {
     }
     backends?: AudioBackendDescriptor[]
     devices?: { inputs: AudioHostDevice[]; outputs: AudioHostDevice[] }
+    targets?: AudioHostApplicationCaptureTarget[]
+    captures?: AudioHostApplicationCaptureSnapshot[]
     runtime?: AudioHostRuntime
     measurement?: AudioHostRoundTripLatencyMeasurement
     meters?: AudioHostMeter[]

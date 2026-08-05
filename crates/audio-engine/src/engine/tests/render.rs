@@ -1,6 +1,36 @@
 use super::*;
 
 #[test]
+fn application_source_reaches_recording_slots_before_monitoring_is_applied() {
+    use ringbuf::traits::{Consumer, Producer};
+
+    let mut runtime = transport_test_runtime(48_000, 1_000, 0, TRANSPORT_RECORDING);
+    let (capture, mut producer) =
+        crate::application_capture::PreparedApplicationCapture::new(48_000, 2);
+    producer.try_push([0.25, -0.125]).unwrap();
+    runtime.application_captures[0] = Some(capture);
+    runtime.recording_routes[0] = Some((0, 2));
+    runtime.recording_channel_count = 2;
+    runtime.external_source_monitoring[0] = false;
+    runtime.clips.clear();
+    let (mut tap, mut recorded) = crate::recording::recording_tap_for_test(
+        Arc::clone(&runtime.transport.state),
+        TRANSPORT_RECORDING,
+        2,
+    );
+    let inputs = [[0.0; MAX_INPUT_CHANNELS]; 1];
+    let mut outputs = [[0.0; MAX_OUTPUT_CHANNELS]; 1];
+
+    runtime.render_block(&inputs, &mut outputs, None, Some(&mut tap));
+
+    let frame = recorded
+        .try_pop()
+        .expect("application frame must be recorded");
+    assert_eq!([frame[0], frame[1]], [0.25, -0.125]);
+    assert_eq!(outputs[0], [0.0; MAX_OUTPUT_CHANNELS]);
+}
+
+#[test]
 fn uses_the_driver_default_when_the_range_is_unknown() {
     let selection = select_buffer_size(&SupportedBufferSize::Unknown, 64);
     assert!(matches!(selection.buffer_size, BufferSize::Default));
