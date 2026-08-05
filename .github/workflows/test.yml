@@ -30,7 +30,7 @@ jobs:
   checks:
     name: Checks (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +44,7 @@ jobs:
         # runners.
         include:
           - name: Linux x64
-            os: ubuntu-latest
+            os: ubuntu-24.04
             check-task: ci:check:coverage
           - name: Windows x64
             os: windows-latest
@@ -67,66 +67,17 @@ jobs:
 
       - name: Install Playwright Chromium and Linux dependencies
         if: runner.os == 'Linux'
-        run: mise run ci:install:playwright
-
-      - name: Run repository checks
-        run: mise run ${{ matrix.check-task }}
-
-      # On Linux the checks above already produced both coverage reports:
-      # Vitest wrote lcov during the test pass and the combined coverage
-      # orchestrator merged Rust profiles from Cargo tests and instrumented
-      # napi calls, keeping output in target-coverage/ so it stays out of the
-      # shared Cargo target cache.
-      - name: Upload JavaScript coverage to Codecov
-        if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          # Keep this comma-separated list free of spaces: codecov-action
-          # forwards each segment verbatim as a --file argument.
-          files: apps/desktop/coverage/lcov.info,packages/contracts/coverage/lcov.info,packages/project-db/coverage/lcov.info,packages/project-model/coverage/lcov.info,packages/ui/coverage/lcov.info
-          flags: javascript
-          name: javascript
-          fail_ci_if_error: true
-          disable_search: true
-
-      - name: Upload Rust coverage to Codecov
-        if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage/rust/lcov.info
-          flags: rust
-          name: rust
-          fail_ci_if_error: true
-          disable_search: true
-
-  plugin-conformance:
-    name: Official plug-in fixtures (Linux x64)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      CLAP_PLUGINS_COMMIT: 81791d08bb4e5198213440fe43b8e99745210130
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Set up build environment
-        uses: ./.github/actions/setup-build
-        with:
-          github-token: >-
-            ${{ github.event_name == 'pull_request' && '' || github.token }}
-          cache-rust-build: "true"
-
-      - name: Install fixture and headless UI dependencies
         run: |
-          pnpm --filter @heron/design-system exec playwright install-deps chromium
-          sudo apt-get install --yes --no-install-recommends ninja-build xauth xvfb
+          mise run ci:install:playwright
+          # Steinberg's VSTGUI CMake integration enables its standalone library
+          # even when only plug-in example targets are requested.
+          sudo apt-get install --yes --no-install-recommends libgtkmm-3.0-dev ninja-build xauth xvfb
 
       - name: Fetch pinned official CLAP examples
+        if: runner.os == 'Linux'
         shell: bash
+        env:
+          CLAP_PLUGINS_COMMIT: 81791d08bb4e5198213440fe43b8e99745210130
         run: |
           fixture_source="$RUNNER_TEMP/clap-plugins"
           git init "$fixture_source"
@@ -148,6 +99,7 @@ jobs:
           echo "CLAP_FIXTURE_SOURCE=$fixture_source" >> "$GITHUB_ENV"
 
       - name: Build official VST3 and CLAP examples
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           cmake \
@@ -180,33 +132,34 @@ jobs:
           echo "VST3_SYNTH_FIXTURE=$synth_path" >> "$GITHUB_ENV"
           echo "CLAP_PLUGIN_FIXTURE=$clap_path" >> "$GITHUB_ENV"
 
-      - name: Build Heron native host and probes
-        run: node scripts/native-build.ts debug
+      - name: Run repository checks
+        run: mise run ${{ matrix.check-task }}
 
-      - name: Probe official plug-in fixtures
-        shell: bash
-        run: |
-          target/debug/heron-vst3-probe "$VST3_AGAIN_FIXTURE" > "$RUNNER_TEMP/vst3-probe.json"
-          target/debug/heron-clap-probe "$CLAP_PLUGIN_FIXTURE" > "$RUNNER_TEMP/clap-probe.json"
-          grep -q '41347FD6FED64094AFBB12B7DBA1D441' "$RUNNER_TEMP/vst3-probe.json"
-          grep -q 'com.github.free-audio.clap.synth' "$RUNNER_TEMP/clap-probe.json"
-          grep -q 'com.github.free-audio.clap.gain' "$RUNNER_TEMP/clap-probe.json"
+      # On Linux the checks above already produced both coverage reports:
+      # Vitest wrote lcov during the test pass and the combined coverage
+      # orchestrator merged Rust profiles from Cargo tests, instrumented napi
+      # calls, probes, and the official plug-in fixtures, keeping output in
+      # target-coverage/ so it stays out of the shared Cargo target cache.
+      - name: Upload JavaScript coverage to Codecov
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Keep this comma-separated list free of spaces: codecov-action
+          # forwards each segment verbatim as a --file argument.
+          files: apps/desktop/coverage/lcov.info,packages/contracts/coverage/lcov.info,packages/project-db/coverage/lcov.info,packages/project-model/coverage/lcov.info,packages/ui/coverage/lcov.info
+          flags: javascript
+          name: javascript
+          fail_ci_if_error: true
+          disable_search: true
 
-      - name: Run embedded-host smoke tests
-        shell: bash
-        run: |
-          pnpm --filter @heron/desktop test:vst3-runtime -- \
-            "$VST3_AGAIN_FIXTURE" \
-            "$VST3_SYNTH_FIXTURE"
-          pnpm --filter @heron/desktop test:clap-runtime -- "$CLAP_PLUGIN_FIXTURE"
-
-      - name: Run VST3 native editor smoke test
-        shell: bash
-        env:
-          HERON_EDITOR_SMOKE_DELAY_MS: "0"
-        run: |
-          xvfb-run --auto-servernum \
-            pnpm --filter @heron/desktop test:vst3-editor -- \
-            "$VST3_SYNTH_FIXTURE" \
-            41466D9BB0654576B641098F686371B3 \
-            instrument
+      - name: Upload Rust coverage to Codecov
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/rust/lcov.info
+          flags: rust
+          name: rust
+          fail_ci_if_error: true
+          disable_search: true

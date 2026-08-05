@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#MISE hide=true
+set -euo pipefail
+
+: "${VST3_AGAIN_FIXTURE:?VST3_AGAIN_FIXTURE is required}"
+: "${VST3_SYNTH_FIXTURE:?VST3_SYNTH_FIXTURE is required}"
+: "${CLAP_PLUGIN_FIXTURE:?CLAP_PLUGIN_FIXTURE is required}"
+
+for fixture in "$VST3_AGAIN_FIXTURE" "$VST3_SYNTH_FIXTURE" "$CLAP_PLUGIN_FIXTURE"; do
+  if [[ ! -e "$fixture" ]]; then
+    echo "Official plug-in fixture does not exist: $fixture" >&2
+    exit 1
+  fi
+done
+
+target="$(cargo xtask host-target)"
+cargo build --target "$target" -p heron-vst3-host --bin heron-vst3-probe
+cargo build --target "$target" -p heron-clap-host --bin heron-clap-probe
+
+target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
+profile_dir="$target_dir/$target/debug"
+vst3_probe_output="$("$profile_dir/heron-vst3-probe" "$VST3_AGAIN_FIXTURE")"
+clap_probe_output="$("$profile_dir/heron-clap-probe" "$CLAP_PLUGIN_FIXTURE")"
+
+if [[ "$vst3_probe_output" != *41347FD6FED64094AFBB12B7DBA1D441* ]]; then
+  echo "VST3 probe did not enumerate the expected AGain plug-in" >&2
+  exit 1
+fi
+for plugin_id in com.github.free-audio.clap.synth com.github.free-audio.clap.gain; do
+  if [[ "$clap_probe_output" != *"$plugin_id"* ]]; then
+    echo "CLAP probe did not enumerate expected plug-in $plugin_id" >&2
+    exit 1
+  fi
+done
+
+pnpm --filter @heron/desktop test:vst3-runtime -- \
+  "$VST3_AGAIN_FIXTURE" \
+  "$VST3_SYNTH_FIXTURE"
+pnpm --filter @heron/desktop test:clap-runtime -- "$CLAP_PLUGIN_FIXTURE"
+HERON_EDITOR_SMOKE_DELAY_MS=0 xvfb-run --auto-servernum \
+  pnpm --filter @heron/desktop test:vst3-editor -- \
+  "$VST3_SYNTH_FIXTURE" \
+  41466D9BB0654576B641098F686371B3 \
+  instrument
