@@ -27,11 +27,13 @@ lipo crates/dsp-node/heron-dsp-node.darwin-universal.node \
   -verify_arch arm64 x86_64
 
 mkdir -p target/release
-lipo -create \
-  "target/$arm_target/release/heron-vst3-probe" \
-  "target/$x64_target/release/heron-vst3-probe" \
-  -output target/release/heron-vst3-probe
-lipo target/release/heron-vst3-probe -verify_arch arm64 x86_64
+for probe in heron-vst3-probe heron-clap-probe; do
+  lipo -create \
+    "target/$arm_target/release/$probe" \
+    "target/$x64_target/release/$probe" \
+    -output "target/release/$probe"
+  lipo "target/release/$probe" -verify_arch arm64 x86_64
+done
 
 for arm_bundle in "target/bundles/$arm_target"/*.vst3; do
   bundle_name="$(basename "$arm_bundle")"

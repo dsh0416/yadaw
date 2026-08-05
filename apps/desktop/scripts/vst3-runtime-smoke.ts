@@ -32,7 +32,7 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const [pluginPath, synthPath] = process.argv.slice(2)
+const [pluginPath, synthPath, againNativeId, synthNativeId] = process.argv.slice(2)
 const resolvedPlugin =
   pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Release", "again.vst3")
 const resolvedSynth =
@@ -45,6 +45,8 @@ const resolvedSynth =
     "Release",
     "note-expression-synth.vst3"
   )
+const resolvedAgainNativeId = againNativeId ?? "41347FD6FED64094AFBB12B7DBA1D441"
+const resolvedSynthNativeId = synthNativeId ?? "41466D9BB0654576B641098F686371B3"
 const runtime = new AudioHostRuntime(2, 4)
 const uiPump = setInterval(() => runtime.drainUiWork(), 8)
 uiPump.unref()
@@ -76,7 +78,7 @@ try {
     locator: {
       format: "vst3",
       artifact_path: resolvedPlugin,
-      native_id: "41347FD6FED64094AFBB12B7DBA1D441"
+      native_id: resolvedAgainNativeId
     },
     plugin_kind: "effect",
     audio_mode: "stereo",
@@ -91,7 +93,7 @@ try {
     locator: {
       format: "vst3",
       artifact_path: resolvedSynth,
-      native_id: "41466D9BB0654576B641098F686371B3"
+      native_id: resolvedSynthNativeId
     },
     plugin_kind: "instrument",
     audio_mode: "stereo",
