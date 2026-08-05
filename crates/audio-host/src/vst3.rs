@@ -29,7 +29,7 @@ const HOST_REQUEST_CAPACITY: usize = 1_024;
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
     retired_instances: Vec<GuardedInstance>,
-    process_lifetime_guard: Option<Instance>,
+    process_lifetime_guards: HashMap<String, Instance>,
     benchmark_lifetime_guards: Vec<GuardedInstance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
@@ -196,7 +196,7 @@ impl Vst3Runtime {
         Self {
             instances: HashMap::new(),
             retired_instances: Vec::new(),
-            process_lifetime_guard: None,
+            process_lifetime_guards: HashMap::new(),
             benchmark_lifetime_guards: Vec::new(),
             ara_factories: HashMap::new(),
             next_runtime_handle: 1,
@@ -349,9 +349,21 @@ impl Vst3Runtime {
                     instance,
                 });
             }
-        } else if self.instances.is_empty() {
-            let previous = self.process_lifetime_guard.replace(instance);
-            drop(previous);
+        } else {
+            let module_path = instance.configuration.module_path.clone();
+            let module_still_loaded = self
+                .instances
+                .values()
+                .any(|loaded| loaded.configuration.module_path == module_path);
+            if !module_still_loaded {
+                // Retain one instance per loaded module for the process lifetime. VST3 modules
+                // may keep process-global entrypoint state, so unloading the final instance of
+                // one artifact while instances from another artifact remain active is unsafe.
+                // Additional instances from an already guarded module can be destroyed normally.
+                self.process_lifetime_guards
+                    .entry(module_path)
+                    .or_insert(instance);
+            }
         }
     }
 

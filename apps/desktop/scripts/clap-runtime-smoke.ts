@@ -5,6 +5,7 @@ import { AudioHostRuntime } from "@heron/dsp-node"
 interface PluginParameter {
   parameter_key: string
   value: number
+  read_only: boolean
 }
 
 interface AudioHostMeter {
@@ -13,14 +14,16 @@ interface AudioHostMeter {
   held_right: number
 }
 
+interface PluginStateEnvelope {
+  version: number
+  chunks: Array<{ key: string; bytes: { storage: string; bytes?: Uint8Array } }>
+}
+
 interface WireResult {
   type: string
   error?: { user_message_key?: string }
   parameters?: PluginParameter[]
-  state?: {
-    version: number
-    chunks: Array<{ key: string; bytes: { storage: string; bytes?: Uint8Array } }>
-  }
+  state?: PluginStateEnvelope
   latency_samples?: number
   tail_samples?: number
   meters?: AudioHostMeter[]
@@ -32,19 +35,9 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const [pluginPath, synthPath] = process.argv.slice(2)
+const [pluginPath] = process.argv.slice(2)
 const resolvedPlugin =
-  pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Release", "again.vst3")
-const resolvedSynth =
-  synthPath ??
-  resolve(
-    repositoryRoot,
-    "target",
-    "vst3-fixtures",
-    "VST3",
-    "Release",
-    "note-expression-synth.vst3"
-  )
+  pluginPath ?? resolve(repositoryRoot, "target", "clap-fixtures", "plugins", "clap-plugins.clap")
 const runtime = new AudioHostRuntime(2, 4)
 const uiPump = setInterval(() => runtime.drainUiWork(), 8)
 uiPump.unref()
@@ -69,57 +62,57 @@ async function send(command: unknown): Promise<WireResult> {
   return decoded.result
 }
 
-try {
-  const loaded = await send({
+function loadCommand(
+  instanceId: string,
+  nativeId: string,
+  pluginKind: "effect" | "instrument",
+  state: PluginStateEnvelope = { version: 1, chunks: [] }
+): object {
+  return {
     type: "load-plugin",
-    instance_id: "again-1",
-    locator: {
-      format: "vst3",
-      artifact_path: resolvedPlugin,
-      native_id: "41347FD6FED64094AFBB12B7DBA1D441"
-    },
-    plugin_kind: "effect",
-    audio_mode: "stereo",
-    active_aux_inputs: [{ input_port_key: "vst3:audio:input:1", channels: 1 }],
-    sample_rate: 48_000,
-    state: { version: 1, chunks: [] }
-  })
-  if (loaded.type !== "plugin-loaded") throw new Error("load response mismatch")
-  const synthLoaded = await send({
-    type: "load-plugin",
-    instance_id: "synth-1",
-    locator: {
-      format: "vst3",
-      artifact_path: resolvedSynth,
-      native_id: "41466D9BB0654576B641098F686371B3"
-    },
-    plugin_kind: "instrument",
+    instance_id: instanceId,
+    locator: { format: "clap", artifact_path: resolvedPlugin, native_id: nativeId },
+    plugin_kind: pluginKind,
     audio_mode: "stereo",
     sample_rate: 48_000,
-    state: { version: 1, chunks: [] }
-  })
-  if (synthLoaded.type !== "plugin-loaded") throw new Error("synth load response mismatch")
-  const listed = await send({ type: "plugin-parameters", instance_id: "again-1" })
-  const listedParameters = listed.parameters
-  if (listed.type !== "plugin-parameters" || !listedParameters?.length) {
-    throw new Error("AGain did not expose parameters")
+    state
   }
-  const parameter = listedParameters[0]
-  if (!parameter) throw new Error("AGain parameter list became empty")
-  for (const gesture of ["begin", "perform", "end"]) {
+}
+
+try {
+  const effectLoaded = await send(
+    loadCommand("effect-1", "com.github.free-audio.clap.gain", "effect")
+  )
+  if (effectLoaded.type !== "plugin-loaded") throw new Error("effect load response mismatch")
+
+  const listed = await send({ type: "plugin-parameters", instance_id: "effect-1" })
+  const parameters = listed.parameters
+  if (listed.type !== "plugin-parameters" || !parameters?.length) {
+    throw new Error("official CLAP Gain did not expose parameters")
+  }
+  const editable = parameters.find((parameter) => !parameter.read_only)
+  if (!editable) throw new Error("official CLAP Gain has no editable parameter")
+  for (const gesture of ["begin", "perform", "end"] as const) {
     await send({
       type: "set-plugin-parameter",
-      instance_id: "again-1",
-      parameter_key: parameter.parameter_key,
-      value: parameter.value,
+      instance_id: "effect-1",
+      parameter_key: editable.parameter_key,
+      value: editable.value,
       gesture
     })
   }
-  const state = await send({ type: "save-plugin-state", instance_id: "again-1" })
-  const componentState = state.state?.chunks.find((chunk) => chunk.key === "component")?.bytes.bytes
-  if (state.type !== "plugin-state" || !(componentState instanceof Uint8Array)) {
-    throw new Error("state response mismatch")
+
+  const saved = await send({ type: "save-plugin-state", instance_id: "effect-1" })
+  const mainState = saved.state?.chunks.find((chunk) => chunk.key === "main")?.bytes.bytes
+  if (saved.type !== "plugin-state" || !(mainState instanceof Uint8Array)) {
+    throw new Error("official CLAP plug-in did not return its main state chunk")
   }
+
+  const synthLoaded = await send(
+    loadCommand("synth-1", "com.github.free-audio.clap.synth", "instrument")
+  )
+  if (synthLoaded.type !== "plugin-loaded") throw new Error("synth load response mismatch")
+
   const liveGraph = {
     sample_rate: 48_000,
     channels: [
@@ -174,14 +167,14 @@ try {
         tail_samples: synthLoaded.tail_samples ?? 0
       },
       {
-        instance_id: "again-1",
+        instance_id: "effect-1",
         channel_id: "instrument-1",
         role: "insert",
         slot_order: 0,
         audio_mode: "stereo",
         enabled: true,
-        latency_samples: loaded.latency_samples ?? 0,
-        tail_samples: loaded.tail_samples ?? 0
+        latency_samples: effectLoaded.latency_samples ?? 0,
+        tail_samples: effectLoaded.tail_samples ?? 0
       }
     ],
     midi_clips: [
@@ -228,11 +221,11 @@ try {
     }
   })
   await send({ type: "transport", command: { kind: "play" } })
-  await new Promise((resolve) => setTimeout(resolve, 150))
+  await new Promise((resolve) => setTimeout(resolve, 200))
   const meters = await send({ type: "mixer-snapshot" })
   const instrumentMeter = meters.meters?.find((meter) => meter.channel_id === "instrument-1")
   if (!instrumentMeter || Math.max(instrumentMeter.held_left, instrumentMeter.held_right) <= 0) {
-    throw new Error("mock live graph did not render the VST3 instrument/effect chain")
+    throw new Error("mock live graph did not render the official CLAP instrument/effect chain")
   }
   await send({
     type: "update-graph",
@@ -245,16 +238,15 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 50))
   await send({ type: "stop-audio-engine" })
   await send({ type: "unload-plugin", instance_id: "synth-1" })
-  await send({ type: "unload-plugin", instance_id: "again-1" })
+  await send({ type: "unload-plugin", instance_id: "effect-1" })
   console.log(
-    `VST3 embedded runtime live graph passed (${listedParameters.length} parameters, ` +
-      `${componentState.length} component bytes, meter ` +
-      `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
+    `CLAP official fixture passed (${parameters.length} parameters, ${mainState.length} state ` +
+      `bytes, meter ${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
   )
 } finally {
   clearInterval(uiPump)
   runtime.close()
   // EmbeddedAudioHost::close is intentionally non-blocking. Keep Node alive
-  // long enough for the runtime thread to retire the graph and stop its actors.
+  // long enough for the runtime thread to retire the graph and unload modules.
   await new Promise((resolve) => setTimeout(resolve, 250))
 }

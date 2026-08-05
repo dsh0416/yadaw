@@ -76,6 +76,21 @@ old endpoint on the audio thread, wait for its lease to return, reactivate on
 the control thread, then publish the replacement endpoint. A failed
 reactivation leaves the committed project intact and the live graph bypassed.
 
+### Official plug-in fixture testing
+
+CI pins and builds Steinberg's AGain and Note Expression Synth VST3 examples
+and the free-audio headless CLAP example module. Heron's own probes must
+enumerate their expected native IDs before the embedded host tests load them.
+The VST3 example build also runs Steinberg's validator against both fixtures.
+The smoke tests then exercise parameters, state, side-chain configuration,
+CLAP note events, graph publication, mock-device processing, and output
+metering; the VST3 fixture also runs its native editor under Xvfb.
+
+Upstream plug-in validators complement this flow but do not replace it: a
+validator checks whether a plug-in behaves correctly when driven by its own
+reference host, while these fixtures check whether Heron behaves correctly as
+the host. No upstream fixture binary is checked into the repository.
+
 ## Failure model
 
 An unrecoverable native crash terminates the Electron main process; it cannot

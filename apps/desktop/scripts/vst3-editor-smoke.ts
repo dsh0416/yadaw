@@ -12,11 +12,10 @@ interface WireResponse {
   request_id: number
   result: {
     type: string
-    message?: string
+    error?: { user_message_key?: string }
     active_mode?: "native" | "parameters"
     open?: boolean
     parameters?: Array<{
-      id: number
       parameter_key: string
       runtime_token: number
       title: string
@@ -36,7 +35,6 @@ interface WireResponse {
       automatable: boolean
       bypass: boolean
       formatted?: string
-      flags: number
     }>
     state?: {
       active_mode: "native" | "parameters"
@@ -65,7 +63,14 @@ const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const [pluginArgument, classIdArgument, pluginKindArgument] = process.argv.slice(2)
 const pluginPath =
   pluginArgument ??
-  resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "note-expression-synth.vst3")
+  resolve(
+    repositoryRoot,
+    "target",
+    "vst3-fixtures",
+    "VST3",
+    "Release",
+    "note-expression-synth.vst3"
+  )
 const classId = classIdArgument ?? "41466D9BB0654576B641098F686371B3"
 const pluginKind = pluginKindArgument ?? "instrument"
 const observationDelayMs = Number.parseInt(process.env.HERON_EDITOR_SMOKE_DELAY_MS ?? "250", 10)
@@ -119,7 +124,7 @@ async function run(): Promise<void> {
     const decoded = decode(response.body) as WireResponse
     if (decoded.request_id !== id) throw new Error("audio-host response ID mismatch")
     if (decoded.result.type === "error") {
-      throw new Error(decoded.result.message ?? "audio-host returned an error")
+      throw new Error(decoded.result.error?.user_message_key ?? "audio-host returned an error")
     }
     return decoded.result
   }
@@ -271,29 +276,17 @@ async function run(): Promise<void> {
       throw new Error("parameter editor mode did not activate")
     }
     const parameters = await readParameters()
-    const editable = parameters.find((parameter) => (parameter.flags & 2) === 0)
+    const editable = parameters.find((parameter) => !parameter.read_only)
     if (!editable) throw new Error("parameter editor has no editable parameters")
-    await request({
-      type: "set-plugin-parameter",
-      instance_id: "editor-smoke",
-      parameter_id: editable.id,
-      normalized: editable.normalized,
-      gesture: "begin"
-    })
-    await request({
-      type: "set-plugin-parameter",
-      instance_id: "editor-smoke",
-      parameter_id: editable.id,
-      normalized: editable.normalized,
-      gesture: "perform"
-    })
-    await request({
-      type: "set-plugin-parameter",
-      instance_id: "editor-smoke",
-      parameter_id: editable.id,
-      normalized: editable.normalized,
-      gesture: "end"
-    })
+    for (const gesture of ["begin", "perform", "end"] as const) {
+      await request({
+        type: "set-plugin-parameter",
+        instance_id: "editor-smoke",
+        parameter_key: editable.parameter_key,
+        value: editable.value,
+        gesture
+      })
+    }
     const nativeMode = await applyToolbarAction({ type: "mode", mode: "native" })
     if (nativeMode.activeMode !== "native") {
       throw new Error("native editor mode did not reactivate")
@@ -310,7 +303,7 @@ async function run(): Promise<void> {
     }
 
     const beforeInteraction = new Map(
-      (await readParameters()).map((parameter) => [parameter.id, parameter.normalized])
+      (await readParameters()).map((parameter) => [parameter.parameter_key, parameter.normalized])
     )
     console.log(
       "VST3 editor smoke: windows",
@@ -331,7 +324,7 @@ async function run(): Promise<void> {
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, observationDelayMs))
     const changedParameters = (await readParameters()).filter(
-      (parameter) => beforeInteraction.get(parameter.id) !== parameter.normalized
+      (parameter) => beforeInteraction.get(parameter.parameter_key) !== parameter.normalized
     )
     if (changedParameters.length > 0) {
       console.log(
@@ -350,7 +343,7 @@ async function run(): Promise<void> {
     if (!parent.isDestroyed()) parent.destroy()
     client.close()
     liveClient = null
-    app.quit()
+    app.exit(0)
   }
 }
 
