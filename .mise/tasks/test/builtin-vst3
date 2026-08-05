@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run smoke tests for the bundled VST3 plug-ins"
+#MISE depends=["native:debug"]
+set -euo pipefail
+
+pnpm --filter @heron/desktop test:builtin-vst3

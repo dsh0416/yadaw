@@ -7,16 +7,16 @@ machine; they are not portable scores and do not run as a pull-request gate.
 ## Commands
 
 ```text
-pnpm bench:rust:quick
-pnpm bench:rust
-pnpm bench:rust:save
-pnpm bench:rust:compare
+mise run bench:quick
+mise run bench
+mise run bench:save
+mise run bench:compare
 ```
 
-`bench:rust:save` stores a baseline named `main` under each crate's
-`target/criterion` directory. `bench:rust:compare` compares against those
+`mise run bench:save` stores a baseline named `main` under each crate's
+`target/criterion` directory. `mise run bench:compare` compares against those
 baselines. The directories are ignored by Git and should not be copied between
-machines. `pnpm check:rust` compiles every benchmark without measuring it and
+machines. `mise run check` compiles every benchmark without measuring it and
 runs the real-time allocation invariants.
 
 The live cpal runtime and graph renderer live in `heron-audio-engine`.

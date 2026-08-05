@@ -1,5 +1,3 @@
-monorepo_root = true
-
 [tools]
 "github:microsoft/apm" = "latest"
 node = "26"
@@ -18,8 +16,8 @@ matching = "clang+llvm"
 lockfile = true
 
 [tasks.install]
-description = "Install monorepo dependencies from the pnpm lockfile"
-run = "pnpm install --frozen-lockfile"
+description = "Install JavaScript workspace dependencies from the pnpm lockfile"
+run = "pnpm install --frozen-lockfile --prefer-offline"
 sources = [
   "package.json",
   "pnpm-lock.yaml",
@@ -31,9 +29,143 @@ sources = [
 ]
 outputs = ["node_modules/.pnpm/lock.yaml"]
 
-[tasks.dev]
-description = "Build the native addon and start Electron with Vite watchers"
+[tasks."js:dev"]
+hide = true
 depends = ["install"]
+run = "pnpm dev"
+
+[tasks."js:docs"]
+hide = true
+depends = ["install"]
+run = "pnpm docs:dev"
+
+[tasks."js:docs-build"]
+hide = true
+depends = ["install"]
+run = "pnpm docs:build"
+
+[tasks."js:desktop:build"]
+hide = true
+depends = ["install"]
+run = "pnpm build:desktop"
+
+[tasks."js:format"]
+hide = true
+depends = ["install"]
+run = "pnpm format"
+
+[tasks."js:format-check"]
+hide = true
+depends = ["install"]
+run = "pnpm format:check"
+
+[tasks."js:lint"]
+hide = true
+depends = ["install"]
+run = "pnpm lint"
+
+[tasks."js:check:configs"]
+hide = true
+depends = ["install"]
+run = "pnpm check:configs"
+
+[tasks."js:check:packages"]
+hide = true
+depends = ["install"]
+run = "pnpm check:packages"
+
+[tasks."js:test"]
+hide = true
+depends = ["install"]
+run = "pnpm test:js"
+
+[tasks."js:test:coverage"]
+hide = true
+depends = ["install"]
+run = "pnpm test:coverage:js"
+
+[tasks."js:native:test"]
+hide = true
+depends = ["install"]
+run = "pnpm test:native-bindings"
+
+[tasks."js:design:test"]
+hide = true
+depends = ["install"]
+run = "pnpm design:test"
+
+[tasks."js:design:build"]
+hide = true
+depends = ["install"]
+run = "pnpm design:build"
+
+[tasks."rust:format"]
+hide = true
+run = "cargo xtask fmt"
+
+[tasks."rust:format:check"]
+hide = true
+run = "cargo xtask fmt --check"
+
+[tasks."rust:clippy"]
+hide = true
+run = "cargo xtask clippy"
+
+[tasks."rust:clippy:fast"]
+hide = true
+run = "cargo xtask clippy --fast"
+
+[tasks."rust:test"]
+hide = true
+run = "cargo xtask test"
+
+[tasks."rust:test:fast"]
+hide = true
+run = "cargo xtask test --fast"
+
+[tasks."rust:bench:check"]
+hide = true
+run = "cargo xtask bench check"
+
+[tasks."rust:native:debug"]
+hide = true
+run = "cargo xtask native build --profile debug"
+
+[tasks."rust:native:release"]
+hide = true
+run = "cargo xtask native build --profile release"
+
+[tasks."native:bindings:debug"]
+hide = true
+depends = ["install"]
+run = "pnpm --filter @heron/dsp-node build:debug"
+
+[tasks."native:bindings:release"]
+hide = true
+depends = ["install"]
+run = "pnpm --filter @heron/dsp-node build"
+
+[tasks."native:staged:debug"]
+hide = true
+depends = ["native:bindings:debug"]
+run = "cargo xtask native build --profile debug"
+
+[tasks."native:staged:release"]
+hide = true
+depends = ["native:bindings:release"]
+run = "cargo xtask native build --profile release"
+
+[tasks."native:debug"]
+hide = true
+depends = ["native:staged:debug"]
+
+[tasks."native:release"]
+hide = true
+depends = ["native:staged:release"]
+
+[tasks.dev]
+description = "Build debug native artifacts and start Electron development watchers"
+depends = ["native:debug"]
 run = "pnpm dev"
 
 [tasks.docs]
@@ -41,47 +173,195 @@ description = "Start the user documentation site"
 depends = ["install"]
 run = "pnpm docs:dev"
 
-[tasks.docs-build]
+[tasks."docs-build"]
 description = "Build the user documentation site"
 depends = ["install"]
 run = "pnpm docs:build"
 
+[tasks."check:prepare"]
+hide = true
+depends = ["install"]
+run = [
+  "node scripts/version.ts check",
+  "pnpm --filter @heron/dsp-node build:debug",
+]
+
+[tasks."check:js"]
+hide = true
+depends = ["check:prepare"]
+run = [
+  "pnpm format:check",
+  "pnpm lint",
+  "pnpm check:configs",
+  "pnpm check:packages",
+  "pnpm test:js",
+  "pnpm design:test",
+  "pnpm design:build",
+]
+
+[tasks."check:rust"]
+hide = true
+depends = ["check:prepare"]
+run = [
+  "cargo xtask fmt --check",
+  "cargo xtask clippy",
+  "cargo xtask test",
+  "cargo xtask bench check",
+]
+
 [tasks.check]
-description = "Run formatting, lint, Rust, napi-rs, TypeScript, and Vue checks"
-depends = ["install"]
-run = "pnpm check"
+description = "Run the full JavaScript, Rust, native, and design validation path"
+depends = ["check:js", "check:rust"]
 
-[tasks.check-fast]
-description = "Run the fast local Rust formatting, lint, and library-test path"
-depends = ["install"]
-run = "pnpm check:rust:fast"
+[tasks."check-fast"]
+description = "Run the fast Rust edit-loop checks without installing JavaScript dependencies"
+run = [
+  "cargo xtask fmt --check",
+  "cargo xtask clippy --fast",
+  "cargo xtask test --fast",
+]
 
-[tasks.build]
-description = "Build the native addon and all Electron bundles"
-depends = ["install"]
-run = "pnpm build"
+[tasks.test]
+description = "Run JavaScript, native binding, and Rust tests"
+depends = ["test:js", "test:rust"]
 
-[tasks.pack]
-description = "Create an unpacked Electron application"
-depends = ["install"]
-run = "pnpm --filter @heron/desktop run pack"
+[tasks."test:prepare"]
+hide = true
+depends = ["native:bindings:debug"]
+
+[tasks."test:js"]
+hide = true
+depends = ["test:prepare"]
+run = "pnpm test:js"
+
+[tasks."test:rust"]
+hide = true
+depends = ["test:prepare"]
+run = "cargo xtask test"
 
 [tasks.format]
-description = "Format TypeScript, JavaScript, Vue, configuration, docs, and Rust"
-depends = ["install"]
-run = "pnpm format"
+description = "Format JavaScript, TypeScript, Vue, configuration, documentation, and Rust"
+depends = ["js:format", "rust:format"]
 
-[tasks.format-check]
-description = "Check Oxfmt and Rust formatting without modifying files"
-depends = ["install"]
-run = "pnpm format:check"
+[tasks."format-check"]
+description = "Check JavaScript and Rust formatting without modifying files"
+depends = ["js:format-check", "rust:format:check"]
 
-[tasks.lint]
-description = "Run Oxlint, residual Vue ESLint, and Clippy"
-depends = ["install"]
+[tasks."lint:prepare"]
+hide = true
+depends = ["native:bindings:debug"]
+
+[tasks."lint:js"]
+hide = true
+depends = ["lint:prepare"]
 run = "pnpm lint"
 
+[tasks."lint:rust"]
+hide = true
+depends = ["lint:prepare"]
+run = "cargo xtask clippy"
+
+[tasks.lint]
+description = "Run JavaScript lint, design audits, and Rust Clippy"
+depends = ["lint:js", "lint:rust"]
+
 [tasks.native]
-description = "Build the native addon and VST3 probe (ASIO is always included on Windows)"
+description = "Build release N-API, VST3 probe, and bundled plug-in artifacts"
+depends = ["native:release"]
+
+[tasks."build:desktop"]
+hide = true
+depends = ["native:release"]
+run = "pnpm build:desktop"
+
+[tasks.build]
+description = "Build release native artifacts and all Electron bundles"
+depends = ["build:desktop"]
+
+[tasks.pack]
+description = "Create an unpacked Electron application from release native artifacts"
+depends = ["build"]
+run = "pnpm --filter @heron/desktop run pack"
+
+[tasks.bench]
+description = "Run Rust performance benchmarks"
+run = "cargo xtask bench run"
+
+[tasks."bench:quick"]
+description = "Run shortened Rust performance benchmarks"
+run = "cargo xtask bench quick"
+
+[tasks."bench:save"]
+description = "Save the main Rust benchmark baseline"
+run = "cargo xtask bench save"
+
+[tasks."bench:compare"]
+description = "Compare Rust benchmarks with the saved main baseline"
+run = "cargo xtask bench compare"
+
+[tasks."version:check"]
+description = "Check VERSION against Cargo and JavaScript workspace manifests"
+run = "node scripts/version.ts check"
+
+[tasks."version:sync"]
+description = "Synchronize VERSION across manifests and rebuild N-API bindings"
 depends = ["install"]
-run = "node scripts/native-build.ts release"
+depends_post = ["native:bindings:debug"]
+run = "node scripts/version.ts sync"
+
+[tasks."ci:install:playwright"]
+hide = true
+depends = ["install"]
+run = "pnpm --filter @heron/design-system exec playwright install --with-deps chromium"
+
+[tasks."ci:check:native"]
+hide = true
+depends = ["install"]
+run = [
+  "cargo xtask fmt --check",
+  "cargo xtask clippy",
+  "cargo xtask test",
+  "pnpm --filter @heron/dsp-node build:debug",
+  "pnpm test:native-bindings",
+  "pnpm --filter @heron/desktop test:unit",
+  "pnpm --filter @heron/project-db test:integration",
+]
+
+[tasks."ci:package:windows-x64"]
+hide = true
+depends = ["build"]
+run = [
+  "pnpm --filter @heron/desktop exec electron-builder --publish never --x64",
+  "pnpm --filter @heron/desktop verify:package-security",
+]
+
+[tasks."ci:package:windows-x64".env]
+CSC_IDENTITY_AUTO_DISCOVERY = "false"
+HERON_REQUIRE_DEVELOPER_ID_SIGNATURE = "false"
+HERON_REQUIRE_NOTARIZATION = "false"
+
+[tasks."ci:package:linux-x64"]
+hide = true
+depends = ["build"]
+run = [
+  "pnpm --filter @heron/desktop exec electron-builder --publish never --x64",
+  "pnpm --filter @heron/desktop verify:package-security",
+]
+
+[tasks."ci:package:linux-x64".env]
+CSC_IDENTITY_AUTO_DISCOVERY = "false"
+HERON_REQUIRE_DEVELOPER_ID_SIGNATURE = "false"
+HERON_REQUIRE_NOTARIZATION = "false"
+
+[tasks."ci:package:linux-arm64"]
+hide = true
+depends = ["build"]
+run = [
+  "pnpm --filter @heron/desktop exec electron-builder --publish never --arm64",
+  "pnpm --filter @heron/desktop verify:package-security",
+]
+
+[tasks."ci:package:linux-arm64".env]
+CSC_IDENTITY_AUTO_DISCOVERY = "false"
+HERON_REQUIRE_DEVELOPER_ID_SIGNATURE = "false"
+HERON_REQUIRE_NOTARIZATION = "false"

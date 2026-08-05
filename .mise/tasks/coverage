@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Collect combined JavaScript and Rust coverage in one test pass"
+#MISE depends=["install"]
+set -euo pipefail
+
+target="$(cargo xtask host-target)"
+(
+  export CARGO_TARGET_DIR="$PWD/target-coverage"
+  eval "$(cargo llvm-cov show-env --sh --target "$target")"
+  cargo xtask coverage prepare
+  pnpm --filter @heron/dsp-node build:debug
+  pnpm test:coverage:js
+  pnpm test:native-bindings
+  cargo xtask coverage report
+)

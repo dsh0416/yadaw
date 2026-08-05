@@ -45,13 +45,13 @@ jobs:
         include:
           - name: Linux x64
             os: ubuntu-latest
-            check-script: check:coverage
+            check-task: ci:check:coverage
           - name: Windows x64
             os: windows-latest
-            check-script: check:native
+            check-task: ci:check:native
           - name: macOS
             os: macos-latest
-            check-script: check:native
+            check-task: ci:check:native
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -67,12 +67,10 @@ jobs:
 
       - name: Install Playwright Chromium and Linux dependencies
         if: runner.os == 'Linux'
-        run: >-
-          pnpm --filter @heron/design-system exec playwright install
-          --with-deps chromium
+        run: mise run ci:install:playwright
 
       - name: Run repository checks
-        run: pnpm ${{ matrix.check-script }}
+        run: mise run ${{ matrix.check-task }}
 
       # On Linux the checks above already produced both coverage reports:
       # Vitest wrote lcov during the test pass and the combined coverage

@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#MISE hide=true
+#MISE depends=["install"]
+set -euo pipefail
+
+arm_target="aarch64-apple-darwin"
+x64_target="x86_64-apple-darwin"
+rustup target add "$arm_target" "$x64_target"
+test "$(plutil -extract LSUIElement raw build/macos-agent-info.plist)" = "true"
+
+for target in "$arm_target" "$x64_target"; do
+  pnpm --filter @heron/dsp-node exec napi build \
+    --platform \
+    --release \
+    --target "$target"
+  cargo xtask native build --profile release --target "$target"
+  otool -l "target/$target/release/heron-vst3-probe" | \
+    grep -q "sectname __info_plist"
+done
+pnpm --filter @heron/dsp-node exec napi universalize
+
+rm -f \
+  crates/dsp-node/*.darwin-arm64.node \
+  crates/dsp-node/*.darwin-x64.node
+
+lipo crates/dsp-node/heron-dsp-node.darwin-universal.node \
+  -verify_arch arm64 x86_64
+
+mkdir -p target/release
+lipo -create \
+  "target/$arm_target/release/heron-vst3-probe" \
+  "target/$x64_target/release/heron-vst3-probe" \
+  -output target/release/heron-vst3-probe
+lipo target/release/heron-vst3-probe -verify_arch arm64 x86_64
+
+for arm_bundle in "target/bundles/$arm_target"/*.vst3; do
+  bundle_name="$(basename "$arm_bundle")"
+  x64_bundle="target/bundles/$x64_target/$bundle_name"
+  universal_bundle="target/bundles/$bundle_name"
+  ditto "$arm_bundle" "$universal_bundle"
+
+  while IFS= read -r -d '' arm_binary; do
+    relative_path="${arm_binary#${arm_bundle}/}"
+    lipo -create \
+      "$arm_binary" \
+      "$x64_bundle/$relative_path" \
+      -output "$universal_bundle/$relative_path"
+    lipo "$universal_bundle/$relative_path" -verify_arch arm64 x86_64
+  done < <(find "$arm_bundle/Contents/MacOS" -type f -print0)
+done
+
+mise run js:desktop:build
+if [[ "${HERON_SIGN_MACOS:-false}" == "true" ]]; then
+  CSC_IDENTITY_AUTO_DISCOVERY=true \
+    pnpm --filter @heron/desktop exec electron-builder \
+      --config electron-builder.release.yml --universal
+  HERON_REQUIRE_DEVELOPER_ID_SIGNATURE=true \
+    HERON_REQUIRE_NOTARIZATION=true \
+    pnpm --filter @heron/desktop verify:package-security
+else
+  CSC_IDENTITY_AUTO_DISCOVERY=false \
+    pnpm --filter @heron/desktop exec electron-builder --publish never --universal
+  HERON_REQUIRE_DEVELOPER_ID_SIGNATURE=false \
+    HERON_REQUIRE_NOTARIZATION=false \
+    pnpm --filter @heron/desktop verify:package-security
+fi

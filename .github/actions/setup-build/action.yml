@@ -170,4 +170,4 @@ runs:
 
     - name: Install workspace dependencies
       shell: bash
-      run: pnpm install --frozen-lockfile --prefer-offline
+      run: mise run install

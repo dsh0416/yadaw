@@ -86,8 +86,8 @@ Use package-level scripts for narrower validation when appropriate:
 ```sh
 mise exec -- pnpm --filter @heron/desktop test:unit
 mise exec -- pnpm --filter @heron/project-db test:integration
-mise exec -- pnpm test:e2e
-mise exec -- pnpm check:rust
+mise exec -- mise run test:e2e
+mise exec -- cargo xtask test
 mise exec -- pnpm format:check
 mise exec -- pnpm lint
 ```

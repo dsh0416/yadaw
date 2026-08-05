@@ -7,7 +7,6 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "pnpm --workspace-root exec node scripts/native-build.ts debug",
     "dev": "node scripts/dev.ts",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:main": "vite build --config vite.main.config.ts",
@@ -20,9 +19,9 @@
     "test:vst3-editor": "node scripts/vst3-editor-smoke-launch.ts",
     "test:builtin-vst3": "node scripts/builtin-vst3-smoke.ts && node scripts/audio-benchmark-smoke.ts",
     "verify:package-security": "node scripts/verify-electron-security.ts",
-    "test:e2e": "pnpm predev && pnpm build && playwright test",
-    "pack": "pnpm --workspace-root build:native && pnpm build && electron-builder --dir --publish never",
-    "dist": "pnpm --workspace-root build:native && pnpm build && electron-builder --publish never"
+    "test:e2e": "pnpm build && playwright test",
+    "pack": "electron-builder --dir --publish never",
+    "dist": "electron-builder --publish never"
   },
   "dependencies": {
     "@electric-sql/pglite": "catalog:",

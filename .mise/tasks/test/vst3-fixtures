@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Build Steinberg VST3 fixtures and run host/editor smoke tests"
+#MISE depends=["native:debug"]
+set -euo pipefail
+
+cmake -S . -B target/vst3-fixtures -DHERON_BUILD_VST3_FIXTURES=ON
+cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again \
+  --config Debug --target again
+cmake --build \
+  target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth \
+  --config Debug --target note-expression-synth
+pnpm --filter @heron/desktop test:vst3-runtime
+pnpm --filter @heron/desktop test:vst3-editor

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#MISE hide=true
+#MISE depends=["install"]
+set -euo pipefail
+
+mise run version:check
+mise run js:format-check ::: rust:format:check ::: rust:clippy ::: js:check:configs
+pnpm lint:design
+
+target="$(cargo xtask host-target)"
+(
+  export CARGO_TARGET_DIR="$PWD/target-coverage"
+  eval "$(cargo llvm-cov show-env --sh --target "$target")"
+  cargo xtask coverage prepare
+  pnpm --filter @heron/dsp-node build:debug
+  pnpm lint:oxlint
+  pnpm lint:eslint
+  pnpm check:packages
+  pnpm test:coverage:js
+  pnpm test:native-bindings
+  cargo xtask coverage report
+)
+
+mise run rust:bench:check
+mise run js:design:test ::: js:design:build
