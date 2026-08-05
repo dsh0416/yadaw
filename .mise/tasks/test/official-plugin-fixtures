@@ -13,6 +13,10 @@ for fixture in "$VST3_AGAIN_FIXTURE" "$VST3_SYNTH_FIXTURE" "$CLAP_PLUGIN_FIXTURE
   fi
 done
 
+VST3_AGAIN_FIXTURE="$(realpath "$VST3_AGAIN_FIXTURE")"
+VST3_SYNTH_FIXTURE="$(realpath "$VST3_SYNTH_FIXTURE")"
+CLAP_PLUGIN_FIXTURE="$(realpath "$CLAP_PLUGIN_FIXTURE")"
+
 target="$(cargo xtask host-target)"
 cargo build --target "$target" -p heron-vst3-host --bin heron-vst3-probe
 cargo build --target "$target" -p heron-clap-host --bin heron-clap-probe
@@ -52,14 +56,14 @@ for plugin_id in com.github.free-audio.clap.synth com.github.free-audio.clap.gai
   fi
 done
 
-pnpm --filter @heron/desktop test:vst3-runtime -- \
+pnpm --filter @heron/desktop run test:vst3-runtime \
   "$VST3_AGAIN_FIXTURE" \
   "$VST3_SYNTH_FIXTURE" \
   "$again_id" \
   "$synth_id"
-pnpm --filter @heron/desktop test:clap-runtime -- "$CLAP_PLUGIN_FIXTURE"
+pnpm --filter @heron/desktop run test:clap-runtime "$CLAP_PLUGIN_FIXTURE"
 HERON_EDITOR_SMOKE_DELAY_MS=0 xvfb-run --auto-servernum \
-  pnpm --filter @heron/desktop test:vst3-editor -- \
+  pnpm --filter @heron/desktop run test:vst3-editor \
   "$VST3_SYNTH_FIXTURE" \
   "$synth_id" \
   instrument
