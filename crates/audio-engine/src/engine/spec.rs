@@ -61,9 +61,18 @@ pub struct NativeMixerChannel {
     pub input_monitoring: bool,
     pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
+    pub application_capture: Option<NativeApplicationCaptureTarget>,
     pub hardware_output_channels: Vec<u32>,
     pub midi_input_port_id: Option<String>,
     pub midi_input_channel: Option<u8>,
+}
+
+#[derive(Clone)]
+pub struct NativeApplicationCaptureTarget {
+    pub platform: String,
+    pub executable_path: String,
+    pub executable_name: String,
+    pub include_process_tree: bool,
 }
 
 #[derive(Clone)]
@@ -199,7 +208,8 @@ pub(super) fn plan_native_low_latency(native: &NativeMixerGraph) -> LowLatencyPl
                 output_bus: channel.output_bus,
                 monitored: channel.input_monitoring
                     && (channel.kind == "instrument"
-                        || channel.input_source.as_deref() == Some("hardware")),
+                        || channel.input_source.as_deref() == Some("hardware")
+                        || channel.input_source.as_deref() == Some("application")),
             })
             .collect::<Vec<_>>(),
         &native

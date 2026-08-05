@@ -10,6 +10,8 @@ export interface RecordingTrackSidecar {
   trackId: string
   trackName: string
   inputChannels: number[]
+  /** Source-level channel slots in the aggregate recording. Optional for old sidecars. */
+  recordingChannels?: number[]
   finalPath: string | null
   contentHash: string | null
   sampleRate: number | null

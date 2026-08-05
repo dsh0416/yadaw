@@ -54,6 +54,39 @@ pub struct AudioRuntime {
     pub buffer_fallback: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationCaptureLogicalTarget {
+    pub platform: String,
+    pub executable_path: String,
+    pub executable_name: String,
+    pub include_process_tree: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationCaptureTargetDescriptor {
+    pub runtime_id: String,
+    pub process_id: u32,
+    pub display_name: String,
+    pub executable_path: String,
+    pub logical_target: ApplicationCaptureLogicalTarget,
+    pub channel_count: u32,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ApplicationCaptureSnapshot {
+    pub runtime_id: String,
+    pub process_id: Option<u32>,
+    pub display_name: String,
+    pub executable_path: String,
+    pub logical_target: ApplicationCaptureLogicalTarget,
+    pub channel_count: u32,
+    pub status: String,
+    pub dropout_frames: u64,
+    pub overflow_frames: u64,
+    pub underflow_frames: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoundTripLatencyMeasurementRequest {
     pub input_channel: u32,

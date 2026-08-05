@@ -145,7 +145,7 @@ export class RecordingCommitter {
           originationDate: utc.date,
           originationTime: utc.time,
           timeReference: recording.startFrame,
-          channelIndices: track.inputChannels
+          channelIndices: track.recordingChannels ?? track.inputChannels
         })
         track.finalPath = finalPath
         track.contentHash = finalized.contentHash

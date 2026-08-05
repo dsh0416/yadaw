@@ -23,6 +23,8 @@ import type {
   AudioHostRuntimePreferences,
   AudioPreferences,
   AudioRuntimeSnapshot,
+  ApplicationCaptureSnapshot,
+  ApplicationCaptureTargetDescriptor,
   CompiledAudioGraphSnapshot,
   ProjectGraphSnapshot,
   MixerParameterPreview,
@@ -453,6 +455,14 @@ export class AudioHostService {
 
   listAudioDevices(backend: string): Promise<AudioDeviceList> {
     return this.audioTransport.listAudioDevices(backend)
+  }
+
+  listApplicationCaptureTargets(): Promise<ApplicationCaptureTargetDescriptor[]> {
+    return this.audioTransport.listApplicationCaptureTargets()
+  }
+
+  applicationCaptureSnapshot(): Promise<ApplicationCaptureSnapshot[]> {
+    return this.audioTransport.applicationCaptureSnapshot()
   }
 
   startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {

@@ -10,6 +10,8 @@ pub struct RecordingStartConfig {
     pub origination_date: String,
     pub origination_time: String,
     pub time_reference: i64,
+    pub sample_rate: u32,
+    pub channels: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -93,6 +93,7 @@ type InputFrame = [f32; MAX_INPUT_CHANNELS];
 /// not `Clone`; real-time callbacks only retain the narrow atomic/ring-buffer
 /// endpoints constructed while a stream is running.
 pub struct AudioEngine {
+    application_capture: crate::application_capture::ApplicationCaptureManager,
     runtime_transition: Mutex<()>,
     running: Mutex<Option<RunningAudioEngine>>,
     pending_mixer: Mutex<Option<Box<NativeMixerRuntime>>>,
@@ -105,6 +106,7 @@ impl AudioEngine {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            application_capture: crate::application_capture::global_manager().clone(),
             runtime_transition: Mutex::new(()),
             running: Mutex::new(None),
             pending_mixer: Mutex::new(None),
@@ -112,6 +114,20 @@ impl AudioEngine {
             compiled_graph_snapshots: Mutex::new(BTreeMap::new()),
             next_build_generation: AtomicU64::new(1),
         }
+    }
+
+    #[must_use]
+    pub fn list_application_capture_targets(
+        &self,
+    ) -> Vec<crate::application_capture::ApplicationCaptureTargetDescriptor> {
+        self.application_capture.enumerate_targets()
+    }
+
+    #[must_use]
+    pub fn application_capture_snapshot(
+        &self,
+    ) -> Vec<crate::application_capture::ApplicationCaptureSnapshot> {
+        self.application_capture.snapshot()
     }
 }
 
@@ -202,12 +218,12 @@ pub use clip_decode::decode_clip_audio;
 pub use metering::TransportClockHandle;
 pub use publication::{CompiledGraphBuild, GraphBuildInput, PublishOutcome, compile_graph_build};
 pub use spec::{
-    NativeAudioEngineConfig, NativeAudioRuntimeSnapshot, NativeLatencyPolicy, NativeMidiClip,
-    NativeMidiEvent, NativeMidiEventKind, NativeMidiNote, NativeMixerChannel,
-    NativeMixerChannelMeter, NativeMixerClip, NativeMixerGraph, NativeMixerParameterPreview,
-    NativeMixerSend, NativeMixerSnapshot, NativePluginAuxInputBus, NativePluginInstance,
-    NativeRoundTripLatencyMeasurementRequest, NativeRoundTripLatencyMeasurementSnapshot,
-    NativeTransportSnapshot,
+    NativeApplicationCaptureTarget, NativeAudioEngineConfig, NativeAudioRuntimeSnapshot,
+    NativeLatencyPolicy, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind, NativeMidiNote,
+    NativeMixerChannel, NativeMixerChannelMeter, NativeMixerClip, NativeMixerGraph,
+    NativeMixerParameterPreview, NativeMixerSend, NativeMixerSnapshot, NativePluginAuxInputBus,
+    NativePluginInstance, NativeRoundTripLatencyMeasurementRequest,
+    NativeRoundTripLatencyMeasurementSnapshot, NativeTransportSnapshot,
 };
 
 #[cfg(test)]

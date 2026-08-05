@@ -115,6 +115,13 @@ function unavailableError(meta: RpcRequestMeta, dispatched: boolean): RpcError {
   }
 }
 
+function isGraphCommandError(error: unknown): error is Error {
+  if (!(error instanceof Error)) return false
+  return /(?:was not found|require a valid .* input|must reference|must target|cannot be)/i.test(
+    error.message
+  )
+}
+
 export class ProjectCommandService {
   private lifecycle: LifecycleCoordinator | null = null
   private operations: OperationService | null = null
@@ -357,11 +364,21 @@ export class ProjectCommandService {
         await this.projects.abortProjectCommand(workerPrepared.token).catch(() => undefined)
       }
       if (nativePrepared) await this.graphs.abortMutation(nativePrepared).catch(() => undefined)
-      const failure = rpcFailure(meta, unavailableError(meta, commitDispatched))
-      console.error(
-        `[project-command] ${failure.error.correlationId} command transaction failed`,
-        error
+      const graphError = !commitDispatched && isGraphCommandError(error)
+      const failure = rpcFailure(
+        meta,
+        graphError
+          ? validationError(meta, "projectGraph")
+          : unavailableError(meta, commitDispatched)
       )
+      if (graphError) {
+        console.warn(`[project-command] ${failure.error.correlationId} command rejected`, error)
+      } else {
+        console.error(
+          `[project-command] ${failure.error.correlationId} command transaction failed`,
+          error
+        )
+      }
       this.finish(meta, commitDispatched ? "quarantined" : "not-committed", failure)
       return failure
     }

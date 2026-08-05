@@ -441,6 +441,7 @@ fn stable_id_patch_matches_the_equivalent_full_graph() {
         midi_input_channel: None,
         input_source: None,
         input_channels: vec![],
+        application_capture: None,
         hardware_output_channels: vec![0, 1],
     };
     let mut patched = LiveMixerGraph {
@@ -481,6 +482,7 @@ fn stable_id_patch_matches_the_equivalent_full_graph() {
         midi_input_channel: None,
         input_source: Some("hardware".into()),
         input_channels: vec![],
+        application_capture: None,
         hardware_output_channels: vec![],
     };
     patched.apply_ops(vec![
@@ -534,6 +536,7 @@ fn channel(id: &str) -> LiveMixerChannel {
         midi_input_channel: None,
         input_source: None,
         input_channels: vec![],
+        application_capture: None,
         hardware_output_channels: vec![],
     }
 }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
+import { createPinia } from "pinia"
 import type { MixerChannelState } from "@heron/contracts"
 import MixerInputSection from "./MixerInputSection.vue"
+
+const pinia = createPinia()
 
 const channel: MixerChannelState = {
   id: "audio",
@@ -42,7 +45,8 @@ describe("MixerInputSection", () => {
         instrument: null,
         pluginRuntime: {},
         instrumentPlugins: []
-      }
+      },
+      global: { plugins: [pinia] }
     })
 
     const select = wrapper.get('button[aria-label="Audio 1 input channel"]')
@@ -64,7 +68,8 @@ describe("MixerInputSection", () => {
         instrument: null,
         pluginRuntime: {},
         instrumentPlugins: []
-      }
+      },
+      global: { plugins: [pinia] }
     })
 
     expect(wrapper.find("select").exists()).toBe(false)

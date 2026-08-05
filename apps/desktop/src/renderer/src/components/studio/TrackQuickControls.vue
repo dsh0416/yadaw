@@ -9,8 +9,6 @@ import TrackGainControl from "./TrackGainControl.vue"
 import TrackPanControl from "./TrackPanControl.vue"
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { storeToRefs } from "pinia"
-import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
 const { t } = useI18n()
 
@@ -24,19 +22,23 @@ const emit = defineEmits<{
   updateChannel: [channelId: string, patch: MixerChannelPatch]
 }>()
 
-const settingsStore = useApplicationSettingsStore()
-const { settings } = storeToRefs(settingsStore)
 const supportsRecording = computed(
   () =>
     props.channel.kind === "audio" ||
     (props.channel.kind === "instrument" && props.channel.systemRole === null)
 )
+const supportsMonitoring = computed(
+  () =>
+    props.channel.kind === "audio" ||
+    props.channel.kind === "aux" ||
+    (props.channel.kind === "instrument" && props.channel.systemRole === null)
+)
 const monitoringAvailable = computed(
   () =>
     (props.channel.kind === "instrument" && props.channel.systemRole === null) ||
-    (settings.value?.softwareMonitoringEnabled === true &&
-      props.channel.kind === "audio" &&
-      props.channel.inputSource === "hardware")
+    ((props.channel.kind === "audio" || props.channel.kind === "aux") &&
+      (props.channel.inputSource === "hardware" ||
+        (props.channel.inputSource === "application" && props.channel.applicationCapture != null)))
 )
 const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
 
@@ -84,7 +86,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       R
     </button>
     <button
-      v-if="supportsRecording"
+      v-if="supportsMonitoring"
       :class="['monitor', { active: monitoringActive }]"
       :aria-label="t('studio.trackControls.monitorAria', { name: channel.name })"
       :aria-pressed="channel.inputMonitoring"

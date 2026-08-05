@@ -3,6 +3,8 @@ import type { AudioHostRuntime } from "@heron/dsp-node"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
+  ApplicationCaptureSnapshot,
+  ApplicationCaptureTargetDescriptor,
   AudioPreferences,
   AudioRuntimeSnapshot,
   CompiledAudioGraphSnapshot,
@@ -14,7 +16,25 @@ import type {
   TransportSnapshot
 } from "@heron/contracts"
 import { stableRuntimeHandle } from "./wire"
-import type { AudioHostDevice, ControlResponse, TelemetryWire } from "./wire"
+import type {
+  AudioHostApplicationCaptureSnapshot,
+  AudioHostApplicationCaptureTarget,
+  AudioHostDevice,
+  ControlResponse,
+  TelemetryWire
+} from "./wire"
+
+function normalizeApplicationCaptureStatus(value: string): ApplicationCaptureSnapshot["status"] {
+  return value === "capturing" ||
+    value === "no-stream" ||
+    value === "target-missing" ||
+    value === "ambiguous-target" ||
+    value === "target-exited" ||
+    value === "unsupported" ||
+    value === "error"
+    ? value
+    : "inactive"
+}
 
 export class AudioHostTransportClient {
   private lastAudioPreferences: AudioPreferences | null = null
@@ -92,6 +112,51 @@ export class AudioHostTransportClient {
       inputs: response.result.devices.inputs.map(convert),
       outputs: response.result.devices.outputs.map(convert)
     }
+  }
+
+  async listApplicationCaptureTargets(): Promise<ApplicationCaptureTargetDescriptor[]> {
+    const response = await this.request({ type: "list-application-capture-targets" })
+    if (response.result.type !== "application-capture-targets") {
+      throw new Error("audio host returned an invalid application capture target response")
+    }
+    return (response.result.targets ?? []).map((target: AudioHostApplicationCaptureTarget) => ({
+      runtimeId: target.runtime_id,
+      processId: target.process_id,
+      displayName: target.display_name,
+      executablePath: target.executable_path,
+      logicalTarget: {
+        platform: "windows",
+        executablePath: target.logical_target.executable_path,
+        executableName: target.logical_target.executable_name,
+        includeProcessTree: target.logical_target.include_process_tree
+      },
+      channelCount: target.channel_count,
+      status: normalizeApplicationCaptureStatus(target.status)
+    }))
+  }
+
+  async applicationCaptureSnapshot(): Promise<ApplicationCaptureSnapshot[]> {
+    const response = await this.request({ type: "application-capture-snapshot" })
+    if (response.result.type !== "application-captures") {
+      throw new Error("audio host returned an invalid application capture snapshot response")
+    }
+    return (response.result.captures ?? []).map((capture: AudioHostApplicationCaptureSnapshot) => ({
+      runtimeId: capture.runtime_id,
+      processId: capture.process_id,
+      displayName: capture.display_name,
+      executablePath: capture.executable_path,
+      logicalTarget: {
+        platform: "windows",
+        executablePath: capture.logical_target.executable_path,
+        executableName: capture.logical_target.executable_name,
+        includeProcessTree: capture.logical_target.include_process_tree
+      },
+      channelCount: capture.channel_count,
+      status: normalizeApplicationCaptureStatus(capture.status),
+      dropoutFrames: capture.dropout_frames,
+      overflowFrames: capture.overflow_frames,
+      underflowFrames: capture.underflow_frames
+    }))
   }
 
   async startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {

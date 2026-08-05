@@ -15,7 +15,7 @@ export const DEFAULT_PROJECT_END_TICK = 61_440
 
 export type MixerChannelKind = "audio" | "instrument" | "aux" | "master" | "output"
 export type MixerSystemRole = "metronome"
-export type MixerInputSource = "hardware" | "bus"
+export type MixerInputSource = "hardware" | "bus" | "application"
 export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post" | "post-pan"
 
@@ -28,6 +28,8 @@ export interface MixerChannelState {
   sortOrder: number
   inputSource: MixerInputSource | null
   inputFormat: MixerInputFormat | null
+  /** Logical identity of the application captured by an application input. */
+  applicationCapture?: ApplicationCaptureTarget | null
   /** Present only for ordinary Instrument tracks. */
   midiInput?: MidiInputRoute | null
   gainDb: number
@@ -40,6 +42,13 @@ export interface MixerChannelState {
   inputMonitoring: boolean
   inputChannels: number[]
   hardwareOutputChannels: number[]
+}
+
+export interface ApplicationCaptureTarget {
+  platform: "windows"
+  executablePath: string
+  executableName: string
+  includeProcessTree: boolean
 }
 
 export interface MixerBusState {
@@ -113,6 +122,7 @@ export type MixerChannelPatch = Partial<
     | "sortOrder"
     | "inputSource"
     | "inputFormat"
+    | "applicationCapture"
     | "midiInput"
     | "gainDb"
     | "pan"
@@ -131,6 +141,7 @@ export type CompiledAudioGraphSignalWidth = "mono" | "stereo"
 export type CompiledAudioGraphPluginState = "active" | "bypassed" | "unavailable"
 export type CompiledAudioGraphNodeKind =
   | "hardware-input"
+  | "application-input"
   | "bus-input"
   | "timeline-input"
   | "instrument-input"

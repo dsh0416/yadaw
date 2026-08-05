@@ -45,12 +45,13 @@ export class RecordingCaptureCoordinator {
     const runtime = deterministicTestCapture
       ? {
           state: "running" as const,
-          inputSampleRate: 48_000
+          inputSampleRate: 48_000,
+          sampleRate: 48_000
         }
       : await this.audioHost?.audioEngineSnapshot()
     if (
       !runtime ||
-      (!deterministicTestCapture && (runtime.state !== "running" || !runtime.inputSampleRate))
+      (!deterministicTestCapture && (runtime.state !== "running" || !runtime.sampleRate))
     ) {
       throw new Error("Start the audio engine before recording")
     }
@@ -76,6 +77,17 @@ export class RecordingCaptureCoordinator {
     const startFrame = transportBeforeRecording.positionFrames
     const startTick = Math.max(0, Math.floor(transportBeforeRecording.positionTicks ?? 0))
     const hasAudio = audioTargets.length > 0
+    let nextRecordingChannel = 1
+    const recordingLayouts = audioTargets.map((channel) => {
+      const width = Math.min(2, Math.max(1, channel.inputChannels.length))
+      const recordingChannels = Array.from(
+        { length: width },
+        (_, index) => nextRecordingChannel + index
+      )
+      nextRecordingChannel += width
+      return recordingChannels
+    })
+    const recordingChannelCount = nextRecordingChannel - 1
     const partialPath = hasAudio
       ? join(applicationSettings.swapDirectory, `${id}.partial.bwf`)
       : join(applicationSettings.swapDirectory, `${id}.midi-only`)
@@ -105,8 +117,8 @@ export class RecordingCaptureCoordinator {
       audioPath: partialPath,
       sidecarPath,
       projectPath: project.path,
-      sampleRate: deterministicTestCapture ? 48_000 : runtime.inputSampleRate!,
-      channels: hasAudio ? 2 : 0,
+      sampleRate: deterministicTestCapture ? 48_000 : runtime.sampleRate!,
+      channels: hasAudio ? recordingChannelCount : 0,
       startedAt,
       dropoutFrames: 0,
       assetExists: false,
@@ -126,6 +138,7 @@ export class RecordingCaptureCoordinator {
         trackId: track.id,
         trackName: track.name,
         inputChannels: [...track.inputChannels],
+        recordingChannels: recordingLayouts[index],
         finalPath: null,
         contentHash: null,
         sampleRate: null,
@@ -146,7 +159,9 @@ export class RecordingCaptureCoordinator {
           originationTime: utc.time,
           timeReference: Math.round(
             (startFrame * sidecar.sampleRate) / project.configuration.sampleRate
-          )
+          ),
+          sampleRate: sidecar.sampleRate,
+          channels: sidecar.channels
         })
       }
       if (!deterministicTestCapture && midiTakes.length > 0) {

@@ -297,6 +297,8 @@ fn streaming_clip_prefetches_and_restarts_after_a_seek_generation() {
             origination_date: "2026-07-24".to_owned(),
             origination_time: "12:00:00".to_owned(),
             time_reference: 0,
+            sample_rate: 48_000,
+            channels: 2,
         },
         48_000,
         4_800,
@@ -382,7 +384,7 @@ fn render_block_rejects_mismatched_buffers_and_silence_when_stopped() {
     let mut runtime = transport_test_runtime(48_000, 1_000, 0, TRANSPORT_STOPPED);
     let inputs = vec![[0.5; MAX_INPUT_CHANNELS]; 8];
     let mut outputs = vec![[0.25; MAX_OUTPUT_CHANNELS]; 4];
-    assert!(runtime.render_block(&inputs, &mut outputs, None));
+    assert!(runtime.render_block(&inputs, &mut outputs, None, None));
     assert!(
         outputs
             .iter()
@@ -391,7 +393,7 @@ fn render_block_rejects_mismatched_buffers_and_silence_when_stopped() {
 
     let inputs = vec![[0.5; MAX_INPUT_CHANNELS]; 16];
     let mut outputs = vec![[0.25; MAX_OUTPUT_CHANNELS]; 16];
-    assert!(!runtime.render_block(&inputs, &mut outputs, None));
+    assert!(!runtime.render_block(&inputs, &mut outputs, None, None));
     assert!(
         outputs
             .iter()

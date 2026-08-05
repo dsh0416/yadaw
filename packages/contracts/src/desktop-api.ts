@@ -10,6 +10,8 @@ import type {
 import type {
   AudioBackend,
   AudioBackendDescriptor,
+  ApplicationCaptureSnapshot,
+  ApplicationCaptureTargetDescriptor,
   AudioDeviceList,
   AudioEngineSessionSnapshot,
   AudioEngineStopSnapshot,
@@ -89,6 +91,8 @@ export const IPC_CHANNELS = {
   processGain: "engine:process-gain",
   audioBackends: "audio:list-backends",
   audioDevices: "audio:list-devices",
+  applicationCaptureTargets: "audio:list-application-capture-targets",
+  applicationCaptureSnapshot: "audio:application-capture-snapshot",
   audioStart: "audio:start",
   audioStop: "audio:stop",
   audioSnapshot: "audio:snapshot",
@@ -171,6 +175,10 @@ export interface HeronDesktopApi {
   ): Promise<RpcResult<ProcessGainResult>>
   listAudioBackends(meta: RpcRequestMeta): Promise<RpcResult<AudioBackendDescriptor[]>>
   listAudioDevices(meta: RpcRequestMeta, backend: AudioBackend): Promise<RpcResult<AudioDeviceList>>
+  listApplicationCaptureTargets(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<ApplicationCaptureTargetDescriptor[]>>
+  applicationCaptureSnapshot(meta: RpcRequestMeta): Promise<RpcResult<ApplicationCaptureSnapshot[]>>
   startAudioEngine(
     meta: RpcRequestMeta,
     preferences: AudioPreferences

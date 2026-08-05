@@ -26,7 +26,10 @@ pub(in crate::runtime) fn is_vst3_command(command: &ControlCommand) -> bool {
 pub(in crate::runtime) fn is_background_io_command(command: &ControlCommand) -> bool {
     matches!(
         command,
-        ControlCommand::ListAudioBackends | ControlCommand::ListAudioDevices { .. }
+        ControlCommand::ListAudioBackends
+            | ControlCommand::ListAudioDevices { .. }
+            | ControlCommand::ListApplicationCaptureTargets
+            | ControlCommand::ApplicationCaptureSnapshot
     )
 }
 

@@ -1,9 +1,10 @@
 use super::{
     BlockMidiEvent, ChannelPeak, ClipSamples, CountInState, EngineCommand, HardwareOutputFrame,
     InputFrame, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES, MUSICAL_TICKS_PER_QUARTER,
-    NativeMixerRuntime, Ordering, ProcessContext, RealtimeParameter, ScheduledMidiEvent,
-    ScheduledMidiEventKind, SignalWidth, StereoFrame, TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING,
-    TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING, TimeSignatureEvent, TransportAction,
+    NativeMixerRuntime, Ordering, ProcessContext, RealtimeParameter, RecordingTap,
+    ScheduledMidiEvent, ScheduledMidiEventKind, SignalWidth, StereoFrame, TRANSPORT_COUNTING_IN,
+    TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
+    TimeSignatureEvent, TransportAction,
 };
 
 impl NativeMixerRuntime {
@@ -12,6 +13,7 @@ impl NativeMixerRuntime {
         inputs: &[InputFrame],
         outputs: &mut [HardwareOutputFrame],
         mut midi_input: Option<&mut crate::midi_input::RealtimeMidiConsumer>,
+        mut recording_tap: Option<&mut RecordingTap>,
     ) -> bool {
         if inputs.len() != outputs.len() || outputs.len() > MAX_PLUGIN_BLOCK_FRAMES {
             outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);
@@ -28,6 +30,11 @@ impl NativeMixerRuntime {
             self.live_midi_events.clear();
         }
         let has_monitor = self.monitor_input_routes.iter().any(Option::is_some)
+            || self
+                .external_source_monitoring
+                .iter()
+                .any(|monitoring| *monitoring)
+            || self.application_captures.iter().any(Option::is_some)
             || self
                 .live_midi_routes
                 .iter()
@@ -108,6 +115,7 @@ impl NativeMixerRuntime {
                 state,
                 offset,
                 midi_input.as_deref_mut(),
+                recording_tap.as_deref_mut(),
             );
             offset = end;
             if counting_in {
@@ -161,6 +169,7 @@ impl NativeMixerRuntime {
         stream_underrun
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_segment(
         &mut self,
         inputs: &[InputFrame],
@@ -169,17 +178,54 @@ impl NativeMixerRuntime {
         state: u32,
         block_offset: usize,
         midi_input: Option<&mut crate::midi_input::RealtimeMidiConsumer>,
+        recording_tap: Option<&mut RecordingTap>,
     ) -> bool {
         let frame_count = outputs.len();
         let used_sources = self.channel_input_widths.len().saturating_mul(frame_count);
         self.channel_source_block[..used_sources].fill([0.0, 0.0]);
-        for (channel_index, route) in self.monitor_input_routes.iter().enumerate() {
+        for (channel_index, route) in self.source_input_routes.iter().enumerate() {
             if let Some([left, right]) = route {
                 let start = channel_index * frame_count;
                 for (frame, input) in inputs.iter().enumerate() {
                     self.channel_source_block[start + frame] = [input[*left], input[*right]];
                 }
             }
+        }
+        for (channel_index, capture) in self.application_captures.iter_mut().enumerate() {
+            let Some(capture) = capture else { continue };
+            let start = channel_index * frame_count;
+            for frame in 0..frame_count {
+                self.channel_source_block[start + frame] =
+                    capture.pop_frame().unwrap_or_else(|| {
+                        capture
+                            .counters
+                            .underflow_frames
+                            .fetch_add(1, Ordering::Relaxed);
+                        [0.0, 0.0]
+                    });
+            }
+        }
+
+        if let Some(recording_tap) = recording_tap {
+            for frame in 0..frame_count {
+                let mut recording_frame = [0.0_f32; super::MAX_INPUT_CHANNELS];
+                for (channel_index, route) in self.recording_routes.iter().enumerate() {
+                    let Some((slot, width)) = route else { continue };
+                    let source = self.channel_source_block[channel_index * frame_count + frame];
+                    recording_frame[*slot] = source[0];
+                    if *width == 2 {
+                        recording_frame[*slot + 1] = source[1];
+                    }
+                }
+                recording_tap.push(&recording_frame[..self.recording_channel_count]);
+            }
+        }
+        for (channel_index, monitoring) in self.external_source_monitoring.iter().enumerate() {
+            if *monitoring {
+                continue;
+            }
+            let start = channel_index * frame_count;
+            self.channel_source_block[start..start + frame_count].fill([0.0, 0.0]);
         }
 
         let mut stream_underrun = false;

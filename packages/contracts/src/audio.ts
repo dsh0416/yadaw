@@ -14,6 +14,46 @@ export interface AudioBackendDescriptor {
   available: boolean
 }
 
+export type ApplicationCaptureStatus =
+  | "inactive"
+  | "capturing"
+  | "no-stream"
+  | "target-missing"
+  | "ambiguous-target"
+  | "target-exited"
+  | "unsupported"
+  | "error"
+
+export interface ApplicationCaptureLogicalTarget {
+  platform: "windows"
+  executablePath: string
+  executableName: string
+  includeProcessTree: boolean
+}
+
+export interface ApplicationCaptureTargetDescriptor {
+  runtimeId: string
+  processId: number
+  displayName: string
+  executablePath: string
+  logicalTarget: ApplicationCaptureLogicalTarget
+  channelCount: number
+  status: ApplicationCaptureStatus
+}
+
+export interface ApplicationCaptureSnapshot {
+  runtimeId: string
+  processId: number | null
+  displayName: string
+  executablePath: string
+  logicalTarget: ApplicationCaptureLogicalTarget
+  channelCount: number
+  status: ApplicationCaptureStatus
+  dropoutFrames: number
+  overflowFrames: number
+  underflowFrames: number
+}
+
 export interface AudioDeviceDescriptor {
   id: string
   name: string

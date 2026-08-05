@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, onBeforeUnmount, onMounted } from "vue"
 import { useI18n } from "vue-i18n"
 import { UiCascadingSelect, type UiCascadingSelectGroup } from "@heron/ui"
-import type { MixerChannelPatch, MixerInputSource } from "@heron/contracts"
+import type {
+  ApplicationCaptureTarget,
+  MixerChannelPatch,
+  MixerInputSource
+} from "@heron/contracts"
 import { MIXER_BUS_COUNT } from "@heron/contracts"
 import ChannelFormatIcon from "../studio/ChannelFormatIcon.vue"
+import { useApplicationCaptureStore } from "../../stores/applicationCapture"
 
 const props = withDefaults(
   defineProps<{
@@ -12,12 +17,14 @@ const props = withDefaults(
     inputSource: MixerInputSource
     inputFormat: "mono" | "stereo"
     inputChannels: number[]
+    applicationCapture?: ApplicationCaptureTarget | null
     hardwareInputCount?: number
     busCount?: number
   }>(),
   {
     hardwareInputCount: 32,
-    busCount: MIXER_BUS_COUNT
+    busCount: MIXER_BUS_COUNT,
+    applicationCapture: null
   }
 )
 
@@ -26,11 +33,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const applicationCaptureStore = useApplicationCaptureStore()
 
 const isStereo = computed(() => props.inputFormat === "stereo")
 
 function inputCount(source: MixerInputSource): number {
-  return source === "hardware" ? props.hardwareInputCount : props.busCount
+  if (source === "hardware") return props.hardwareInputCount
+  if (source === "bus") return props.busCount
+  return 2
 }
 
 function clampInput(source: MixerInputSource, channel: number): number {
@@ -50,6 +60,9 @@ const selectedInput = computed(() => {
   const selected = isStereo.value
     ? adjacentPair(props.inputSource, channel)[0]
     : clampInput(props.inputSource, channel)
+  if (props.inputSource === "application") {
+    return `application:${props.applicationCapture?.executablePath ?? ""}`
+  }
   return `${props.inputSource}:${selected}`
 })
 
@@ -57,6 +70,23 @@ function sourceOptions(source: MixerInputSource) {
   const count = inputCount(source)
   const prefix =
     source === "hardware" ? t("mixer.inputCapsule.inPrefix") : t("mixer.inputCapsule.busPrefix")
+  if (source === "application") {
+    const options = applicationCaptureStore.targets.map((target) => ({
+      value: `${source}:${target.executablePath}`,
+      label: `${target.displayName} (${target.channelCount > 1 ? t("mixer.inputCapsule.stereo") : t("mixer.inputCapsule.mono")})`
+    }))
+    const currentTarget = props.applicationCapture
+    if (
+      currentTarget &&
+      !options.some((option) => option.value === `${source}:${currentTarget.executablePath}`)
+    ) {
+      options.push({
+        value: `${source}:${currentTarget.executablePath}`,
+        label: `${currentTarget.executableName} (${t("mixer.inputCapsule.targetMissing")})`
+      })
+    }
+    return options
+  }
   if (isStereo.value) {
     return Array.from({ length: Math.floor(count / 2) }, (_, index) => {
       const first = index * 2 + 1
@@ -79,20 +109,42 @@ function sourceOptions(source: MixerInputSource) {
 const inputGroups = computed<readonly UiCascadingSelectGroup[]>(() => {
   return [
     { label: t("mixer.inputCapsule.hardwareInputs"), options: sourceOptions("hardware") },
-    { label: t("mixer.inputCapsule.buses"), options: sourceOptions("bus") }
+    { label: t("mixer.inputCapsule.buses"), options: sourceOptions("bus") },
+    { label: t("mixer.inputCapsule.applications"), options: sourceOptions("application") }
   ]
 })
 
 function selectInput(value: string): void {
-  const [sourceValue, channelValue] = value.split(":")
+  const separator = value.indexOf(":")
+  const sourceValue = separator === -1 ? value : value.slice(0, separator)
+  const channelValue = separator === -1 ? "1" : value.slice(separator + 1)
+  if (sourceValue === "application") {
+    const target = applicationCaptureStore.targets.find(
+      (candidate) => candidate.executablePath === channelValue
+    )
+    if (!target) return
+    emit("update", {
+      inputSource: "application",
+      inputFormat: target.channelCount > 1 ? "stereo" : "mono",
+      inputChannels: target.channelCount > 1 ? [1, 2] : [1],
+      applicationCapture: target.logicalTarget
+    })
+    return
+  }
   const inputSource: MixerInputSource = sourceValue === "bus" ? "bus" : "hardware"
   const channel = clampInput(inputSource, Number(channelValue))
   emit("update", {
     inputSource,
     inputFormat: props.inputFormat,
-    inputChannels: isStereo.value ? adjacentPair(inputSource, channel) : [channel]
+    inputChannels: isStereo.value ? adjacentPair(inputSource, channel) : [channel],
+    ...(props.inputSource === "application" || props.applicationCapture != null
+      ? { applicationCapture: null }
+      : {})
   })
 }
+
+onMounted(() => applicationCaptureStore.startPolling())
+onBeforeUnmount(() => applicationCaptureStore.stopPolling())
 
 function toggleStereo(): void {
   const channel = props.inputChannels[0] ?? 1
@@ -102,7 +154,10 @@ function toggleStereo(): void {
     inputFormat: nextIsStereo ? "stereo" : "mono",
     inputChannels: nextIsStereo
       ? adjacentPair(props.inputSource, channel)
-      : [clampInput(props.inputSource, channel)]
+      : [clampInput(props.inputSource, channel)],
+    ...(props.inputSource === "application"
+      ? { applicationCapture: props.applicationCapture ?? null }
+      : {})
   })
 }
 </script>

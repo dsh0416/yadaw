@@ -271,6 +271,8 @@ export function createContext(
       configurationRestarting: false,
       listAudioBackends: vi.fn(async () => ["mock"]),
       listAudioDevices: vi.fn(async () => ({ inputs: [], outputs: [] })),
+      listApplicationCaptureTargets: vi.fn(async () => []),
+      applicationCaptureSnapshot: vi.fn(async () => []),
       startAudioEngine: vi.fn(),
       stopAudioEngine: vi.fn(),
       audioEngineSnapshot: vi.fn(),

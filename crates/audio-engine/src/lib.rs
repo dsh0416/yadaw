@@ -44,6 +44,7 @@ pub type EngineResult<T> = Result<T, EngineError>;
 pub type HostError = EngineError;
 pub type HostResult<T> = EngineResult<T>;
 
+pub mod application_capture;
 pub mod device;
 pub mod midi_input;
 pub mod midi_recording;

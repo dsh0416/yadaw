@@ -3,6 +3,25 @@ import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import type { ControlResponse } from "./wire"
 
 describe("AudioHostRecordingClient MIDI recording", () => {
+  it("starts audio recording with the graph capture format", async () => {
+    const request = vi.fn(async () => ({ result: { type: "accepted" } }) as ControlResponse)
+    const client = new AudioHostRecordingClient(request)
+    await client.startRecording({
+      path: "/swap/take.bwf",
+      assetId: "asset-1",
+      originator: "Heron",
+      originationDate: "2026-08-05",
+      originationTime: "12:00:00",
+      timeReference: 0,
+      sampleRate: 48_000,
+      channels: 4
+    })
+    expect(request).toHaveBeenCalledWith({
+      type: "start-recording",
+      config: expect.objectContaining({ sample_rate: 48_000, channels: 4 })
+    })
+  })
+
   it("starts MIDI recording with snake_case wire fields", async () => {
     const request = vi.fn(async () => ({ result: { type: "accepted" } }) as ControlResponse)
     const client = new AudioHostRecordingClient(request)

@@ -161,6 +161,11 @@ fn runtime_for(scenario: RenderScenario) -> Box<NativeMixerRuntime> {
         input_peaks,
         input_meter_routes: vec![None; scenario.tracks + 2],
         monitor_input_routes: vec![None; scenario.tracks + 2],
+        source_input_routes: vec![None; scenario.tracks + 2],
+        recording_routes: vec![None; scenario.tracks + 2],
+        recording_channel_count: 0,
+        external_source_monitoring: vec![false; scenario.tracks + 2],
+        application_captures: (0..scenario.tracks + 2).map(|_| None).collect(),
         input_peak_scratch: [0.0; super::MAX_INPUT_CHANNELS],
         meter_frame_clock: 0,
     })
@@ -194,6 +199,7 @@ impl RenderHarness {
                 &self.inputs[..block_frames],
                 &mut self.outputs[..block_frames],
                 None,
+                None,
             );
             debug_assert!(!underrun);
             let frame = self.outputs[block_frames - 1];
@@ -205,6 +211,8 @@ impl RenderHarness {
 
     pub fn enable_stopped_monitoring(&mut self) {
         self.runtime.monitor_input_routes[0] = Some([0, 1]);
+        self.runtime.source_input_routes[0] = Some([0, 1]);
+        self.runtime.external_source_monitoring[0] = true;
         self.runtime
             .transport
             .state
@@ -222,6 +230,7 @@ impl RenderHarness {
             let underrun = self.runtime.render_block(
                 &self.inputs[..block_frames],
                 &mut self.outputs[..block_frames],
+                None,
                 None,
             );
             debug_assert!(!underrun);

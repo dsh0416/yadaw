@@ -1111,7 +1111,7 @@
       "armAria": "预备录音 {name}",
       "monitorAria": "监听 {name}",
       "inputMonitoring": "输入监听",
-      "inputMonitoringDisabled": "请先启用软件监听并选择硬件输入"
+      "inputMonitoringDisabled": "请先选择硬件或应用输入"
     },
     "soundBrowser": {
       "eyebrow": "资料库",
@@ -1289,7 +1289,7 @@
       "recordEnable": "录音启用",
       "monitor": "监听 {name}",
       "inputMonitoring": "输入监听",
-      "inputMonitoringDisabled": "请先启用软件监听并选择硬件输入",
+      "inputMonitoringDisabled": "请先选择硬件或应用输入",
       "mute": "静音 {name}",
       "solo": "独奏 {name}"
     },
@@ -1380,6 +1380,10 @@
       "linkStereoTitle": "链接相邻输入为立体声",
       "hardwareInputs": "硬件输入",
       "buses": "总线",
+      "applications": "应用程序",
+      "mono": "单声道",
+      "stereo": "立体声",
+      "targetMissing": "目标不存在",
       "inPrefix": "输入",
       "busPrefix": "总线"
     },

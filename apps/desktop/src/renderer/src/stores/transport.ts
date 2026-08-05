@@ -1,6 +1,6 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
-import { computed, shallowRef } from "vue"
+import { computed, shallowRef, watch } from "vue"
 import {
   DEFAULT_PROJECT_END_TICK,
   type TransportLoopRange,
@@ -128,6 +128,15 @@ export const useTransportStore = defineStore("transport", () => {
       MINIMUM_TIMELINE_SECONDS,
       Math.max(projectEndSeconds.value, contentEndSeconds.value) + TIMELINE_TAIL_SECONDS
     )
+  )
+
+  watch(
+    () => mixerStore.graph.audioClips,
+    (clips) => {
+      if (selectedClipId.value && !clips.some((clip) => clip.id === selectedClipId.value)) {
+        selectedClipId.value = null
+      }
+    }
   )
   const canPlay = computed(() => projectEndSeconds.value > 0)
 

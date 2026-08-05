@@ -1,7 +1,7 @@
 use super::{
     Arc, AudioEngine, Consumer, EngineCommand, Error, HeapCons, HeapProd, InputPeakBank, MeterBank,
-    NativeMixerRuntime, Ordering, RecorderController, Result, RoundTripLatencyMeasurement,
-    RuntimeMetrics, Status, Stream, TransportShared,
+    NativeMixerRuntime, Ordering, RecorderController, RecordingTap, Result,
+    RoundTripLatencyMeasurement, RuntimeMetrics, Status, Stream, TransportShared,
 };
 
 pub(super) struct RunningAudioEngine {
@@ -28,6 +28,7 @@ pub(super) struct OutputStreamContext {
     pub(super) metrics: Arc<RuntimeMetrics>,
     pub(super) mixer_control: OutputMixerControl,
     pub(super) round_trip_latency: Arc<RoundTripLatencyMeasurement>,
+    pub(super) recording_tap: RecordingTap,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

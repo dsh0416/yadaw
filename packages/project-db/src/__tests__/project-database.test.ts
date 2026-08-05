@@ -458,6 +458,65 @@ describe("ProjectDatabase", () => {
     ).rejects.toThrow()
   })
 
+  it("round-trips application capture targets before enabling input monitoring", async () => {
+    const { database } = await createDatabase()
+    const target = {
+      platform: "windows" as const,
+      executablePath: "C:\\Program Files\\Steam\\steam.exe",
+      executableName: "steam.exe",
+      includeProcessTree: true
+    }
+
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: {
+          inputSource: "application",
+          inputFormat: "stereo",
+          inputChannels: [1, 2],
+          applicationCapture: target
+        }
+      },
+      "output-1-2"
+    )
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({ inputSource: "application", applicationCapture: target })
+
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: { inputMonitoring: true }
+      },
+      "output-1-2"
+    )
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({
+      inputSource: "application",
+      applicationCapture: target,
+      inputMonitoring: true
+    })
+
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: {
+          inputSource: "hardware",
+          inputFormat: "stereo",
+          inputChannels: [1, 2]
+        }
+      },
+      "output-1-2"
+    )
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({ inputSource: "hardware", applicationCapture: null })
+  })
+
   it.skip("does not backfill pre-baseline input monitoring state", async () => {
     const resource = await createDatabase()
     await resource.database.close()

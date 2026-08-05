@@ -1133,6 +1133,7 @@ mod tests {
             output_bus: None,
             record_armed: false,
             input_monitoring: false,
+            application_capture: None,
             midi_input_port_id: None,
             midi_input_port_name: None,
             midi_input_channel: None,

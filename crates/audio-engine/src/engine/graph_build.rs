@@ -10,6 +10,7 @@ use super::{
     clip_storage_policy, decode_clip_audio, fs, invalid_config, parse_channel_kind,
     plan_low_latency, spawn_streaming_clip,
 };
+use crate::application_capture::ApplicationCaptureLogicalTarget;
 
 #[path = "graph_build/clip_midi.rs"]
 mod clip_midi;
@@ -57,7 +58,8 @@ pub(super) fn build_mixer_runtime(
                     output_bus: channel.output_bus,
                     monitored: channel.input_monitoring
                         && (channel.kind == "instrument"
-                            || channel.input_source.as_deref() == Some("hardware")),
+                            || channel.input_source.as_deref() == Some("hardware")
+                            || channel.input_source.as_deref() == Some("application")),
                 })
                 .collect::<Vec<_>>(),
             &native
@@ -83,7 +85,64 @@ pub(super) fn build_mixer_runtime(
     let InputRoutes {
         meter: input_meter_routes,
         monitor: monitor_input_routes,
+        source: source_input_routes,
     } = build_input_routes(&native.channels)?;
+    let mut recording_channel_count = 0_usize;
+    let recording_routes = native
+        .channels
+        .iter()
+        .map(|channel| {
+            if channel.kind != "audio"
+                || !channel.record_armed
+                || !matches!(
+                    channel.input_source.as_deref(),
+                    Some("hardware" | "application")
+                )
+            {
+                return None;
+            }
+            let width = channel.input_channels.len().clamp(1, 2);
+            let start = recording_channel_count;
+            recording_channel_count = recording_channel_count.saturating_add(width);
+            Some((start, width))
+        })
+        .collect::<Vec<_>>();
+    if recording_channel_count > MAX_INPUT_CHANNELS {
+        return Err(invalid_config("recording layout exceeds the channel limit"));
+    }
+    let external_source_monitoring = native
+        .channels
+        .iter()
+        .map(|channel| {
+            channel.input_monitoring
+                && matches!(
+                    channel.input_source.as_deref(),
+                    Some("hardware" | "application")
+                )
+        })
+        .collect::<Vec<_>>();
+    let application_captures = native
+        .channels
+        .iter()
+        .map(|channel| {
+            if channel.input_source.as_deref() != Some("application")
+                || (!channel.input_monitoring && !channel.record_armed)
+            {
+                return None;
+            }
+            let target = channel.application_capture.as_ref()?;
+            let logical = ApplicationCaptureLogicalTarget {
+                platform: target.platform.clone(),
+                executable_path: target.executable_path.clone(),
+                executable_name: target.executable_name.clone(),
+                include_process_tree: target.include_process_tree,
+            };
+            crate::application_capture::global_manager()
+                .prepare_capture(&logical, native.sample_rate)
+                .ok()
+                .inspect(|capture| capture.activate())
+        })
+        .collect();
     let RoutingBuild {
         channel_input_widths,
         live_midi_routes,
@@ -185,6 +244,11 @@ pub(super) fn build_mixer_runtime(
         input_peaks,
         input_meter_routes,
         monitor_input_routes,
+        source_input_routes,
+        recording_routes,
+        recording_channel_count,
+        external_source_monitoring,
+        application_captures,
         input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
         meter_frame_clock: 0,
     })

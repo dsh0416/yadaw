@@ -12,6 +12,7 @@ use super::{
     ScheduledMidiEvent, SignalWidth, StereoFrame, TempoMap, TransportShared, frames_to_ms,
     frames_to_nanos, invalid_config, optional_latency,
 };
+use crate::application_capture::PreparedApplicationCapture;
 
 pub(super) struct NativeMixerRuntime {
     pub(super) generation: u64,
@@ -50,6 +51,11 @@ pub(super) struct NativeMixerRuntime {
     pub(super) input_peaks: Arc<InputPeakBank>,
     pub(super) input_meter_routes: Vec<Option<[usize; 2]>>,
     pub(super) monitor_input_routes: Vec<Option<[usize; 2]>>,
+    pub(super) source_input_routes: Vec<Option<[usize; 2]>>,
+    pub(super) recording_routes: Vec<Option<(usize, usize)>>,
+    pub(super) recording_channel_count: usize,
+    pub(super) external_source_monitoring: Vec<bool>,
+    pub(super) application_captures: Vec<Option<PreparedApplicationCapture>>,
     pub(super) input_peak_scratch: [f32; MAX_INPUT_CHANNELS],
     pub(super) meter_frame_clock: u64,
 }

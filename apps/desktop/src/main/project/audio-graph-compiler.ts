@@ -55,14 +55,24 @@ export class AudioGraphCompiler {
           channel.kind === "instrument" && channel.systemRole === null
             ? channel.inputMonitoring
             : runtimeOptions.softwareMonitoringEnabled &&
-              channel.kind === "audio" &&
+              (channel.kind === "audio" || channel.kind === "aux") &&
               channel.inputMonitoring &&
-              channel.inputSource === "hardware",
+              (channel.inputSource === "hardware" || channel.inputSource === "application"),
         midi_input_port_id: channel.midiInput?.portId ?? undefined,
         midi_input_port_name: channel.midiInput?.portName ?? undefined,
         midi_input_channel: channel.midiInput?.channel ?? undefined,
         input_source: channel.inputSource ?? undefined,
         input_channels: channel.inputChannels,
+        ...(channel.applicationCapture
+          ? {
+              application_capture: {
+                platform: channel.applicationCapture.platform,
+                executable_path: channel.applicationCapture.executablePath,
+                executable_name: channel.applicationCapture.executableName,
+                include_process_tree: channel.applicationCapture.includeProcessTree
+              }
+            }
+          : {}),
         hardware_output_channels: channel.hardwareOutputChannels,
         output_channel_id: channel.outputChannelId ?? undefined,
         output_bus: channel.outputBus ?? undefined

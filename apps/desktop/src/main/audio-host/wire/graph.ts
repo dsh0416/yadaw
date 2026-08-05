@@ -28,8 +28,14 @@ export interface AudioHostGraph {
     midi_input_port_id?: string
     midi_input_port_name?: string
     midi_input_channel?: number
-    input_source?: "hardware" | "bus"
+    input_source?: "hardware" | "bus" | "application"
     input_channels: number[]
+    application_capture?: {
+      platform: "windows"
+      executable_path: string
+      executable_name: string
+      include_process_tree: boolean
+    }
     hardware_output_channels: number[]
   }>
   sends: Array<{

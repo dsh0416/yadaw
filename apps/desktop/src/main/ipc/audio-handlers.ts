@@ -96,6 +96,20 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
     )
   })
 
+  registerRpcHandler(IPC_CHANNELS.applicationCaptureTargets, async ({ meta }) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
+    return audioHostService.listApplicationCaptureTargets()
+  })
+
+  registerRpcHandler(IPC_CHANNELS.applicationCaptureSnapshot, async ({ meta }) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
+    return audioHostService.applicationCaptureSnapshot()
+  })
+
   registerRpcHandler(IPC_CHANNELS.audioStart, async ({ meta }, value: unknown) => {
     const state = lifecycle.applicationState
     if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))

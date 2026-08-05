@@ -147,7 +147,15 @@ export class PluginDiscoveryService {
   ): Promise<PluginCatalogSnapshot> {
     const knownExternalRoots = catalog.plugins
       .filter((plugin) => plugin.source.kind === "external")
-      .map((plugin) => dirname(plugin.modulePath))
+      // Catalogs are persisted across upgrades. Older or partially-written
+      // entries can miss `modulePath`; ignore those entries during discovery
+      // instead of allowing one malformed cache record to abort startup.
+      .map((plugin) => plugin.modulePath)
+      .filter(
+        (modulePath): modulePath is string =>
+          typeof modulePath === "string" && modulePath.length > 0
+      )
+      .map((modulePath) => dirname(modulePath))
     const roots = [
       ...new Set([...(request.paths ?? []), ...knownExternalRoots, ...this.systemPluginPaths()])
     ]

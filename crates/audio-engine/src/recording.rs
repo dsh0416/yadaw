@@ -35,6 +35,8 @@ pub struct NativeRecordingStartConfig {
     pub origination_date: String,
     pub origination_time: String,
     pub time_reference: i64,
+    pub sample_rate: u32,
+    pub channels: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -214,7 +216,7 @@ pub struct RecordingTap {
     producer: HeapProd<InputFrame>,
     active: Arc<AtomicBool>,
     dropout_frames: Arc<AtomicU64>,
-    channel_count: usize,
+    channel_count: Arc<AtomicU32>,
     transport_state: Arc<AtomicU32>,
     recording_state: u32,
 }
@@ -229,13 +231,33 @@ impl RecordingTap {
         let mut frame = [0.0_f32; MAX_INPUT_CHANNELS];
         let count = channels
             .len()
-            .min(self.channel_count)
+            .min(self.channel_count.load(Ordering::Relaxed) as usize)
             .min(MAX_INPUT_CHANNELS);
         frame[..count].copy_from_slice(&channels[..count]);
         if self.producer.try_push(frame).is_err() {
             self.dropout_frames.fetch_add(1, Ordering::Relaxed);
         }
     }
+}
+
+#[cfg(test)]
+pub(crate) fn recording_tap_for_test(
+    transport_state: Arc<AtomicU32>,
+    recording_state: u32,
+    channels: u32,
+) -> (RecordingTap, HeapCons<InputFrame>) {
+    let (producer, consumer) = HeapRb::<InputFrame>::new(16).split();
+    (
+        RecordingTap {
+            producer,
+            active: Arc::new(AtomicBool::new(true)),
+            dropout_frames: Arc::new(AtomicU64::new(0)),
+            channel_count: Arc::new(AtomicU32::new(channels)),
+            transport_state,
+            recording_state,
+        },
+        consumer,
+    )
 }
 
 enum WriterCommand {
@@ -252,6 +274,8 @@ enum WriterCommand {
 struct ActiveWriter {
     path: String,
     frames: u64,
+    sample_rate: u32,
+    channel_count: usize,
     writer: AudioFrameWriter<BufWriter<File>>,
 }
 
@@ -260,8 +284,8 @@ fn write_available(
     active: &mut ActiveWriter,
     scratch: &mut Vec<f32>,
     waveform: &Arc<Mutex<LiveWaveform>>,
-    channel_count: usize,
 ) -> Result<(), String> {
+    let channel_count = active.channel_count;
     scratch.clear();
     while scratch.len() < WRITER_BLOCK_FRAMES * channel_count {
         let Some(frame) = consumer.try_pop() else {
@@ -289,21 +313,14 @@ fn writer_thread(
     receiver: Receiver<WriterCommand>,
     active_flag: Arc<AtomicBool>,
     dropout_frames: Arc<AtomicU64>,
-    sample_rate: u32,
-    channel_count: usize,
+    channel_count: Arc<AtomicU32>,
     waveform: Arc<Mutex<LiveWaveform>>,
 ) {
     let mut current: Option<ActiveWriter> = None;
-    let mut scratch = Vec::with_capacity(WRITER_BLOCK_FRAMES * channel_count);
+    let mut scratch = Vec::with_capacity(WRITER_BLOCK_FRAMES * MAX_INPUT_CHANNELS);
     loop {
         if let Some(active) = current.as_mut() {
-            let _ = write_available(
-                &mut consumer,
-                active,
-                &mut scratch,
-                &waveform,
-                channel_count,
-            );
+            let _ = write_available(&mut consumer, active, &mut scratch, &waveform);
         }
         match receiver.recv_timeout(Duration::from_millis(5)) {
             Ok(WriterCommand::Start { config, reply }) => {
@@ -312,20 +329,39 @@ fn writer_thread(
                         return Err("a recording is already active".to_owned());
                     }
                     while consumer.try_pop().is_some() {}
+                    let sample_rate = config.sample_rate;
+                    let configured_channels = usize::try_from(config.channels)
+                        .unwrap_or(0)
+                        .clamp(1, MAX_INPUT_CHANNELS);
+                    if config.sample_rate == 0
+                        || config.channels == 0
+                        || configured_channels as u32 != config.channels
+                    {
+                        return Err("recording format is invalid".to_owned());
+                    }
                     dropout_frames.store(0, Ordering::Relaxed);
+                    channel_count.store(config.channels, Ordering::Release);
                     waveform
                         .lock()
                         .map_err(|_| "waveform state is poisoned".to_owned())?
-                        .reset(sample_rate, channel_count);
-                    let mut writer =
-                        WaveWriter::create(&config.path, float_format(sample_rate, channel_count))
-                            .map_err(|value| value.to_string())?;
+                        .reset(sample_rate, configured_channels);
+                    let mut writer = WaveWriter::create(
+                        &config.path,
+                        float_format(sample_rate, configured_channels),
+                    )
+                    .map_err(|value| value.to_string())?;
                     writer
-                        .write_broadcast_metadata(&metadata(&config, sample_rate, channel_count))
+                        .write_broadcast_metadata(&metadata(
+                            &config,
+                            sample_rate,
+                            configured_channels,
+                        ))
                         .map_err(|value| value.to_string())?;
                     current = Some(ActiveWriter {
                         path: config.path,
                         frames: 0,
+                        sample_rate,
+                        channel_count: configured_channels,
                         writer: writer
                             .audio_frame_writer()
                             .map_err(|value| value.to_string())?,
@@ -342,13 +378,7 @@ fn writer_thread(
                         .take()
                         .ok_or_else(|| "no recording is active".to_owned())?;
                     while consumer.occupied_len() > 0 {
-                        write_available(
-                            &mut consumer,
-                            &mut writer,
-                            &mut scratch,
-                            &waveform,
-                            channel_count,
-                        )?;
+                        write_available(&mut consumer, &mut writer, &mut scratch, &waveform)?;
                     }
                     let path = writer.path.clone();
                     let frames = writer.frames;
@@ -361,8 +391,8 @@ fn writer_thread(
                         .map_err(|value| value.to_string())?;
                     Ok(NativeRecordingResult {
                         path,
-                        sample_rate,
-                        channels: channel_count as u32,
+                        sample_rate: writer.sample_rate,
+                        channels: writer.channel_count as u32,
                         frame_count: frames.min(i64::MAX as u64) as i64,
                         dropout_frames: dropout_frames.load(Ordering::Relaxed).min(i64::MAX as u64)
                             as i64,
@@ -374,13 +404,8 @@ fn writer_thread(
                 active_flag.store(false, Ordering::Release);
                 if let Some(mut writer) = current.take() {
                     while consumer.occupied_len() > 0 {
-                        let _ = write_available(
-                            &mut consumer,
-                            &mut writer,
-                            &mut scratch,
-                            &waveform,
-                            channel_count,
-                        );
+                        let _ =
+                            write_available(&mut consumer, &mut writer, &mut scratch, &waveform);
                     }
                     let _ = writer.writer.end();
                 }
@@ -402,16 +427,15 @@ pub struct RecorderController {
 impl RecorderController {
     pub fn new(
         sample_rate: u32,
-        channel_count: usize,
         transport_state: Arc<AtomicU32>,
         recording_state: u32,
     ) -> (Self, RecordingTap) {
-        let channel_count = channel_count.clamp(1, MAX_INPUT_CHANNELS);
         let ring =
             HeapRb::<InputFrame>::new((sample_rate as usize * RECORDING_RING_SECONDS).max(8_192));
         let (producer, consumer) = ring.split();
         let active = Arc::new(AtomicBool::new(false));
         let dropout_frames = Arc::new(AtomicU64::new(0));
+        let channel_count = Arc::new(AtomicU32::new(0));
         let (sender, receiver) = mpsc::channel();
         let waveform = Arc::new(Mutex::new(LiveWaveform::default()));
         let thread = thread::Builder::new()
@@ -420,13 +444,13 @@ impl RecorderController {
                 let active = Arc::clone(&active);
                 let dropout_frames = Arc::clone(&dropout_frames);
                 let waveform = Arc::clone(&waveform);
+                let channel_count = Arc::clone(&channel_count);
                 move || {
                     writer_thread(
                         consumer,
                         receiver,
                         active,
                         dropout_frames,
-                        sample_rate,
                         channel_count,
                         waveform,
                     );
@@ -587,6 +611,8 @@ mod tests {
             origination_date: "2026-07-31".to_owned(),
             origination_time: "16:00:00".to_owned(),
             time_reference: -7,
+            sample_rate: 8_000,
+            channels: 2,
         }
     }
 
@@ -599,11 +625,10 @@ mod tests {
 
     fn recording_controller(
         sample_rate: u32,
-        channel_count: usize,
+        _channel_count: usize,
     ) -> (RecorderController, RecordingTap) {
         RecorderController::new(
             sample_rate,
-            channel_count,
             Arc::new(AtomicU32::new(TRANSPORT_RECORDING)),
             TRANSPORT_RECORDING,
         )
@@ -830,7 +855,7 @@ mod tests {
             producer,
             active,
             dropout_frames: Arc::new(AtomicU64::new(0)),
-            channel_count: 2,
+            channel_count: Arc::new(AtomicU32::new(2)),
             transport_state: Arc::clone(&transport_state),
             recording_state: TRANSPORT_RECORDING,
         };

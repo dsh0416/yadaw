@@ -10,6 +10,7 @@ pub(super) fn validate_sample_rate(sample_rate: u32) -> Result<()> {
 pub(super) struct InputRoutes {
     pub(super) meter: Vec<Option<[usize; 2]>>,
     pub(super) monitor: Vec<Option<[usize; 2]>>,
+    pub(super) source: Vec<Option<[usize; 2]>>,
 }
 
 pub(super) fn build_input_routes(channels: &[NativeMixerChannel]) -> Result<InputRoutes> {
@@ -40,7 +41,7 @@ pub(super) fn build_input_routes(channels: &[NativeMixerChannel]) -> Result<Inpu
     let monitor_input_routes = channels
         .iter()
         .map(|channel| {
-            if channel.kind != "audio"
+            if !matches!(channel.kind.as_str(), "audio" | "aux")
                 || channel.input_source.as_deref() != Some("hardware")
                 || !channel.input_monitoring
             {
@@ -62,8 +63,34 @@ pub(super) fn build_input_routes(channels: &[NativeMixerChannel]) -> Result<Inpu
             Ok(Some([routed[0], *routed.get(1).unwrap_or(&routed[0])]))
         })
         .collect::<Result<Vec<_>>>()?;
+    let source_input_routes = channels
+        .iter()
+        .map(|channel| {
+            if !matches!(channel.kind.as_str(), "audio" | "aux")
+                || channel.input_source.as_deref() != Some("hardware")
+                || (!channel.input_monitoring && !channel.record_armed)
+            {
+                return Ok(None);
+            }
+            let routed = channel
+                .input_channels
+                .iter()
+                .map(|channel| channel.saturating_sub(1) as usize)
+                .collect::<Vec<_>>();
+            if routed.is_empty()
+                || routed.len() > 2
+                || routed.iter().any(|&channel| channel >= MAX_INPUT_CHANNELS)
+            {
+                return Err(invalid_config(
+                    "input source has an invalid channel mapping",
+                ));
+            }
+            Ok(Some([routed[0], *routed.get(1).unwrap_or(&routed[0])]))
+        })
+        .collect::<Result<Vec<_>>>()?;
     Ok(InputRoutes {
         meter: input_meter_routes,
         monitor: monitor_input_routes,
+        source: source_input_routes,
     })
 }

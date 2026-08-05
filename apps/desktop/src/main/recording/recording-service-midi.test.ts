@@ -174,7 +174,8 @@ describe("RecordingService MIDI orchestration", () => {
     const audioHost = {
       audioEngineSnapshot: vi.fn().mockResolvedValue({
         state: "running",
-        inputSampleRate: 48_000
+        inputSampleRate: 48_000,
+        sampleRate: 48_000
       }),
       transportControlSnapshot: vi.fn().mockResolvedValue({
         state: "playing",
@@ -290,6 +291,9 @@ describe("RecordingService MIDI orchestration", () => {
     expect(session.audioTrackIds).toEqual(["ch:audio"])
     expect(session.midiTrackIds).toEqual([])
     expect(audioHost.startRecording).toHaveBeenCalledOnce()
+    expect(audioHost.startRecording).toHaveBeenCalledWith(
+      expect.objectContaining({ sampleRate: 48_000, channels: 2 })
+    )
     expect(audioHost.startMidiRecording).not.toHaveBeenCalled()
   })
 
