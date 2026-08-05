@@ -22,27 +22,47 @@ fn runtime_failure(error: EmbeddedRuntimeError) -> Error {
     failure("embedded audio runtime", error)
 }
 
+#[cfg(all(target_os = "linux", target_pointer_width = "64"))]
+fn decode_platform_native_window_handle(handle: &[u8]) -> Result<usize> {
+    let bytes: [u8; size_of::<u32>()] = handle.try_into().map_err(|_| {
+        Error::new(
+            Status::InvalidArg,
+            format!(
+                "invalid editor owner window handle: expected {} or {} bytes, received {}",
+                size_of::<u32>(),
+                size_of::<usize>(),
+                handle.len()
+            ),
+        )
+    })?;
+    usize::try_from(u32::from_ne_bytes(bytes)).map_err(|_| {
+        Error::new(
+            Status::InvalidArg,
+            "editor owner window handle does not fit in a native pointer",
+        )
+    })
+}
+
+#[cfg(not(all(target_os = "linux", target_pointer_width = "64")))]
+fn decode_platform_native_window_handle(handle: &[u8]) -> Result<usize> {
+    Err(Error::new(
+        Status::InvalidArg,
+        format!(
+            "invalid editor owner window handle: expected {} bytes, received {}",
+            size_of::<usize>(),
+            handle.len()
+        ),
+    ))
+}
+
 fn decode_native_window_handle(handle: Option<&[u8]>) -> Result<Option<usize>> {
     let Some(handle) = handle else {
         return Ok(None);
     };
-    if handle.len() != size_of::<usize>() {
-        return Err(Error::new(
-            Status::InvalidArg,
-            format!(
-                "invalid editor owner window handle: expected {} bytes, received {}",
-                size_of::<usize>(),
-                handle.len()
-            ),
-        ));
-    }
-    let bytes: [u8; size_of::<usize>()] = handle.try_into().map_err(|_| {
-        Error::new(
-            Status::InvalidArg,
-            "invalid editor owner window handle byte length",
-        )
-    })?;
-    let value = usize::from_ne_bytes(bytes);
+    let value = match <[u8; size_of::<usize>()]>::try_from(handle) {
+        Ok(bytes) => usize::from_ne_bytes(bytes),
+        Err(_) => decode_platform_native_window_handle(handle)?,
+    };
     if value == 0 {
         return Err(Error::new(
             Status::InvalidArg,
@@ -502,5 +522,43 @@ fn native_toolbar_state(
 impl Drop for AudioHostRuntime {
     fn drop(&mut self) {
         self.runtime.close();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_native_width_window_handle() {
+        let value = 0x1234_usize;
+
+        assert_eq!(
+            decode_native_window_handle(Some(&value.to_ne_bytes()))
+                .expect("native-width window handle should decode"),
+            Some(value)
+        );
+    }
+
+    #[test]
+    fn rejects_null_window_handle() {
+        assert!(decode_native_window_handle(Some(&0_usize.to_ne_bytes())).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_window_handle_width() {
+        assert!(decode_native_window_handle(Some(&[1, 2, 3])).is_err());
+    }
+
+    #[cfg(all(target_os = "linux", target_pointer_width = "64"))]
+    #[test]
+    fn decodes_x11_window_identifier() {
+        let value = 0x1234_u32;
+
+        assert_eq!(
+            decode_native_window_handle(Some(&value.to_ne_bytes()))
+                .expect("X11 window identifier should decode"),
+            Some(usize::try_from(value).expect("u32 fits in a 64-bit usize"))
+        );
     }
 }
