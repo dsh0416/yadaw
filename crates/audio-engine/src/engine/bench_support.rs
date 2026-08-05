@@ -211,6 +211,8 @@ impl RenderHarness {
 
     pub fn enable_stopped_monitoring(&mut self) {
         self.runtime.monitor_input_routes[0] = Some([0, 1]);
+        self.runtime.source_input_routes[0] = Some([0, 1]);
+        self.runtime.external_source_monitoring[0] = true;
         self.runtime
             .transport
             .state
