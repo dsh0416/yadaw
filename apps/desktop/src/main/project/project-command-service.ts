@@ -367,7 +367,9 @@ export class ProjectCommandService {
       const graphError = !commitDispatched && isGraphCommandError(error)
       const failure = rpcFailure(
         meta,
-        graphError ? validationError(meta, "projectGraph") : unavailableError(meta, commitDispatched)
+        graphError
+          ? validationError(meta, "projectGraph")
+          : unavailableError(meta, commitDispatched)
       )
       if (graphError) {
         console.warn(`[project-command] ${failure.error.correlationId} command rejected`, error)

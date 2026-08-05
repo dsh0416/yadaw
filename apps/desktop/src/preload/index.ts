@@ -28,10 +28,8 @@ const api: HeronDesktopApi = {
   listAudioBackends: (meta) => invokeRpc(IPC_CHANNELS.audioBackends, meta),
   listAudioDevices: (meta, backend: AudioBackend) =>
     invokeRpc(IPC_CHANNELS.audioDevices, meta, backend),
-  listApplicationCaptureTargets: (meta) =>
-    invokeRpc(IPC_CHANNELS.applicationCaptureTargets, meta),
-  applicationCaptureSnapshot: (meta) =>
-    invokeRpc(IPC_CHANNELS.applicationCaptureSnapshot, meta),
+  listApplicationCaptureTargets: (meta) => invokeRpc(IPC_CHANNELS.applicationCaptureTargets, meta),
+  applicationCaptureSnapshot: (meta) => invokeRpc(IPC_CHANNELS.applicationCaptureSnapshot, meta),
   startAudioEngine: (meta, preferences: AudioPreferences) =>
     invokeRpc(IPC_CHANNELS.audioStart, meta, preferences),
   stopAudioEngine: (meta) => invokeRpc(IPC_CHANNELS.audioStop, meta),

@@ -178,9 +178,7 @@ export interface HeronDesktopApi {
   listApplicationCaptureTargets(
     meta: RpcRequestMeta
   ): Promise<RpcResult<ApplicationCaptureTargetDescriptor[]>>
-  applicationCaptureSnapshot(
-    meta: RpcRequestMeta
-  ): Promise<RpcResult<ApplicationCaptureSnapshot[]>>
+  applicationCaptureSnapshot(meta: RpcRequestMeta): Promise<RpcResult<ApplicationCaptureSnapshot[]>>
   startAudioEngine(
     meta: RpcRequestMeta,
     preferences: AudioPreferences

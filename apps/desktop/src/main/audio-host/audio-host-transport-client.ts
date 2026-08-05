@@ -24,9 +24,7 @@ import type {
   TelemetryWire
 } from "./wire"
 
-function normalizeApplicationCaptureStatus(
-  value: string
-): ApplicationCaptureSnapshot["status"] {
+function normalizeApplicationCaptureStatus(value: string): ApplicationCaptureSnapshot["status"] {
   return value === "capturing" ||
     value === "no-stream" ||
     value === "target-missing" ||
