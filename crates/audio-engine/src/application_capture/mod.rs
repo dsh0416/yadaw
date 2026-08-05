@@ -69,13 +69,6 @@ pub trait ApplicationCaptureBackend: Send + Sync {
 pub type ApplicationCaptureFrame = [f32; 2];
 
 pub(crate) const APPLICATION_CAPTURE_STATUS_INACTIVE: u32 = 0;
-pub(crate) const APPLICATION_CAPTURE_STATUS_CAPTURING: u32 = 1;
-pub(crate) const APPLICATION_CAPTURE_STATUS_NO_STREAM: u32 = 2;
-pub(crate) const APPLICATION_CAPTURE_STATUS_TARGET_MISSING: u32 = 3;
-pub(crate) const APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET: u32 = 4;
-pub(crate) const APPLICATION_CAPTURE_STATUS_TARGET_EXITED: u32 = 5;
-pub(crate) const APPLICATION_CAPTURE_STATUS_UNSUPPORTED: u32 = 6;
-pub(crate) const APPLICATION_CAPTURE_STATUS_ERROR: u32 = 7;
 
 pub struct ApplicationCaptureCounters {
     pub dropout_frames: AtomicU64,

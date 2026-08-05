@@ -28,13 +28,19 @@ use windows::Win32::System::Variant::VT_BLOB;
 use windows::core::{IUnknown, Interface, PCSTR, PCWSTR, PWSTR, implement};
 
 use super::{
-    APPLICATION_CAPTURE_STATUS_CAPTURING, APPLICATION_CAPTURE_STATUS_ERROR,
-    APPLICATION_CAPTURE_STATUS_UNSUPPORTED, ApplicationCaptureBackend, ApplicationCaptureCounters,
-    ApplicationCaptureFrame, ApplicationCaptureLogicalTarget, ApplicationCaptureSnapshot,
+    ApplicationCaptureBackend, ApplicationCaptureCounters, ApplicationCaptureFrame,
+    ApplicationCaptureLogicalTarget, ApplicationCaptureSnapshot,
     ApplicationCaptureTargetDescriptor, PreparedApplicationCapture,
 };
 
 const PROCESS_LOOPBACK_DEVICE_INTERFACE: PCWSTR = windows::core::w!("VAD\\Process_Loopback");
+const APPLICATION_CAPTURE_STATUS_CAPTURING: u32 = 1;
+const APPLICATION_CAPTURE_STATUS_NO_STREAM: u32 = 2;
+const APPLICATION_CAPTURE_STATUS_TARGET_MISSING: u32 = 3;
+const APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET: u32 = 4;
+const APPLICATION_CAPTURE_STATUS_TARGET_EXITED: u32 = 5;
+const APPLICATION_CAPTURE_STATUS_UNSUPPORTED: u32 = 6;
+const APPLICATION_CAPTURE_STATUS_ERROR: u32 = 7;
 
 pub(super) struct WindowsApplicationCaptureBackend {
     snapshots: Arc<RwLock<Vec<ApplicationCaptureSnapshot>>>,
@@ -220,10 +226,10 @@ fn status_name(status: u32) -> &'static str {
     match status {
         super::APPLICATION_CAPTURE_STATUS_INACTIVE => "inactive",
         APPLICATION_CAPTURE_STATUS_CAPTURING => "capturing",
-        super::APPLICATION_CAPTURE_STATUS_NO_STREAM => "no-stream",
-        super::APPLICATION_CAPTURE_STATUS_TARGET_MISSING => "target-missing",
-        super::APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET => "ambiguous-target",
-        super::APPLICATION_CAPTURE_STATUS_TARGET_EXITED => "target-exited",
+        APPLICATION_CAPTURE_STATUS_NO_STREAM => "no-stream",
+        APPLICATION_CAPTURE_STATUS_TARGET_MISSING => "target-missing",
+        APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET => "ambiguous-target",
+        APPLICATION_CAPTURE_STATUS_TARGET_EXITED => "target-exited",
         APPLICATION_CAPTURE_STATUS_UNSUPPORTED => "unsupported",
         _ => "error",
     }
