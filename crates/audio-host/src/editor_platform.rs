@@ -1435,7 +1435,9 @@ mod platform {
             // SAFETY: display is a live X11 connection and the atom name is a static C string.
             XInternAtom(display, c"CARDINAL".as_ptr(), 0)
         };
-        let values = [0_u32, 1_u32];
+        // Xlib requires format-32 property data to be an array of C longs,
+        // including on LP64 where each element occupies eight bytes.
+        let values: [c_ulong; 2] = [0, 1];
         unsafe {
             // SAFETY: display/window are live, atoms were interned above, and values outlives the call.
             XChangeProperty(
