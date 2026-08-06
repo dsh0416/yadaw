@@ -1265,11 +1265,28 @@ impl EmbeddedUiHost {
         &mut self,
         now: std::time::Instant,
     ) -> Option<std::time::Instant> {
-        self.embedded_editor_hosts
-            .values_mut()
-            .filter_map(|host| host.attachment.as_mut())
-            .filter_map(|attachment| attachment.dispatch_run_loop(now))
-            .min()
+        #[cfg(target_os = "linux")]
+        {
+            let runtime = self.vst3.as_ref();
+            self.embedded_editor_hosts
+                .iter_mut()
+                .filter_map(|(instance_id, host)| {
+                    let attachment = host.attachment.as_mut()?;
+                    let frame_deadline = attachment.dispatch_run_loop(now);
+                    let module_deadline = runtime
+                        .and_then(|runtime| runtime.dispatch_editor_run_loop(instance_id, now));
+                    frame_deadline.into_iter().chain(module_deadline).min()
+                })
+                .min()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            self.embedded_editor_hosts
+                .values_mut()
+                .filter_map(|host| host.attachment.as_mut())
+                .filter_map(|attachment| attachment.dispatch_run_loop(now))
+                .min()
+        }
     }
 }
 

@@ -445,6 +445,9 @@ pub struct HostedPlugin {
     output_parameter_reader: OutputParameterReader,
     controller_initialized: bool,
     class_id: ClassId,
+    // Keep the module and its HostContext alive until every plug-in interface above is released.
+    #[cfg(target_os = "linux")]
+    module: Rc<Module>,
 }
 
 struct ComponentConnections {
@@ -734,6 +737,8 @@ impl HostedPlugin {
                 output_parameter_reader,
                 controller_initialized,
                 class_id,
+                #[cfg(target_os = "linux")]
+                module,
             },
             hook_result,
         ))
@@ -751,6 +756,11 @@ impl HostedPlugin {
     #[must_use]
     pub fn class_id(&self) -> ClassId {
         self.class_id
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn dispatch_run_loop(&self, now: std::time::Instant) -> Option<std::time::Instant> {
+        self.module.dispatch_run_loop(now)
     }
 
     #[must_use]

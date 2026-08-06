@@ -623,6 +623,17 @@ impl Vst3Runtime {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    pub fn dispatch_editor_run_loop(
+        &self,
+        instance_id: &str,
+        now: std::time::Instant,
+    ) -> Option<std::time::Instant> {
+        self.instances
+            .get(instance_id)
+            .and_then(|instance| instance.plugin.dispatch_run_loop(now))
+    }
+
     pub fn editor_state(&self, instance_id: &str) -> Result<EditorPluginState, String> {
         let instance = self
             .instances
