@@ -18,6 +18,7 @@ target="$(cargo xtask host-target)"
   pnpm check:packages
   pnpm test:coverage:js
   pnpm test:native-bindings
+  mise run test:official-plugin-fixtures
   cargo xtask coverage report
 )
 

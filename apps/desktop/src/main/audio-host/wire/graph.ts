@@ -65,7 +65,7 @@ export interface AudioHostGraph {
     audio_mode: PluginAudioMode
     enabled: boolean
     aux_input_buses: Array<{
-      input_bus_index: number
+      input_port_key: string
       name: string
       channels: number
       source_channel_id?: string

@@ -40,7 +40,7 @@ impl EmbeddedUiHost {
         while should_drain_ui_request(drained, started.elapsed()) {
             match self.inbox.try_recv() {
                 Ok(request) => {
-                    self.execute_vst3_request(request);
+                    self.execute_audio_plugin_request(request);
                     drained += 1;
                 }
                 Err(std_mpsc::TryRecvError::Empty | std_mpsc::TryRecvError::Disconnected) => {

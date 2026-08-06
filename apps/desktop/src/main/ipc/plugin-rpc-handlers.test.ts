@@ -49,8 +49,11 @@ import { registerPluginRpcHandlers } from "./plugin-rpc-handlers"
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "ABCDEF0123456789ABCDEF0123456789",
-  modulePath: "/plugins/Effect.vst3",
+  locator: {
+    format: "vst3",
+    artifactPath: "/plugins/Effect.vst3",
+    nativeId: "ABCDEF0123456789ABCDEF0123456789"
+  },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -69,13 +72,18 @@ const plugin: PluginInstanceState = {
   channelId: "master",
   role: "insert",
   slotOrder: 0,
-  classId: descriptor.classId,
+  locator: descriptor.locator,
   descriptor,
   audioMode: "stereo",
   enabled: true,
   sidechainInputs: [],
-  componentState: new Uint8Array([1]),
-  controllerState: new Uint8Array([2])
+  state: {
+    version: 1,
+    chunks: [
+      { key: "component", bytes: new Uint8Array([1]) },
+      { key: "controller", bytes: new Uint8Array([2]) }
+    ]
+  }
 }
 
 describe("registerPluginRpcHandlers", () => {
@@ -306,8 +314,9 @@ describe("registerPluginRpcHandlers", () => {
       helperEpoch: context.lifecycle.applicationState.audioHost.epoch,
       pluginGeneration: resource!.plugin.generation,
       sequence: "1",
-      parameterId: 1,
-      normalized: 0.25,
+      parameterKey: "vst3:1",
+      runtimeToken: 1,
+      value: 0.25,
       gesture: "perform" as const
     }
 

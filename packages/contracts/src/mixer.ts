@@ -179,8 +179,8 @@ export interface CompiledAudioGraphEdge {
   target: string
   kind: CompiledAudioGraphEdgeKind
   signalWidth: CompiledAudioGraphSignalWidth
-  /** VST3 input bus index for side-chain edges. */
-  targetInputBusIndex?: number
+  /** Stable plug-in input port key for side-chain edges. */
+  targetInputPortKey?: string
 }
 
 export interface CompiledAudioGraphSnapshot {
@@ -217,16 +217,7 @@ export type MixerSendPatch = Partial<
 >
 
 export type PluginInstancePatch = Partial<
-  Pick<
-    PluginInstanceState,
-    | "slotOrder"
-    | "enabled"
-    | "descriptor"
-    | "sidechainInputs"
-    | "componentState"
-    | "controllerState"
-    | "araDocumentState"
-  >
+  Pick<PluginInstanceState, "slotOrder" | "enabled" | "descriptor" | "sidechainInputs" | "state">
 >
 
 export type ProjectCommand =

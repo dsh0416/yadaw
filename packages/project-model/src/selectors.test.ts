@@ -155,11 +155,10 @@ describe("patchMixerGraph", () => {
       channelId: "audio",
       role: "insert",
       slotOrder: 0,
-      classId: "effect-class",
+      locator: { format: "vst3", artifactPath: "effect.vst3", nativeId: "effect-class" },
       descriptor: {
         source: { kind: "external" },
-        classId: "effect-class",
-        modulePath: "effect.vst3",
+        locator: { format: "vst3", artifactPath: "effect.vst3", nativeId: "effect-class" },
         name: "Effect",
         vendor: "Heron Studio",
         version: "1.0",
@@ -175,8 +174,7 @@ describe("patchMixerGraph", () => {
       audioMode: "stereo",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     })
     const patchedChannel = patchMixerGraph(before, "channel", "audio", { gainDb: -6, pan: 0.5 })
     const patchedSend = patchMixerGraph(before, "send", "audio-to-output", { levelDb: -6 })

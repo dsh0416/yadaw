@@ -14,11 +14,19 @@ describe("AudioHostService benchmark", () => {
 
   it("runs the complete benchmark in the embedded runtime and cleans up temporary plugins", async () => {
     const effect = {
+      source: { kind: "external" },
+      locator: { format: "vst3", artifactPath: "/tmp/gain.vst3", nativeId: "test-gain" },
+      name: "Test Gain",
+      vendor: "Heron",
+      version: "1",
+      categories: ["Fx"],
       kind: "effect",
+      architecture: "x86_64",
+      buses: [],
       compatibility: "compatible",
       supportedAudioModes: ["stereo"],
-      classId: "test-gain",
-      modulePath: "/tmp/gain.vst3"
+      hasEditor: false,
+      compatibilityReason: null
     } as PluginDescriptor
 
     const service = new AudioHostService(
@@ -62,11 +70,19 @@ describe("AudioHostService benchmark", () => {
 
   it("keeps project requests available while the embedded benchmark runs", async () => {
     const effect = {
+      source: { kind: "external" },
+      locator: { format: "vst3", artifactPath: "/tmp/gain.vst3", nativeId: "test-gain" },
+      name: "Test Gain",
+      vendor: "Heron",
+      version: "1",
+      categories: ["Fx"],
       kind: "effect",
+      architecture: "x86_64",
+      buses: [],
       compatibility: "compatible",
       supportedAudioModes: ["stereo"],
-      classId: "test-gain",
-      modulePath: "/tmp/gain.vst3"
+      hasEditor: false,
+      compatibilityReason: null
     } as PluginDescriptor
     const service = new AudioHostService(
       {

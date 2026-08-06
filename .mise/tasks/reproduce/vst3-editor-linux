@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#MISE description="Reproduce the Linux VST3 native-editor smoke test in Ubuntu/Xvfb"
+set -euo pipefail
+
+readonly image=heron-vst3-editor-linux:ubuntu-24.04
+readonly repository_root="$PWD"
+
+docker build \
+  --platform linux/amd64 \
+  --progress plain \
+  --file .github/docker/vst3-editor-linux.Dockerfile \
+  --tag "$image" \
+  .
+
+docker run --rm \
+  --platform linux/amd64 \
+  --init \
+  --shm-size 2g \
+  --cap-add SYS_PTRACE \
+  --security-opt seccomp=unconfined \
+  --env "HERON_DOCKER_REPEAT=${HERON_DOCKER_REPEAT:-1}" \
+  --env "HERON_DOCKER_GDB=${HERON_DOCKER_GDB:-0}" \
+  --env "HERON_DOCKER_PREPARE=${HERON_DOCKER_PREPARE:-1}" \
+  --env "HERON_DOCKER_BUILD_TYPE=${HERON_DOCKER_BUILD_TYPE:-Release}" \
+  --volume "$repository_root:/source:ro" \
+  --volume heron-vst3-editor-target:/work/target \
+  --volume heron-vst3-editor-node-modules:/work/node_modules \
+  --volume heron-vst3-editor-pnpm-store:/.pnpm-store \
+  --volume heron-vst3-editor-electron-cache:/root/.cache/heron-electron \
+  --volume heron-vst3-editor-cargo:/root/.cargo \
+  --volume heron-vst3-editor-rustup:/root/.rustup \
+  --volume heron-vst3-editor-tools:/root/.local/share \
+  "$image"

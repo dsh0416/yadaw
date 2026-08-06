@@ -55,18 +55,18 @@ export class AudioHostGraphTransactions {
       if (result.status === "rejected") {
         const plugin = project.plugins[index]
         const reason: unknown = result.reason
-        console.error(`Could not prepare VST3 instance ${plugin?.id}:`, {
+        console.error(`Could not prepare audio plug-in instance ${plugin?.id}:`, {
           request: plugin
             ? {
-                classId: plugin.classId,
-                modulePath: plugin.descriptor.modulePath,
+                locator: plugin.locator ?? plugin.descriptor.locator,
                 kind: plugin.descriptor.kind,
                 audioMode: plugin.audioMode,
                 sampleRate: project.sampleRate,
                 araFactoryClassId: plugin.descriptor.ara?.factoryClassId ?? null,
-                componentStateBytes: plugin.componentState.byteLength,
-                controllerStateBytes: plugin.controllerState.byteLength,
-                araDocumentStateBytes: plugin.araDocumentState?.byteLength ?? 0
+                stateChunks: plugin.state?.chunks.map((chunk) => ({
+                  key: chunk.key,
+                  bytes: chunk.bytes.byteLength
+                }))
               }
             : null,
           reason

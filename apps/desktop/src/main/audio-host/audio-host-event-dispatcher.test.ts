@@ -36,7 +36,7 @@ describe("AudioHostEventDispatcher", () => {
     const request = {
       requestId: 4,
       instanceId: "plugin-1",
-      inputBusIndex: 2,
+      inputPortKey: "vst3:audio:input:2",
       sourceChannelId: null
     }
 

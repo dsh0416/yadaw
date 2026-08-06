@@ -12,10 +12,7 @@ use heron_vst3_host_sys::{
 };
 
 #[cfg(any(target_os = "linux", all(test, unix)))]
-use std::cell::RefCell;
-
-#[cfg(any(target_os = "linux", all(test, unix)))]
-use linux::{RunLoopInterface, RunLoopState};
+pub(crate) use linux::RunLoopInterface;
 
 #[repr(C)]
 pub struct PlugFrame {
@@ -24,29 +21,17 @@ pub struct PlugFrame {
     resize: Box<dyn FnMut(*mut IPlugView, ViewRect) -> bool>,
     #[cfg(any(target_os = "linux", all(test, unix)))]
     run_loop: RunLoopInterface,
-    #[cfg(any(target_os = "linux", all(test, unix)))]
-    run_loop_state: RefCell<RunLoopState>,
 }
 
 impl PlugFrame {
     pub fn new(resize: impl FnMut(*mut IPlugView, ViewRect) -> bool + 'static) -> Box<Self> {
-        let frame = Box::new(Self {
+        Box::new(Self {
             vtable: &PLUG_FRAME_VTABLE,
             references: AtomicU32::new(1),
             resize: Box::new(resize),
             #[cfg(any(target_os = "linux", all(test, unix)))]
             run_loop: RunLoopInterface::new(),
-            #[cfg(any(target_os = "linux", all(test, unix)))]
-            run_loop_state: RefCell::new(RunLoopState::new()),
-        });
-        #[cfg(any(target_os = "linux", all(test, unix)))]
-        let mut frame = frame;
-        #[cfg(any(target_os = "linux", all(test, unix)))]
-        {
-            let owner = std::ptr::from_mut(frame.as_mut());
-            frame.run_loop.set_owner(owner);
-        }
-        frame
+        })
     }
 
     #[must_use]
@@ -61,7 +46,7 @@ impl PlugFrame {
 
     #[cfg(any(target_os = "linux", all(test, unix)))]
     pub fn dispatch_run_loop(&mut self, now: Instant) -> Option<Instant> {
-        linux::dispatch(self, now)
+        self.run_loop.dispatch(now)
     }
 }
 
@@ -86,8 +71,7 @@ unsafe extern "system" fn query_interface(
         unsafe {
             // SAFETY: the run-loop interface is a stable field of the boxed PlugFrame and output
             // is writable as validated above.
-            output.write(std::ptr::from_mut(&mut frame.run_loop).cast());
-            add_ref(this);
+            output.write(frame.run_loop.retain_interface().cast());
         }
         return 0;
     }
@@ -155,7 +139,8 @@ static PLUG_FRAME_VTABLE: PlugFrameVTable = PlugFrameVTable {
 #[cfg(any(target_os = "linux", all(test, unix)))]
 mod linux {
     use std::{
-        ptr::NonNull,
+        cell::RefCell,
+        sync::atomic::{AtomicU32, Ordering},
         time::{Duration, Instant},
     };
 
@@ -166,22 +151,23 @@ mod linux {
             tresult, uint32,
         },
         abi::{EventHandlerVTable, FUnknownVTable, RunLoopVTable, TimerHandlerVTable},
+        iid,
     };
     use libc::{POLLERR, POLLHUP, POLLIN, poll, pollfd};
 
-    use super::{PlugFrame, add_ref, query_interface, release};
     use crate::ComPtr;
 
     const INVALID_ARGUMENT: tresult = -2147024809;
     const RESULT_FALSE: tresult = 1;
 
     #[repr(C)]
-    pub(super) struct RunLoopInterface {
+    pub(crate) struct RunLoopInterface {
         vtable: *const RunLoopVTable,
-        owner: Option<NonNull<PlugFrame>>,
+        references: AtomicU32,
+        state: RefCell<RunLoopState>,
     }
 
-    pub(super) struct RunLoopState {
+    struct RunLoopState {
         events: Vec<EventRegistration>,
         timers: Vec<TimerRegistration>,
         pollfds: Vec<pollfd>,
@@ -199,15 +185,21 @@ mod linux {
     }
 
     impl RunLoopInterface {
-        pub(super) const fn new() -> Self {
+        pub(crate) const fn new() -> Self {
             Self {
                 vtable: &RUN_LOOP_VTABLE,
-                owner: None,
+                references: AtomicU32::new(1),
+                state: RefCell::new(RunLoopState::new()),
             }
         }
 
-        pub(super) fn set_owner(&mut self, owner: *mut PlugFrame) {
-            self.owner = NonNull::new(owner);
+        pub(crate) fn retain_interface(&mut self) -> *mut IRunLoop {
+            self.references.fetch_add(1, Ordering::Relaxed);
+            std::ptr::from_mut(self).cast()
+        }
+
+        pub(crate) fn dispatch(&self, now: Instant) -> Option<Instant> {
+            dispatch(self, now)
         }
     }
 
@@ -221,8 +213,8 @@ mod linux {
         }
     }
 
-    pub(super) fn dispatch(frame: &PlugFrame, now: Instant) -> Option<Instant> {
-        let ready_events = collect_ready_events(frame);
+    fn dispatch(run_loop: &RunLoopInterface, now: Instant) -> Option<Instant> {
+        let ready_events = collect_ready_events(run_loop);
         for (handler, fd) in ready_events {
             unsafe {
                 // SAFETY: the retained handler is live for the call and its vtable matches the
@@ -231,7 +223,7 @@ mod linux {
             }
         }
 
-        let due_timers = collect_due_timers(frame, now);
+        let due_timers = collect_due_timers(run_loop, now);
         for handler in due_timers {
             unsafe {
                 // SAFETY: the retained handler is live for the call and its vtable matches the
@@ -240,15 +232,15 @@ mod linux {
             }
         }
 
-        frame
-            .run_loop_state
+        run_loop
+            .state
             .try_borrow()
             .ok()
             .and_then(|state| state.timers.iter().map(|timer| timer.next_fire).min())
     }
 
-    fn collect_ready_events(frame: &PlugFrame) -> Vec<(ComPtr<IEventHandler>, i32)> {
-        let Ok(mut state) = frame.run_loop_state.try_borrow_mut() else {
+    fn collect_ready_events(run_loop: &RunLoopInterface) -> Vec<(ComPtr<IEventHandler>, i32)> {
+        let Ok(mut state) = run_loop.state.try_borrow_mut() else {
             return Vec::new();
         };
         let descriptors = state
@@ -286,8 +278,8 @@ mod linux {
             .collect()
     }
 
-    fn collect_due_timers(frame: &PlugFrame, now: Instant) -> Vec<ComPtr<ITimerHandler>> {
-        let Ok(mut state) = frame.run_loop_state.try_borrow_mut() else {
+    fn collect_due_timers(run_loop: &RunLoopInterface, now: Instant) -> Vec<ComPtr<ITimerHandler>> {
+        let Ok(mut state) = run_loop.state.try_borrow_mut() else {
             return Vec::new();
         };
         let mut due = Vec::new();
@@ -311,42 +303,61 @@ mod linux {
         requested: *const std::os::raw::c_char,
         output: *mut *mut std::ffi::c_void,
     ) -> tresult {
-        let Some(owner) = (unsafe {
+        if requested.is_null() || output.is_null() {
+            return INVALID_ARGUMENT;
+        }
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the leading FUnknown interface of RunLoopInterface.
-            owner_from_run_loop(this.cast::<IRunLoop>())
+            run_loop_from_interface(this.cast::<IRunLoop>())
         }) else {
             return RESULT_FALSE;
         };
-        unsafe {
-            // SAFETY: owner points to the live containing PlugFrame and query_interface validates
-            // the remaining pointers before writing output.
-            query_interface(owner.cast::<FUnknown>(), requested, output)
+        let requested_id = unsafe {
+            // SAFETY: VST3 queryInterface supplies a 16-byte TUID.
+            std::slice::from_raw_parts(requested, 16)
+        };
+        if requested_id == iid::FUNKNOWN || requested_id == iid::IRUN_LOOP {
+            unsafe {
+                // SAFETY: output is writable and this is the live IRunLoop interface.
+                output.write(run_loop.cast());
+                run_loop_add_ref(run_loop.cast());
+            }
+            return 0;
         }
+        unsafe {
+            // SAFETY: output is writable as validated above.
+            output.write(std::ptr::null_mut());
+        }
+        -2147467262
     }
 
     unsafe extern "system" fn run_loop_add_ref(this: *mut FUnknown) -> uint32 {
-        let Some(owner) = (unsafe {
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the leading FUnknown interface of RunLoopInterface.
-            owner_from_run_loop(this.cast::<IRunLoop>())
+            run_loop_from_interface(this.cast::<IRunLoop>())
         }) else {
             return 0;
         };
         unsafe {
-            // SAFETY: owner points to the live containing PlugFrame.
-            add_ref(owner.cast::<FUnknown>())
+            // SAFETY: this is the live host-owned run loop object.
+            (*run_loop).references.fetch_add(1, Ordering::Relaxed) + 1
         }
     }
 
     unsafe extern "system" fn run_loop_release(this: *mut FUnknown) -> uint32 {
-        let Some(owner) = (unsafe {
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the leading FUnknown interface of RunLoopInterface.
-            owner_from_run_loop(this.cast::<IRunLoop>())
+            run_loop_from_interface(this.cast::<IRunLoop>())
         }) else {
             return 0;
         };
         unsafe {
-            // SAFETY: owner points to the live containing PlugFrame.
-            release(owner.cast::<FUnknown>())
+            // SAFETY: this is the live host-owned run loop object. References do not own it;
+            // lifetime remains with the containing HostContext or PlugFrame.
+            (*run_loop)
+                .references
+                .fetch_sub(1, Ordering::Release)
+                .saturating_sub(1)
         }
     }
 
@@ -358,17 +369,17 @@ mod linux {
         if handler.is_null() || fd < 0 {
             return INVALID_ARGUMENT;
         }
-        let Some(owner) = (unsafe {
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the live run-loop interface supplied by PlugFrame.
-            owner_from_run_loop(this)
+            run_loop_from_interface(this)
         }) else {
             return RESULT_FALSE;
         };
-        let frame = unsafe {
-            // SAFETY: owner remains live while the plug-in retains this interface.
-            &*owner
+        let run_loop = unsafe {
+            // SAFETY: the interface remains live for the duration of this callback.
+            &*run_loop
         };
-        let Ok(mut state) = frame.run_loop_state.try_borrow_mut() else {
+        let Ok(mut state) = run_loop.state.try_borrow_mut() else {
             return RESULT_FALSE;
         };
         if state.events.iter().any(|event| event.fd == fd) {
@@ -391,17 +402,17 @@ mod linux {
         if handler.is_null() {
             return INVALID_ARGUMENT;
         }
-        let Some(owner) = (unsafe {
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the live run-loop interface supplied by PlugFrame.
-            owner_from_run_loop(this)
+            run_loop_from_interface(this)
         }) else {
             return RESULT_FALSE;
         };
-        let frame = unsafe {
-            // SAFETY: owner remains live while the plug-in retains this interface.
-            &*owner
+        let run_loop = unsafe {
+            // SAFETY: the interface remains live for the duration of this callback.
+            &*run_loop
         };
-        let Ok(mut state) = frame.run_loop_state.try_borrow_mut() else {
+        let Ok(mut state) = run_loop.state.try_borrow_mut() else {
             return RESULT_FALSE;
         };
         let Some(index) = state
@@ -423,9 +434,9 @@ mod linux {
         if handler.is_null() || milliseconds == 0 {
             return INVALID_ARGUMENT;
         }
-        let Some(owner) = (unsafe {
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the live run-loop interface supplied by PlugFrame.
-            owner_from_run_loop(this)
+            run_loop_from_interface(this)
         }) else {
             return RESULT_FALSE;
         };
@@ -439,11 +450,11 @@ mod linux {
         }) else {
             return INVALID_ARGUMENT;
         };
-        let frame = unsafe {
-            // SAFETY: owner remains live while the plug-in retains this interface.
-            &*owner
+        let run_loop = unsafe {
+            // SAFETY: the interface remains live for the duration of this callback.
+            &*run_loop
         };
-        let Ok(mut state) = frame.run_loop_state.try_borrow_mut() else {
+        let Ok(mut state) = run_loop.state.try_borrow_mut() else {
             return RESULT_FALSE;
         };
         state.timers.push(TimerRegistration {
@@ -461,17 +472,17 @@ mod linux {
         if handler.is_null() {
             return INVALID_ARGUMENT;
         }
-        let Some(owner) = (unsafe {
+        let Some(run_loop) = (unsafe {
             // SAFETY: this is the live run-loop interface supplied by PlugFrame.
-            owner_from_run_loop(this)
+            run_loop_from_interface(this)
         }) else {
             return RESULT_FALSE;
         };
-        let frame = unsafe {
-            // SAFETY: owner remains live while the plug-in retains this interface.
-            &*owner
+        let run_loop = unsafe {
+            // SAFETY: the interface remains live for the duration of this callback.
+            &*run_loop
         };
-        let Ok(mut state) = frame.run_loop_state.try_borrow_mut() else {
+        let Ok(mut state) = run_loop.state.try_borrow_mut() else {
             return RESULT_FALSE;
         };
         let Some(index) = state
@@ -485,16 +496,8 @@ mod linux {
         0
     }
 
-    unsafe fn owner_from_run_loop(this: *mut IRunLoop) -> Option<*mut PlugFrame> {
-        if this.is_null() {
-            return None;
-        }
-        unsafe {
-            // SAFETY: this points to the leading interface field of a live RunLoopInterface.
-            (*this.cast::<RunLoopInterface>())
-                .owner
-                .map(NonNull::as_ptr)
-        }
+    unsafe fn run_loop_from_interface(this: *mut IRunLoop) -> Option<*mut RunLoopInterface> {
+        (!this.is_null()).then_some(this.cast())
     }
 
     fn event_handler_table(handler: &ComPtr<IEventHandler>) -> *const EventHandlerVTable {

@@ -5,10 +5,11 @@ use std::{
 };
 
 use crate::{
-    AudioClipSource, HardwareOutputFrame, PluginProcessContext, PluginProcessor, RenderBuildError,
-    RenderChannelKind, RenderChannelSpec, RenderClipSpec, RenderGraphSpec, RenderMeter,
-    RenderMidiNote, RenderMidiSpec, RenderPluginSpec, RenderResources, RenderRoute, RenderRuntime,
-    RenderSendSpec, RenderSendTap, RenderTransport, TempoEvent, TimeSignatureEvent,
+    AudioClipSource, AudioPluginProcessor, AudioPluginProcessorHandle, HardwareOutputFrame,
+    ParameterToken, ProcessContext, RenderBuildError, RenderChannelKind, RenderChannelSpec,
+    RenderClipSpec, RenderGraphSpec, RenderMeter, RenderMidiNote, RenderMidiSpec, RenderPluginSpec,
+    RenderResources, RenderRoute, RenderRuntime, RenderSendSpec, RenderSendTap, RenderTransport,
+    SidechainSource, TempoEvent, TimeSignatureEvent,
 };
 use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 
@@ -64,20 +65,23 @@ impl AudioClipSource for ConstantClip {
 #[derive(Clone)]
 struct GainPlugin(f32);
 
-impl PluginProcessor for GainPlugin {
-    fn clone_box(&self) -> Box<dyn PluginProcessor> {
+impl AudioPluginProcessor for GainPlugin {
+    fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
         Box::new(self.clone())
     }
 
-    fn process_frame(&mut self, mut frame: [f32; 2], _context: PluginProcessContext) -> [f32; 2] {
-        frame[0] *= self.0;
-        frame[1] *= self.0;
-        frame
+    fn process_block(
+        &mut self,
+        frames: &mut [[f32; 2]],
+        _sidechains: &dyn SidechainSource,
+        _context: &ProcessContext,
+    ) -> bool {
+        for frame in frames {
+            frame[0] *= self.0;
+            frame[1] *= self.0;
+        }
+        true
     }
-
-    fn note_on(&mut self, _channel: u8, _key: u8, _velocity: u8) {}
-
-    fn note_off(&mut self, _channel: u8, _key: u8, _velocity: u8) {}
 }
 
 /// Records every note and parameter call so MIDI dispatch can be asserted.
@@ -99,57 +103,66 @@ impl RecordingPlugin {
     }
 }
 
-impl PluginProcessor for RecordingPlugin {
-    fn clone_box(&self) -> Box<dyn PluginProcessor> {
+impl AudioPluginProcessor for RecordingPlugin {
+    fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
         Box::new(self.clone())
     }
 
-    fn process_frame(&mut self, frame: [f32; 2], _context: PluginProcessContext) -> [f32; 2] {
-        frame
+    fn process_block(
+        &mut self,
+        _frames: &mut [[f32; 2]],
+        _sidechains: &dyn SidechainSource,
+        _context: &ProcessContext,
+    ) -> bool {
+        true
     }
 
-    fn note_on(&mut self, channel: u8, key: u8, velocity: u8) {
+    fn note_on(&mut self, _offset: usize, channel: u8, key: u8, velocity: u8, _id: i32) -> bool {
         self.notes
             .lock()
             .expect("note log should not be poisoned")
             .push(NoteEvent::On(channel, key, velocity));
+        true
     }
 
-    fn note_off(&mut self, channel: u8, key: u8, velocity: u8) {
+    fn note_off(&mut self, _offset: usize, channel: u8, key: u8, velocity: u8, _id: i32) -> bool {
         self.notes
             .lock()
             .expect("note log should not be poisoned")
             .push(NoteEvent::Off(channel, key, velocity));
+        true
     }
 
-    fn set_parameter(&mut self, parameter_id: u32, normalized: f64) {
+    fn parameter(&mut self, _offset: usize, token: ParameterToken, value: f64) -> bool {
         self.parameters
             .lock()
             .expect("parameter log should not be poisoned")
-            .push((parameter_id, normalized));
+            .push((token.get(), value));
+        true
     }
 }
 
 /// Captures the transport context the graph hands to each processor.
 #[derive(Clone, Default)]
-struct ContextProbe(Arc<Mutex<Vec<PluginProcessContext>>>);
+struct ContextProbe(Arc<Mutex<Vec<ProcessContext>>>);
 
-impl PluginProcessor for ContextProbe {
-    fn clone_box(&self) -> Box<dyn PluginProcessor> {
+impl AudioPluginProcessor for ContextProbe {
+    fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
         Box::new(self.clone())
     }
 
-    fn process_frame(&mut self, frame: [f32; 2], context: PluginProcessContext) -> [f32; 2] {
+    fn process_block(
+        &mut self,
+        _frames: &mut [[f32; 2]],
+        _sidechains: &dyn SidechainSource,
+        context: &ProcessContext,
+    ) -> bool {
         self.0
             .lock()
             .expect("context log should not be poisoned")
-            .push(context);
-        frame
+            .push(*context);
+        true
     }
-
-    fn note_on(&mut self, _channel: u8, _key: u8, _velocity: u8) {}
-
-    fn note_off(&mut self, _channel: u8, _key: u8, _velocity: u8) {}
 }
 
 fn channel(id: &str, kind: RenderChannelKind) -> RenderChannelSpec {
@@ -213,7 +226,7 @@ fn spec() -> RenderGraphSpec {
 fn resources() -> RenderResources {
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("gain", Box::new(GainPlugin(0.5)));
+    resources.insert_plugin("gain", AudioPluginProcessorHandle::new(GainPlugin(0.5)));
     resources
 }
 
@@ -395,8 +408,8 @@ fn disabled_plugins_are_left_out_of_the_render_chain() {
 fn plugins_run_in_slot_order_rather_than_declaration_order() {
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("boost", Box::new(GainPlugin(4.0)));
-    resources.insert_plugin("mute", Box::new(GainPlugin(0.0)));
+    resources.insert_plugin("boost", AudioPluginProcessorHandle::new(GainPlugin(4.0)));
+    resources.insert_plugin("mute", AudioPluginProcessorHandle::new(GainPlugin(0.0)));
     let mut spec = spec();
     spec.plugins = vec![
         RenderPluginSpec {
@@ -591,7 +604,7 @@ fn parameter_previews_reach_the_processor_and_are_clamped() {
     let plugin = RecordingPlugin::default();
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("gain", Box::new(plugin.clone()));
+    resources.insert_plugin("gain", AudioPluginProcessorHandle::new(plugin.clone()));
     let mut runtime =
         RenderRuntime::build(spec(), resources).expect("graph with a probe should build");
 
@@ -624,7 +637,7 @@ fn midi_notes_start_and_stop_on_their_own_ticks() {
     let plugin = RecordingPlugin::default();
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("gain", Box::new(plugin.clone()));
+    resources.insert_plugin("gain", AudioPluginProcessorHandle::new(plugin.clone()));
     let mut spec = spec();
     spec.midi = vec![RenderMidiSpec {
         plugin_id: "plugin".into(),
@@ -655,7 +668,7 @@ fn seeking_chases_notes_that_should_already_be_sounding() {
     let plugin = RecordingPlugin::default();
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("gain", Box::new(plugin.clone()));
+    resources.insert_plugin("gain", AudioPluginProcessorHandle::new(plugin.clone()));
     let mut spec = spec();
     spec.midi = vec![RenderMidiSpec {
         plugin_id: "plugin".into(),
@@ -684,7 +697,7 @@ fn processors_receive_the_musical_position_of_each_frame() {
     let probe = ContextProbe::default();
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("gain", Box::new(probe.clone()));
+    resources.insert_plugin("gain", AudioPluginProcessorHandle::new(probe.clone()));
     let mut spec = spec();
     spec.time_signature_events = vec![TimeSignatureEvent {
         tick: 0,
@@ -699,9 +712,9 @@ fn processors_receive_the_musical_position_of_each_frame() {
 
     let contexts = probe.0.lock().expect("context log should not be poisoned");
     let context = contexts.last().copied().expect("one frame was rendered");
-    assert_eq!(context.sample_position, 24_000);
-    assert!((context.quarter_position - 1.0).abs() < 1.0e-9);
-    assert!((context.bar_position - 1.0 / 3.0).abs() < 1.0e-9);
+    assert_eq!(context.project_time_samples, 24_000);
+    assert!((context.project_time_quarters - 1.0).abs() < 1.0e-9);
+    assert!((context.bar_position_quarters - 1.0 / 3.0).abs() < 1.0e-9);
     assert!((context.tempo - 120.0).abs() < 1.0e-9);
     assert_eq!(context.time_signature_numerator, 6);
     assert_eq!(context.time_signature_denominator, 8);
@@ -714,7 +727,7 @@ fn the_context_follows_the_tempo_and_signature_in_effect_at_the_playhead() {
     let probe = ContextProbe::default();
     let mut resources = RenderResources::new();
     resources.insert_clip("clip-source", Box::new(ConstantClip));
-    resources.insert_plugin("gain", Box::new(probe.clone()));
+    resources.insert_plugin("gain", AudioPluginProcessorHandle::new(probe.clone()));
     let mut spec = spec();
     spec.tempo_events = vec![
         TempoEvent {

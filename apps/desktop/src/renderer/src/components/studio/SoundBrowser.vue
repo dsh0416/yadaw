@@ -2,8 +2,13 @@
 import { computed, onMounted, shallowRef } from "vue"
 import { useI18n } from "vue-i18n"
 import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/vue"
-import type { ProjectAssetSummary as Asset } from "@heron/contracts"
-import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@heron/contracts"
+import type { PluginFormat, ProjectAssetSummary as Asset } from "@heron/contracts"
+import {
+  pluginCategoriesLabel,
+  pluginDescriptorKey,
+  pluginLocator,
+  type PluginDescriptor
+} from "@heron/contracts"
 import { usePluginStore } from "../../stores/plugins"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import type { PluginSelection, PluginSignalWidth } from "../plugins/plugin-audio-mode"
@@ -17,27 +22,24 @@ type BrowserSection = "instruments" | "effects" | "samples" | "plugins"
 const activeSection = shallowRef<BrowserSection>("instruments")
 const pendingPlugin = shallowRef<PluginDescriptor | null>(null)
 const pendingInputWidth = shallowRef<PluginSignalWidth | undefined>(undefined)
+const pluginFormat = shallowRef<PluginFormat | "all">("all")
 
 function matches(value: string): boolean {
   return value.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())
 }
 
-const instruments = computed(() =>
-  pluginStore.compatibleInstruments.filter((plugin) =>
-    matches(`${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`)
+function matchesPlugin(plugin: PluginDescriptor): boolean {
+  const format = pluginLocator(plugin).format
+  return (
+    (pluginFormat.value === "all" || pluginFormat.value === format) &&
+    matches(`${plugin.name} ${plugin.vendor} ${format} ${pluginCategoriesLabel(plugin.categories)}`)
   )
-)
-const effects = computed(() =>
-  pluginStore.compatibleEffects.filter((plugin) =>
-    matches(`${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`)
-  )
-)
+}
+
+const instruments = computed(() => pluginStore.compatibleInstruments.filter(matchesPlugin))
+const effects = computed(() => pluginStore.compatibleEffects.filter(matchesPlugin))
 const samples = computed(() => props.assets.filter((asset) => matches(asset.name)))
-const allPlugins = computed(() =>
-  pluginStore.catalog.plugins.filter((plugin) =>
-    matches(`${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`)
-  )
-)
+const allPlugins = computed(() => pluginStore.catalog.plugins.filter(matchesPlugin))
 const browserSections = computed<
   ReadonlyArray<{ value: BrowserSection; icon: typeof Piano; label: string; count: number }>
 >(() => [
@@ -146,7 +148,8 @@ onMounted(() => void pluginStore.load())
             >
               <span class="library-item-icon"><Piano :size="13" /></span
               ><span class="library-item-copy"
-                ><b>{{ plugin.name }}</b
+                ><b
+                  >{{ plugin.name }} <em>{{ pluginLocator(plugin).format.toUpperCase() }}</em></b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
                   }}{{ plugin.vendor }} · {{ pluginCategoriesLabel(plugin.categories) }}</small
@@ -173,7 +176,8 @@ onMounted(() => void pluginStore.load())
             >
               <span class="library-item-icon"><SlidersHorizontal :size="13" /></span
               ><span class="library-item-copy"
-                ><b>{{ plugin.name }}</b
+                ><b
+                  >{{ plugin.name }} <em>{{ pluginLocator(plugin).format.toUpperCase() }}</em></b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
                   }}{{ plugin.vendor }} · {{ pluginCategoriesLabel(plugin.categories) }}</small
@@ -215,6 +219,18 @@ onMounted(() => void pluginStore.load())
             >{{ pluginStore.scanProgress.completed }}/{{ pluginStore.scanProgress.total }}</small
           >
         </div>
+        <div class="plugin-format-filter" :aria-label="t('studio.soundBrowser.formatFilter')">
+          <button
+            v-for="format in ['all', 'vst3', 'clap'] as const"
+            :key="format"
+            type="button"
+            :class="{ active: pluginFormat === format }"
+            :aria-pressed="pluginFormat === format"
+            @click="pluginFormat = format"
+          >
+            {{ format === "all" ? t("studio.soundBrowser.allFormats") : format.toUpperCase() }}
+          </button>
+        </div>
         <div class="library-scroll">
           <div class="library-viewport">
             <div class="library-heading">{{ t("studio.soundBrowser.headings.catalog") }}</div>
@@ -225,7 +241,8 @@ onMounted(() => void pluginStore.load())
             >
               <span class="library-item-icon"><Plug :size="13" /></span
               ><span class="library-item-copy"
-                ><b>{{ plugin.name }}</b
+                ><b
+                  >{{ plugin.name }} <em>{{ pluginLocator(plugin).format.toUpperCase() }}</em></b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
                   }}{{ plugin.vendor }} · {{ plugin.compatibility }}</small
@@ -451,6 +468,12 @@ onMounted(() => void pluginStore.load())
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.library-item-copy em {
+  margin-left: 3px;
+  color: var(--accent);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  font-style: normal;
+}
 .library-item-copy small {
   margin-top: 3px;
   color: var(--text-faint);
@@ -518,5 +541,24 @@ onMounted(() => void pluginStore.load())
 .plugin-scan small {
   color: var(--text-faint);
   font: var(--ui-type-size-caption) var(--ui-type-family-data);
+}
+.plugin-format-filter {
+  display: flex;
+  gap: 3px;
+  margin: 0 5px 8px;
+}
+.plugin-format-filter button {
+  padding: 3px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--text-faint);
+  background: transparent;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  cursor: pointer;
+}
+.plugin-format-filter button.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 </style>

@@ -13,8 +13,11 @@ import {
 function descriptor(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor {
   return {
     source: { kind: "external" },
-    classId: "class-id",
-    modulePath: "/plugins/Reverb.vst3",
+    locator: {
+      format: "vst3",
+      artifactPath: "/plugins/Reverb.vst3",
+      nativeId: "class-id"
+    },
     name: "Reverb",
     vendor: "Heron",
     version: "1.0.0",
@@ -23,6 +26,17 @@ function descriptor(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor
     supportedAudioModes: ["stereo"],
     architecture: "x86_64",
     buses: [],
+    notePorts: [],
+    capabilities: {
+      editor: false,
+      parameters: true,
+      state: true,
+      latency: true,
+      tail: true,
+      audioPortConfigurations: false,
+      noteInput: false,
+      noteOutput: false
+    },
     hasEditor: false,
     compatibility: "compatible",
     compatibilityReason: null,
@@ -32,27 +46,41 @@ function descriptor(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor
 
 describe("pluginDescriptorKey", () => {
   it("keys external plugins by module path so two bundles never collide", () => {
-    const first = descriptor({ modulePath: "/a/Reverb.vst3" })
-    const second = descriptor({ modulePath: "/b/Reverb.vst3" })
+    const first = descriptor({
+      locator: { format: "vst3", artifactPath: "/a/Reverb.vst3", nativeId: "class-id" }
+    })
+    const second = descriptor({
+      locator: { format: "vst3", artifactPath: "/b/Reverb.vst3", nativeId: "class-id" }
+    })
 
-    expect(pluginDescriptorKey(first)).toBe("/a/Reverb.vst3:class-id")
+    expect(pluginDescriptorKey(first)).toBe("vst3:/a/Reverb.vst3:class-id")
     expect(pluginDescriptorKey(first)).not.toBe(pluginDescriptorKey(second))
   })
 
   it("keys builtin plugins by their builtin id rather than the module path", () => {
     const builtin = descriptor({
       source: { kind: "builtin", id: "heron-gain" },
-      modulePath: "/wherever/it/was/installed.vst3"
+      locator: {
+        format: "vst3",
+        artifactPath: "/wherever/it/was/installed.vst3",
+        nativeId: "class-id"
+      }
     })
 
-    expect(pluginDescriptorKey(builtin)).toBe("heron-gain:class-id")
+    expect(pluginDescriptorKey(builtin)).toBe("heron-gain:vst3:class-id")
   })
 
   it("distinguishes classes shipped inside the same bundle", () => {
     const bundle = "/plugins/Suite.vst3"
 
-    expect(pluginDescriptorKey(descriptor({ modulePath: bundle, classId: "a" }))).not.toBe(
-      pluginDescriptorKey(descriptor({ modulePath: bundle, classId: "b" }))
+    expect(
+      pluginDescriptorKey(
+        descriptor({ locator: { format: "vst3", artifactPath: bundle, nativeId: "a" } })
+      )
+    ).not.toBe(
+      pluginDescriptorKey(
+        descriptor({ locator: { format: "vst3", artifactPath: bundle, nativeId: "b" } })
+      )
     )
   })
 })

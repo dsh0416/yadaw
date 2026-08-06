@@ -1,11 +1,11 @@
 use std::hint::black_box;
 
 use super::{
-    Arc, AtomicBool, AtomicU32, AtomicU64, Duration, InputPeakBank, Instant, LiveMixerSendTap,
-    MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, NativeLatencyPolicy, NativeMixerChannel,
-    NativeMixerGraph, NativeMixerRuntime, NativeMixerSend, NativePluginInstance, PluginAudioMode,
-    TRANSPORT_STOPPED, TempoEvent, TimeSignatureEvent, TransportShared, Vst3ProcessorHandle,
-    build_mixer_runtime,
+    Arc, AtomicBool, AtomicU32, AtomicU64, AudioPluginProcessorHandle, Duration, InputPeakBank,
+    Instant, LiveMixerSendTap, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, NativeLatencyPolicy,
+    NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
+    NativePluginInstance, PluginAudioMode, TRANSPORT_STOPPED, TempoEvent, TimeSignatureEvent,
+    TransportShared, build_mixer_runtime,
 };
 
 use heron_dsp_runtime::protocol::{AudioBenchmarkReport, AudioBenchmarkScenario};
@@ -69,7 +69,7 @@ fn percentile(sorted: &[f64], fraction: f64) -> f64 {
 
 fn benchmark_graph(
     spec: AudioBenchmarkSpec,
-    processors: &[(String, Vst3ProcessorHandle)],
+    processors: &[(String, AudioPluginProcessorHandle)],
 ) -> NativeMixerGraph {
     let master = spec.tracks + spec.buses;
     let output = master + 1;
@@ -224,7 +224,7 @@ fn benchmark_graph(
 
 fn benchmark_runtime(
     spec: AudioBenchmarkSpec,
-    processors: &[(String, Vst3ProcessorHandle)],
+    processors: &[(String, AudioPluginProcessorHandle)],
 ) -> std::result::Result<NativeMixerRuntime, String> {
     let transport = Arc::new(TransportShared {
         state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
@@ -250,7 +250,7 @@ fn benchmark_runtime(
 
 fn measure_audio_benchmark_spec(
     spec: AudioBenchmarkSpec,
-    processors: &[(String, Vst3ProcessorHandle)],
+    processors: &[(String, AudioPluginProcessorHandle)],
     target_time: Duration,
     max_virtual_frames: usize,
 ) -> std::result::Result<AudioBenchmarkScenario, String> {
@@ -321,7 +321,7 @@ fn measure_audio_benchmark_spec(
 }
 
 pub fn run_audio_benchmark(
-    processors: Vec<(String, Vst3ProcessorHandle)>,
+    processors: Vec<(String, AudioPluginProcessorHandle)>,
 ) -> std::result::Result<AudioBenchmarkReport, String> {
     let required_plugins = AUDIO_BENCHMARK_SPECS
         .iter()
@@ -370,7 +370,7 @@ mod benchmark_tests {
     use super::*;
 
     #[test]
-    fn audio_benchmark_specs_scale_vst3_load_with_session_size() {
+    fn audio_benchmark_specs_scale_plugin_load_with_session_size() {
         assert_eq!(AUDIO_BENCHMARK_SPECS.map(|spec| spec.plugins), [8, 32, 64]);
         assert!(
             AUDIO_BENCHMARK_SPECS

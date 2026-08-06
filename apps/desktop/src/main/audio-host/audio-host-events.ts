@@ -9,7 +9,7 @@ export interface AraHostCallback {
   event: AraCallbackEvent
 }
 
-export interface Vst3HostNotification {
+export interface PluginHostNotification {
   instanceId: string
   kind: string
   value: string
@@ -18,7 +18,7 @@ export interface Vst3HostNotification {
 export interface PluginSidechainRouteRequest {
   requestId: number
   instanceId: string
-  inputBusIndex: number
+  inputPortKey: string
   sourceChannelId: string | null
 }
 
@@ -158,22 +158,25 @@ function decodeAraCallbackEvent(value: unknown): AraCallbackEvent | null {
 
 export function drainHostEvents(
   client: AudioHostRuntime,
-  onEditorPreferenceChanged: (classId: string, preference: PluginEditorPreference) => Promise<void>,
+  onEditorPreferenceChanged: (
+    pluginTypeKey: string,
+    preference: PluginEditorPreference
+  ) => Promise<void>,
   pendingWrites: Set<Promise<void>>,
   onEditorClosed?: (instanceId: string) => void,
   onAraCallback?: (callback: AraHostCallback) => void,
-  onVst3HostNotification?: (notification: Vst3HostNotification) => void,
+  onPluginHostNotification?: (notification: PluginHostNotification) => void,
   onPluginSidechainRouteRequested?: (request: PluginSidechainRouteRequest) => void
 ): void {
   const latestPreferences = new Map<string, PluginEditorPreference>()
   const closedEditors = new Set<string>()
-  const vst3Notifications: Vst3HostNotification[] = []
+  const pluginNotifications: PluginHostNotification[] = []
   const sidechainRequests: PluginSidechainRouteRequest[] = []
   for (const event of client.drainEvents()) {
     const decoded = decode(event) as {
       type?: string
       revision?: number
-      class_id?: string
+      plugin_type_key?: string
       instance_id?: string
       preference?: {
         mode?: string
@@ -184,20 +187,20 @@ export function drainHostEvents(
       kind?: string
       value?: string
       request_id?: number
-      input_bus_index?: number
+      input_port_key?: string
       source_channel_id?: string | null
     }
     if (decoded.type === "graph-published" && decoded.revision !== undefined) {
       // Telemetry carries the same revision; draining avoids idle event buildup.
     } else if (
       decoded.type === "plugin-editor-preference-changed" &&
-      typeof decoded.class_id === "string" &&
+      typeof decoded.plugin_type_key === "string" &&
       (decoded.preference?.mode === "native" || decoded.preference?.mode === "parameters") &&
       Number.isInteger(decoded.preference.zoom_percent) &&
       (decoded.preference.zoom_percent as number) >= 50 &&
       (decoded.preference.zoom_percent as number) <= 400
     ) {
-      latestPreferences.set(decoded.class_id, {
+      latestPreferences.set(decoded.plugin_type_key, {
         mode: decoded.preference.mode,
         zoomPercent: decoded.preference.zoom_percent as number
       })
@@ -213,14 +216,14 @@ export function drainHostEvents(
       (decoded.request_id as number) > 0 &&
       typeof decoded.instance_id === "string" &&
       decoded.instance_id.length > 0 &&
-      Number.isSafeInteger(decoded.input_bus_index) &&
-      (decoded.input_bus_index as number) >= 0 &&
+      typeof decoded.input_port_key === "string" &&
+      decoded.input_port_key.length > 0 &&
       (decoded.source_channel_id === null || typeof decoded.source_channel_id === "string")
     ) {
       sidechainRequests.push({
         requestId: decoded.request_id as number,
         instanceId: decoded.instance_id,
-        inputBusIndex: decoded.input_bus_index as number,
+        inputPortKey: decoded.input_port_key,
         sourceChannelId: decoded.source_channel_id ?? null
       })
     } else if (
@@ -231,7 +234,7 @@ export function drainHostEvents(
       decoded.kind.length > 0 &&
       typeof decoded.value === "string"
     ) {
-      vst3Notifications.push({
+      pluginNotifications.push({
         instanceId: decoded.instance_id,
         kind: decoded.kind,
         value: decoded.value
@@ -255,8 +258,8 @@ export function drainHostEvents(
       }
     }
   }
-  for (const [classId, preference] of latestPreferences) {
-    const write = onEditorPreferenceChanged(classId, preference).finally(() => {
+  for (const [pluginTypeKey, preference] of latestPreferences) {
+    const write = onEditorPreferenceChanged(pluginTypeKey, preference).finally(() => {
       pendingWrites.delete(write)
     })
     pendingWrites.add(write)
@@ -266,9 +269,9 @@ export function drainHostEvents(
       onEditorClosed(instanceId)
     }
   }
-  if (onVst3HostNotification) {
-    for (const notification of vst3Notifications) {
-      onVst3HostNotification(notification)
+  if (onPluginHostNotification) {
+    for (const notification of pluginNotifications) {
+      onPluginHostNotification(notification)
     }
   }
   if (onPluginSidechainRouteRequested) {

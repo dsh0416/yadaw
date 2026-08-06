@@ -30,7 +30,7 @@ jobs:
   checks:
     name: Checks (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +44,7 @@ jobs:
         # runners.
         include:
           - name: Linux x64
-            os: ubuntu-latest
+            os: ubuntu-24.04
             check-task: ci:check:coverage
           - name: Windows x64
             os: windows-latest
@@ -67,16 +67,79 @@ jobs:
 
       - name: Install Playwright Chromium and Linux dependencies
         if: runner.os == 'Linux'
-        run: mise run ci:install:playwright
+        run: |
+          mise run ci:install:playwright
+          # Steinberg's VSTGUI CMake integration enables its standalone library
+          # even when only plug-in example targets are requested.
+          sudo apt-get install --yes --no-install-recommends libgtkmm-3.0-dev ninja-build xauth xvfb
+
+      - name: Fetch pinned official CLAP examples
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CLAP_PLUGINS_COMMIT: 81791d08bb4e5198213440fe43b8e99745210130
+        run: |
+          fixture_source="$RUNNER_TEMP/clap-plugins"
+          git init "$fixture_source"
+          git -C "$fixture_source" remote add origin https://github.com/free-audio/clap-plugins.git
+          git -C "$fixture_source" fetch --depth 1 origin "$CLAP_PLUGINS_COMMIT"
+          git -C "$fixture_source" checkout --detach FETCH_HEAD
+          git -C "$fixture_source" submodule update \
+            --init \
+            --depth 1 \
+            clap \
+            clap-helpers \
+            yas
+
+          actual_commit="$(git -C "$fixture_source" rev-parse HEAD)"
+          if [[ "$actual_commit" != "$CLAP_PLUGINS_COMMIT" ]]; then
+            echo "::error::Expected CLAP examples commit $CLAP_PLUGINS_COMMIT, got $actual_commit"
+            exit 1
+          fi
+          echo "CLAP_FIXTURE_SOURCE=$fixture_source" >> "$GITHUB_ENV"
+
+      - name: Build official VST3 and CLAP examples
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cmake \
+            -S . \
+            -B target/vst3-fixtures \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHERON_BUILD_VST3_FIXTURES=ON \
+            -DSMTG_RUN_VST_VALIDATOR=ON
+          cmake --build target/vst3-fixtures --target again note-expression-synth
+
+          cmake \
+            -S "$CLAP_FIXTURE_SOURCE" \
+            -B target/clap-fixtures \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCLAP_PLUGINS_HEADLESS=ON
+          cmake --build target/clap-fixtures --target clap-plugins
+
+          again_path="$(find target/vst3-fixtures -type d -name 'again.vst3' -print -quit)"
+          synth_path="$(find target/vst3-fixtures -type d -name 'note-expression-synth.vst3' -print -quit)"
+          clap_path="$(find target/clap-fixtures -type f -name 'clap-plugins.clap' -print -quit)"
+          for fixture in "$again_path" "$synth_path" "$clap_path"; do
+            if [[ -z "$fixture" || ! -e "$fixture" ]]; then
+              echo "::error::An official plug-in fixture was not produced"
+              exit 1
+            fi
+          done
+          echo "VST3_AGAIN_FIXTURE=$again_path" >> "$GITHUB_ENV"
+          echo "VST3_SYNTH_FIXTURE=$synth_path" >> "$GITHUB_ENV"
+          echo "CLAP_PLUGIN_FIXTURE=$clap_path" >> "$GITHUB_ENV"
 
       - name: Run repository checks
         run: mise run ${{ matrix.check-task }}
 
       # On Linux the checks above already produced both coverage reports:
       # Vitest wrote lcov during the test pass and the combined coverage
-      # orchestrator merged Rust profiles from Cargo tests and instrumented
-      # napi calls, keeping output in target-coverage/ so it stays out of the
-      # shared Cargo target cache.
+      # orchestrator merged Rust profiles from Cargo tests, instrumented napi
+      # calls, probes, and the official plug-in fixtures, keeping output in
+      # target-coverage/ so it stays out of the shared Cargo target cache.
       - name: Upload JavaScript coverage to Codecov
         if: runner.os == 'Linux'
         uses: codecov/codecov-action@v7

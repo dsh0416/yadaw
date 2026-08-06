@@ -18,9 +18,8 @@ describe("project plugin state synchronization", () => {
       savePluginState: vi.fn(async (instanceId: string) => {
         if (instanceId === "broken") throw failure
         return {
-          componentState: new Uint8Array([1]),
-          controllerState: new Uint8Array([2]),
-          araDocumentState: new Uint8Array([3])
+          version: 1 as const,
+          chunks: [{ key: "main", bytes: new Uint8Array([1, 2, 3]) }]
         }
       })
     }
@@ -30,7 +29,7 @@ describe("project plugin state synchronization", () => {
     }
 
     await expect(synchronizePluginStatesAtomically(audioHost, projectGraph)).rejects.toThrow(
-      "Could not synchronize every VST3 plug-in state"
+      "Could not synchronize every audio plug-in state"
     )
     expect(projectGraph.savePluginStates).not.toHaveBeenCalled()
   })
@@ -39,9 +38,8 @@ describe("project plugin state synchronization", () => {
     const audioHost = {
       loadPlugin: vi.fn(async () => ({ latencySamples: 0, tailSamples: null })),
       savePluginState: vi.fn(async () => ({
-        componentState: new Uint8Array([1]),
-        controllerState: new Uint8Array([2]),
-        araDocumentState: new Uint8Array([3])
+        version: 1 as const,
+        chunks: [{ key: "main", bytes: new Uint8Array([1, 2, 3]) }]
       }))
     }
     const projectGraph = {

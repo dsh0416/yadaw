@@ -87,7 +87,10 @@ Finish and hand off a mix.
 - [ ] Mixer groups (or equivalent grouping workflow)
 - [x] VST3+ARA 2 hosting (ordinary insert workflow, non-destructive playback,
       independent archive state; Wayland-specific editor work remains in M3)
-- [ ] CLAP hosting
+- [ ] CLAP hosting (format-neutral core, scanning, processing, parameters,
+      state, latency/tail, MIDI, timer/POSIX-FD, native editor embedding and
+      graph-retirement-driven restart/rescan reactivation landed; the
+      repository-owned conformance plug-in and broader platform matrix remain)
 - [ ] AU hosting
 
 ## M3 — Studio to stage

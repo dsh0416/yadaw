@@ -11,8 +11,11 @@ type HostRequest = (command: Record<string, unknown>) => Promise<ControlResponse
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "ABCDEF0123456789ABCDEF0123456789",
-  modulePath: "/plugins/Effect.vst3",
+  locator: {
+    format: "vst3",
+    artifactPath: "/plugins/Effect.vst3",
+    nativeId: "ABCDEF0123456789ABCDEF0123456789"
+  },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -31,13 +34,18 @@ const plugin: PluginInstanceState = {
   channelId: "master",
   role: "insert",
   slotOrder: 0,
-  classId: descriptor.classId,
+  locator: descriptor.locator,
   descriptor,
   audioMode: "stereo",
   enabled: true,
   sidechainInputs: [],
-  componentState: new Uint8Array([1, 2]),
-  controllerState: new Uint8Array([3, 4])
+  state: {
+    version: 1,
+    chunks: [
+      { key: "component", bytes: new Uint8Array([1, 2]) },
+      { key: "controller", bytes: new Uint8Array([3, 4]) }
+    ]
+  }
 }
 
 describe("AudioHostPluginClient", () => {
@@ -73,13 +81,13 @@ describe("AudioHostPluginClient", () => {
     })
 
     await expect(client.loadPlugin(plugin, 48_000)).resolves.toEqual({
-      classId: descriptor.classId,
+      typeKey: "vst3:ABCDEF0123456789ABCDEF0123456789",
       runtimeHandle: 7,
       latencySamples: 32,
       tailSamples: 64
     })
     await expect(client.loadPlugin(plugin, 48_000)).resolves.toEqual({
-      classId: descriptor.classId,
+      typeKey: "vst3:ABCDEF0123456789ABCDEF0123456789",
       runtimeHandle: 7,
       latencySamples: 32,
       tailSamples: 64
@@ -147,13 +155,24 @@ describe("AudioHostPluginClient", () => {
         type: "plugin-parameters",
         parameters: [
           {
-            id: 1,
+            parameter_key: "vst3:1",
+            runtime_token: 1,
             title: "Gain",
             units: "dB",
             step_count: 0,
             default_normalized: 0.5,
             normalized: 0.25,
-            flags: 0
+            min_value: -60,
+            max_value: 12,
+            default_value: 0,
+            value: -12,
+            normalized_value: 0.25,
+            module_path: "Dynamics",
+            read_only: false,
+            hidden: false,
+            stepped: false,
+            automatable: true,
+            bypass: false
           }
         ]
       }
@@ -161,14 +180,25 @@ describe("AudioHostPluginClient", () => {
 
     await expect(client.pluginParameters("plugin-1")).resolves.toEqual([
       {
-        id: 1,
+        parameterKey: "vst3:1",
+        runtimeToken: 1,
         title: "Gain",
         shortTitle: "Gain",
         units: "dB",
         stepCount: 0,
         defaultNormalized: 0.5,
         normalized: 0.25,
-        flags: 0
+        minValue: -60,
+        maxValue: 12,
+        defaultValue: 0,
+        value: -12,
+        normalizedValue: 0.25,
+        modulePath: "Dynamics",
+        readOnly: false,
+        hidden: false,
+        stepped: false,
+        automatable: true,
+        bypass: false
       }
     ])
   })
@@ -234,7 +264,11 @@ describe("AudioHostPluginClient", () => {
           can_undo: false,
           can_redo: true,
           sidechain_buses: [
-            { input_bus_index: 1, name: "Side-chain", source_channel_id: "audio-2" }
+            {
+              input_port_key: "vst3:audio:input:1",
+              name: "Side-chain",
+              source_channel_id: "audio-2"
+            }
           ],
           sidechain_sources: [{ id: "audio-2", name: "Audio 2", kind: "audio" }],
           sidechain_pending: false
@@ -252,7 +286,13 @@ describe("AudioHostPluginClient", () => {
       canPaste: true,
       canUndo: false,
       canRedo: true,
-      sidechainBuses: [{ inputBusIndex: 1, name: "Side-chain", sourceChannelId: "audio-2" }],
+      sidechainBuses: [
+        {
+          inputPortKey: "vst3:audio:input:1",
+          name: "Side-chain",
+          sourceChannelId: "audio-2"
+        }
+      ],
       sidechainSources: [{ id: "audio-2", name: "Audio 2", kind: "audio" }],
       sidechainPending: false
     })
@@ -276,8 +316,9 @@ describe("AudioHostPluginClient", () => {
       helperEpoch: "e",
       pluginGeneration: 1,
       sequence: "1",
-      parameterId: 1,
-      normalized: 0.5,
+      parameterKey: "vst3:1",
+      runtimeToken: 1,
+      value: 0.5,
       gesture: "perform"
     }
 
@@ -307,8 +348,9 @@ describe("AudioHostPluginClient", () => {
       helperEpoch: "e",
       pluginGeneration: 1,
       sequence: "9",
-      parameterId: 2,
-      normalized: 0.8,
+      parameterKey: "vst3:2",
+      runtimeToken: 2,
+      value: 0.8,
       gesture: "perform"
     })
     expect(result.outcome).toBe("coalesced")
@@ -330,8 +372,9 @@ describe("AudioHostPluginClient", () => {
       helperEpoch: "e",
       pluginGeneration: 1,
       sequence: "1",
-      parameterId: 1,
-      normalized: 0.1,
+      parameterKey: "vst3:1",
+      runtimeToken: 1,
+      value: 0.1,
       gesture: "perform"
     })
 
@@ -346,15 +389,22 @@ describe("AudioHostPluginClient", () => {
     request.mockResolvedValue({
       result: {
         type: "plugin-state",
-        component_state: { storage: "inline", bytes: new Uint8Array([1]) },
-        controller_state: { storage: "inline", bytes: new Uint8Array([2]) },
-        ara_document_state: { storage: "inline", bytes: new Uint8Array([3]) }
+        state: {
+          version: 1,
+          chunks: [
+            { key: "component", bytes: { storage: "inline", bytes: new Uint8Array([1]) } },
+            { key: "controller", bytes: { storage: "inline", bytes: new Uint8Array([2]) } },
+            { key: "ara-document", bytes: { storage: "inline", bytes: new Uint8Array([3]) } }
+          ]
+        }
       }
     })
 
     const state = await client.savePluginState("plugin-1")
-    expect(state.componentState).toEqual(new Uint8Array([1]))
-    expect(state.controllerState).toEqual(new Uint8Array([2]))
-    expect(state.araDocumentState).toEqual(new Uint8Array([3]))
+    expect(state.chunks).toEqual([
+      { key: "component", bytes: new Uint8Array([1]) },
+      { key: "controller", bytes: new Uint8Array([2]) },
+      { key: "ara-document", bytes: new Uint8Array([3]) }
+    ])
   })
 })

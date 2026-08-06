@@ -14,6 +14,8 @@ use heron_vst3_host_sys::{
     iid,
 };
 
+#[cfg(target_os = "linux")]
+use crate::frame::RunLoopInterface;
 use crate::host_objects::{HostAttributeList, HostMessage};
 
 #[repr(C)]
@@ -21,6 +23,8 @@ pub(crate) struct HostContext {
     vtable: *const HostApplicationVTable,
     references: AtomicU32,
     plug_interface_support: PlugInterfaceSupportObject,
+    #[cfg(target_os = "linux")]
+    run_loop: RunLoopInterface,
 }
 
 #[repr(C)]
@@ -38,6 +42,8 @@ impl HostContext {
                 vtable: &PLUG_INTERFACE_SUPPORT_VTABLE,
                 owner: std::ptr::null(),
             },
+            #[cfg(target_os = "linux")]
+            run_loop: RunLoopInterface::new(),
         });
         context.plug_interface_support.owner = std::ptr::from_ref(context.as_ref());
         context
@@ -45,6 +51,11 @@ impl HostContext {
 
     pub(crate) fn as_unknown(&self) -> *mut FUnknown {
         std::ptr::from_ref(self).cast_mut().cast()
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn dispatch_run_loop(&self, now: std::time::Instant) -> Option<std::time::Instant> {
+        self.run_loop.dispatch(now)
     }
 }
 
@@ -68,6 +79,25 @@ unsafe extern "system" fn query_interface(
             add_ref(this);
         }
         0
+    } else if requested == iid::IRUN_LOOP {
+        #[cfg(target_os = "linux")]
+        {
+            let context = this.cast::<HostContext>();
+            unsafe {
+                // SAFETY: this is HostContext's leading interface and its run loop has the same
+                // stable boxed lifetime.
+                output.write((*context).run_loop.retain_interface().cast());
+            }
+            0
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            unsafe {
+                // SAFETY: output is writable as validated above.
+                output.write(std::ptr::null_mut());
+            }
+            -2147467262
+        }
     } else if requested == iid::IPLUG_INTERFACE_SUPPORT {
         let context = this.cast::<HostContext>();
         unsafe {
@@ -250,6 +280,8 @@ static PLUG_INTERFACE_SUPPORT_VTABLE: PlugInterfaceSupportVTable = PlugInterface
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    use heron_vst3_host_sys::{Steinberg::Linux::IRunLoop, abi::RunLoopVTable};
 
     unsafe fn release_created(object: *mut c_void) {
         let unknown = object.cast::<FUnknown>();
@@ -302,5 +334,35 @@ mod tests {
         };
         assert_eq!(result, -2147467262);
         assert!(object.is_null());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn exposes_module_lifetime_run_loop_service() {
+        let context = HostContext::new();
+        let mut run_loop = std::ptr::null_mut::<c_void>();
+        let result = unsafe {
+            // SAFETY: the context is live and run_loop is writable interface output storage.
+            query_interface(context.as_unknown(), iid::IRUN_LOOP.as_ptr(), &mut run_loop)
+        };
+        assert_eq!(result, 0);
+        let run_loop = run_loop.cast::<IRunLoop>();
+        assert!(!run_loop.is_null());
+        let table = unsafe {
+            // SAFETY: successful queryInterface returned the IRunLoop interface.
+            *run_loop.cast::<*const RunLoopVTable>()
+        };
+        let mut identity = std::ptr::null_mut::<c_void>();
+        let identity_result = unsafe {
+            // SAFETY: the run loop is live and identity is writable interface output storage.
+            ((*table).base.query_interface)(run_loop.cast(), iid::FUNKNOWN.as_ptr(), &mut identity)
+        };
+        assert_eq!(identity_result, 0);
+        assert_eq!(identity.cast::<IRunLoop>(), run_loop);
+        unsafe {
+            // SAFETY: these calls balance the two successful queryInterface calls above.
+            ((*table).base.release)(identity.cast());
+            ((*table).base.release)(run_loop.cast());
+        }
     }
 }

@@ -116,9 +116,9 @@ pub(super) fn mixer_parameter_command(
                     message: "mixer channel runtime handle is stale".into(),
                 };
             };
-            let (parameter, value) = match command.parameter_id {
-                0 => ("gainDb", -60.0 + command.normalized * 72.0),
-                1 => ("pan", command.normalized * 2.0 - 1.0),
+            let (parameter, value) = match command.parameter_token {
+                0 => ("gainDb", -60.0 + command.value * 72.0),
+                1 => ("pan", command.value * 2.0 - 1.0),
                 _ => {
                     return control_error! {
                         message: "unknown mixer channel parameter".into(),
@@ -137,9 +137,9 @@ pub(super) fn mixer_parameter_command(
                     message: "mixer send runtime handle is stale".into(),
                 };
             };
-            let (parameter, value) = match command.parameter_id {
-                0 => ("levelDb", -60.0 + command.normalized * 72.0),
-                1 => ("pan", command.normalized * 2.0 - 1.0),
+            let (parameter, value) = match command.parameter_token {
+                0 => ("levelDb", -60.0 + command.value * 72.0),
+                1 => ("pan", command.value * 2.0 - 1.0),
                 _ => {
                     return control_error! {
                         message: "unknown mixer send parameter".into(),

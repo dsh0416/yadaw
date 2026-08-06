@@ -4,6 +4,7 @@ import type {
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration,
+  PluginStateEnvelope,
   RpcError
 } from "@heron/contracts"
 
@@ -11,9 +12,7 @@ export type MidiSourceInput = MidiSourceState
 
 export interface PluginStateInput {
   id: string
-  componentState: Uint8Array
-  controllerState: Uint8Array
-  araDocumentState?: Uint8Array
+  state: PluginStateEnvelope
 }
 
 export interface AssetContentHash {

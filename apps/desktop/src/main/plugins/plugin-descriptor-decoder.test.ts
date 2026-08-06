@@ -34,7 +34,7 @@ describe("parseProbeStdout", () => {
 
   it("throws when no valid JSON descriptor is present", () => {
     expect(() => parseProbeStdout("probe failed\n{broken")).toThrow(
-      "VST3 probe returned an invalid descriptor"
+      "AudioPlugin probe returned an invalid descriptor"
     )
   })
 })

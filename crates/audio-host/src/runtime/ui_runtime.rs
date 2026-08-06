@@ -1,8 +1,8 @@
 use self::embedded_editors::EmbeddedEditorHost;
 use super::{
     ActorCommand, ActorRequest, Arc, AtomicU64, ControlCommand, ControlResult, Duration, HashMap,
-    HostEvent, Instant, LiveMixerGraph, Mutex, Ordering, VecDeque, Vst3HostRequest, engine, mpsc,
-    queue_background_graph_build, std_mpsc, vst3,
+    HostEvent, Instant, LiveMixerGraph, Mutex, Ordering, VecDeque, Vst3HostRequest, clap, engine,
+    mpsc, queue_background_graph_build, std_mpsc, vst3,
 };
 
 #[derive(Debug, Clone)]
@@ -70,12 +70,13 @@ pub(super) struct EmbeddedUiHost {
     pub(super) generation: Arc<AtomicU64>,
     pub(super) proxy: UiMailboxWaker,
     pub(super) inbox: std_mpsc::Receiver<ActorRequest>,
-    pub(super) processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    pub(super) processors: Arc<Mutex<HashMap<String, vst3::AudioPluginProcessorHandle>>>,
     pub(super) audio_engine: Arc<engine::AudioEngine>,
     pub(super) background_sender: mpsc::Sender<ActorRequest>,
     pub(super) host_events: std_mpsc::SyncSender<HostEvent>,
     pub(super) pending_ara_events: VecDeque<HostEvent>,
     pub(super) vst3: Option<vst3::Vst3Runtime>,
+    pub(super) clap: Option<clap::ClapRuntime>,
     pub(super) ara_graph: Option<LiveMixerGraph>,
     pub(super) next_ara_tick: Option<Instant>,
     pub(super) next_retirement_tick: Option<Instant>,
@@ -83,7 +84,7 @@ pub(super) struct EmbeddedUiHost {
     pub(super) embedded_editor_hosts: HashMap<String, EmbeddedEditorHost>,
     pub(super) embedded_editor_events:
         std::rc::Rc<std::cell::RefCell<VecDeque<EmbeddedEditorHostEvent>>>,
-    pub(super) embedded_editor_clipboard: Option<(String, crate::vst3::EditorPluginState)>,
+    pub(super) embedded_editor_clipboard: Option<(String, embedded_editors::EditorPluginState)>,
 }
 
 impl EmbeddedUiHost {

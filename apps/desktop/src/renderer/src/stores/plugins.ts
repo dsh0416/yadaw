@@ -10,7 +10,7 @@ import type {
   PluginScanEvent,
   RpcEvent
 } from "@heron/contracts"
-import { pluginDescriptorKey } from "@heron/contracts"
+import { pluginDescriptorKey, pluginLocator, pluginTypeKey } from "@heron/contracts"
 import {
   pluginAudioModeInputWidth,
   pluginAudioModeOutputWidth,
@@ -212,13 +212,12 @@ export const usePluginStore = defineStore("plugins", () => {
         channelId: channel.id,
         role: "instrument",
         slotOrder: 0,
-        classId: descriptor.classId,
+        locator: pluginLocator(descriptor),
         descriptor: structuredClone(descriptor),
         audioMode,
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array(),
-        controllerState: new Uint8Array()
+        state: { version: 1, chunks: [] }
       }
     })
   }
@@ -284,13 +283,12 @@ export const usePluginStore = defineStore("plugins", () => {
       channelId: channel.id,
       role: "insert" as const,
       slotOrder: inserts.length,
-      classId: descriptor.classId,
+      locator: pluginLocator(descriptor),
       descriptor: structuredClone(descriptor),
       audioMode,
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1 as const, chunks: [] }
     }
     return mixerStore.execute(
       insertionIndex === inserts.length
@@ -348,13 +346,12 @@ export const usePluginStore = defineStore("plugins", () => {
       channelId,
       role: "instrument" as const,
       slotOrder: 0,
-      classId: descriptor.classId,
+      locator: pluginLocator(descriptor),
       descriptor: structuredClone(descriptor),
       audioMode,
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1 as const, chunks: [] }
     }
     return mixerStore.execute(
       current
@@ -415,13 +412,25 @@ export const usePluginStore = defineStore("plugins", () => {
     const helperEpoch = audioRuntimeStore.audioHostRef?.epoch
     if (!resource || !helperEpoch) return
     const list = parameters.value[change.instanceId]
+    const parameter = list?.find((candidate) => candidate.parameterKey === change.parameterKey)
+    if (!parameter) {
+      error.value = "Plugin parameter key is stale."
+      return
+    }
+    const range = parameter.maxValue - parameter.minValue
+    const normalizedValue = range === 0 ? 0 : (change.value - parameter.minValue) / range
     if (list) {
       parameters.value = {
         ...parameters.value,
-        [change.instanceId]: list.map((parameter) =>
-          parameter.id === change.parameterId
-            ? { ...parameter, normalized: change.normalized }
-            : parameter
+        [change.instanceId]: list.map((candidate) =>
+          candidate.parameterKey === change.parameterKey
+            ? {
+                ...candidate,
+                value: change.value,
+                normalized: normalizedValue,
+                normalizedValue
+              }
+            : candidate
         )
       }
     }
@@ -431,8 +440,9 @@ export const usePluginStore = defineStore("plugins", () => {
       helperEpoch,
       pluginGeneration: resource.plugin.generation,
       sequence: parameterSequence.toString(),
-      parameterId: change.parameterId,
-      normalized: change.normalized,
+      parameterKey: change.parameterKey,
+      runtimeToken: parameter.runtimeToken,
+      value: change.value,
       gesture: change.gesture
     }
     const result = await window.heron.setPluginParameter(
@@ -457,7 +467,10 @@ export const usePluginStore = defineStore("plugins", () => {
   }
 
   watch(
-    () => mixerStore.graph.plugins.map((plugin) => `${plugin.id}:${plugin.classId}`).join("|"),
+    () =>
+      mixerStore.graph.plugins
+        .map((plugin) => `${plugin.id}:${pluginTypeKey(plugin.locator ?? plugin.descriptor)}`)
+        .join("|"),
     reconcileRuntime
   )
 

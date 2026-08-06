@@ -127,11 +127,11 @@ function parameterCommand(value: unknown): PluginParameterCommand | null {
     Number.isInteger(command.pluginGeneration) &&
     typeof command.sequence === "string" &&
     /^[0-9]+$/u.test(command.sequence) &&
-    Number.isInteger(command.parameterId) &&
-    typeof command.normalized === "number" &&
-    Number.isFinite(command.normalized) &&
-    command.normalized >= 0 &&
-    command.normalized <= 1 &&
+    typeof command.parameterKey === "string" &&
+    command.parameterKey.length > 0 &&
+    Number.isInteger(command.runtimeToken) &&
+    typeof command.value === "number" &&
+    Number.isFinite(command.value) &&
     (command.gesture === "begin" || command.gesture === "perform" || command.gesture === "end")
     ? (command as PluginParameterCommand)
     : null

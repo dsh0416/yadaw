@@ -12,10 +12,13 @@ ara2-bridge-core.workspace = true
 ara2-bridge-host.workspace = true
 ara2-bridge-sys.workspace = true
 bwavfile.workspace = true
+clap-sys.workspace = true
 midir.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 heron-dsp-runtime.workspace = true
+heron-audio-plugin.workspace = true
+heron-clap-host.workspace = true
 heron-audio-engine.workspace = true
 heron-vst3-host.workspace = true
 

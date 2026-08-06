@@ -133,8 +133,8 @@ export function startApplication(
             if (candidate !== mainWindow && candidate !== splashWindow) candidate.close()
           }
         },
-        async (classId, preference) => {
-          await settings.setPluginEditorPreference(classId, preference)
+        async (pluginTypeKey, preference) => {
+          await settings.setPluginEditorPreference(pluginTypeKey, preference)
         },
         (instanceId) => {
           editorClosedSequence += 1

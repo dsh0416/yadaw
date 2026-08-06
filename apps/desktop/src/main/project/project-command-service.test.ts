@@ -30,8 +30,7 @@ vi.mock("electron", () => ({
 
 const effectDescriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "effect",
-  modulePath: "effect.vst3",
+  locator: { format: "vst3", artifactPath: "effect.vst3", nativeId: "effect" },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -89,13 +88,18 @@ function graph(): ProjectGraphSnapshot {
         channelId: "audio",
         role: "insert",
         slotOrder: 0,
-        classId: effectDescriptor.classId,
+        locator: effectDescriptor.locator,
         descriptor: effectDescriptor,
         audioMode: "stereo",
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array([1]),
-        controllerState: new Uint8Array([2])
+        state: {
+          version: 1,
+          chunks: [
+            { key: "component", bytes: new Uint8Array([1]) },
+            { key: "controller", bytes: new Uint8Array([2]) }
+          ]
+        }
       }
     ],
     midiClips: [],
@@ -354,22 +358,26 @@ describe("project graph and command services", () => {
     await service.load()
     const first = await service.snapshot()
     first.channels[0]!.name = "mutated"
-    first.plugins[0]!.componentState[0] = 99
+    first.plugins[0]!.state.chunks[0]!.bytes[0] = 99
     const second = await service.snapshot()
 
     expect(projects.mixerSnapshot).toHaveBeenCalledTimes(1)
     expect(second.channels[0]!.name).toBe("audio")
-    expect(second.plugins[0]!.componentState).toEqual(new Uint8Array([1]))
+    expect(second.plugins[0]!.state.chunks[0]!.bytes).toEqual(new Uint8Array([1]))
   })
 
   it("persists a deep-resolved descriptor when creating a used plug-in", async () => {
     const projects = projectMock()
     const sidechainDescriptor: PluginDescriptor = {
       ...effectDescriptor,
-      classId: "sidechain-effect",
+      locator: {
+        format: "vst3",
+        artifactPath: "sidechain-effect.vst3",
+        nativeId: "sidechain-effect"
+      },
       buses: [
         {
-          index: 1,
+          portKey: "vst3:audio:input:1",
           direction: "input",
           kind: "aux",
           name: "Stereo Side Chain",
@@ -381,7 +389,9 @@ describe("project graph and command services", () => {
     const plugins = {
       resolveDescriptor: vi.fn((value: PluginDescriptor) => value),
       resolveDescriptorForRuntime: vi.fn(async (value: PluginDescriptor) =>
-        value.classId === sidechainDescriptor.classId ? sidechainDescriptor : value
+        value.locator.nativeId === sidechainDescriptor.locator.nativeId
+          ? sidechainDescriptor
+          : value
       )
     }
     const service = await mixer(projects, undefined, plugins)
@@ -394,13 +404,12 @@ describe("project graph and command services", () => {
         channelId: "audio",
         role: "insert",
         slotOrder: 1,
-        classId: sidechainDescriptor.classId,
+        locator: sidechainDescriptor.locator,
         descriptor: { ...sidechainDescriptor, buses: [] },
         audioMode: "stereo",
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array(),
-        controllerState: new Uint8Array()
+        state: { version: 1, chunks: [] }
       }
     })
 
@@ -648,15 +657,23 @@ describe("project graph and command services", () => {
     await service.savePluginStates([
       {
         id: "effect-1",
-        componentState: new Uint8Array([3, 4]),
-        controllerState: new Uint8Array([5, 6]),
-        araDocumentState: new Uint8Array([7, 8])
+        state: {
+          version: 1,
+          chunks: [
+            { key: "component", bytes: new Uint8Array([3, 4]) },
+            { key: "controller", bytes: new Uint8Array([5, 6]) },
+            { key: "ara-document", bytes: new Uint8Array([7, 8]) }
+          ]
+        }
       }
     ])
-    expect((await service.snapshot()).plugins[0]).toMatchObject({
-      componentState: new Uint8Array([3, 4]),
-      controllerState: new Uint8Array([5, 6]),
-      araDocumentState: new Uint8Array([7, 8])
+    expect((await service.snapshot()).plugins[0]?.state).toEqual({
+      version: 1,
+      chunks: [
+        { key: "component", bytes: new Uint8Array([3, 4]) },
+        { key: "controller", bytes: new Uint8Array([5, 6]) },
+        { key: "ara-document", bytes: new Uint8Array([7, 8]) }
+      ]
     })
 
     const refreshed = graph()

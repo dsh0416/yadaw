@@ -1,6 +1,7 @@
 use super::{
-    LiveMixerSendTap, LiveMixerSystemRole, LowLatencyChannel, LowLatencyPlan, LowLatencyPlugin,
-    PluginAudioMode, TempoEvent, TimeSignatureEvent, Vst3ProcessorHandle, plan_low_latency,
+    AudioPluginProcessorHandle, LiveMixerSendTap, LiveMixerSystemRole, LowLatencyChannel,
+    LowLatencyPlan, LowLatencyPlugin, PluginAudioMode, TempoEvent, TimeSignatureEvent,
+    plan_low_latency,
 };
 
 pub struct NativeAudioEngineConfig {
@@ -77,7 +78,8 @@ pub struct NativeApplicationCaptureTarget {
 
 #[derive(Clone)]
 pub struct NativePluginAuxInputBus {
-    pub input_bus_index: u32,
+    pub input_port_key: String,
+    pub input_port_token: u32,
     pub name: String,
     pub channels: u8,
     pub source_index: Option<u32>,
@@ -117,7 +119,7 @@ pub struct NativePluginInstance {
     pub aux_input_buses: Vec<NativePluginAuxInputBus>,
     pub latency_samples: u32,
     pub tail_samples: Option<u32>,
-    pub processor: Option<Vst3ProcessorHandle>,
+    pub processor: Option<AudioPluginProcessorHandle>,
 }
 
 #[derive(Clone)]

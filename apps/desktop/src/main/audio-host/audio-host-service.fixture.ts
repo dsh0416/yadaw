@@ -517,11 +517,10 @@ export function pluginInstance(id = "plugin-1"): PluginInstanceState {
     channelId: "audio-1",
     role: "insert",
     slotOrder: 0,
-    classId: "test-gain",
+    locator: { format: "vst3", artifactPath: "/tmp/gain.vst3", nativeId: "test-gain" },
     descriptor: {
       source: { kind: "external" },
-      classId: "test-gain",
-      modulePath: "/tmp/gain.vst3",
+      locator: { format: "vst3", artifactPath: "/tmp/gain.vst3", nativeId: "test-gain" },
       name: "Test Gain",
       vendor: "Heron Studio",
       version: "1.0",
@@ -537,8 +536,7 @@ export function pluginInstance(id = "plugin-1"): PluginInstanceState {
     audioMode: "stereo",
     enabled: true,
     sidechainInputs: [],
-    componentState: new Uint8Array(),
-    controllerState: new Uint8Array()
+    state: { version: 1, chunks: [] }
   }
 }
 

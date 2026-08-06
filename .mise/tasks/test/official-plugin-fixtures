@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#MISE hide=true
+set -euo pipefail
+
+: "${VST3_AGAIN_FIXTURE:?VST3_AGAIN_FIXTURE is required}"
+: "${VST3_SYNTH_FIXTURE:?VST3_SYNTH_FIXTURE is required}"
+: "${CLAP_PLUGIN_FIXTURE:?CLAP_PLUGIN_FIXTURE is required}"
+
+for fixture in "$VST3_AGAIN_FIXTURE" "$VST3_SYNTH_FIXTURE" "$CLAP_PLUGIN_FIXTURE"; do
+  if [[ ! -e "$fixture" ]]; then
+    echo "Official plug-in fixture does not exist: $fixture" >&2
+    exit 1
+  fi
+done
+
+VST3_AGAIN_FIXTURE="$(realpath "$VST3_AGAIN_FIXTURE")"
+VST3_SYNTH_FIXTURE="$(realpath "$VST3_SYNTH_FIXTURE")"
+CLAP_PLUGIN_FIXTURE="$(realpath "$CLAP_PLUGIN_FIXTURE")"
+
+target="$(cargo xtask host-target)"
+cargo build --target "$target" -p heron-vst3-host --bin heron-vst3-probe
+cargo build --target "$target" -p heron-clap-host --bin heron-clap-probe
+
+target_dir="${CARGO_TARGET_DIR:-$PWD/target}"
+profile_dir="$target_dir/$target/debug"
+vst3_again_probe_output="$("$profile_dir/heron-vst3-probe" "$VST3_AGAIN_FIXTURE")"
+vst3_synth_probe_output="$("$profile_dir/heron-vst3-probe" "$VST3_SYNTH_FIXTURE")"
+clap_probe_output="$("$profile_dir/heron-clap-probe" "$CLAP_PLUGIN_FIXTURE")"
+
+extract_vst3_class_id() {
+  node -e '
+    const { readFileSync } = require("node:fs");
+    const expectedName = process.argv[1];
+    const lines = readFileSync(0, "utf8").trim().split(/\r?\n/u).reverse();
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        const plugin = parsed?.module?.classes?.find(({ name }) => name === expectedName);
+        if (typeof plugin?.classId === "string") {
+          process.stdout.write(plugin.classId);
+          process.exit(0);
+        }
+      } catch {}
+    }
+    console.error(`VST3 probe did not enumerate ${expectedName}`);
+    process.exit(1);
+  ' "$1"
+}
+
+again_id="$(extract_vst3_class_id 'AGain SideChain VST3' <<< "$vst3_again_probe_output")"
+synth_id="$(extract_vst3_class_id 'Note Expression Synth With UI' <<< "$vst3_synth_probe_output")"
+for plugin_id in com.github.free-audio.clap.synth com.github.free-audio.clap.gain; do
+  if [[ "$clap_probe_output" != *"$plugin_id"* ]]; then
+    echo "CLAP probe did not enumerate expected plug-in $plugin_id" >&2
+    exit 1
+  fi
+done
+
+pnpm --filter @heron/desktop run test:vst3-runtime \
+  "$VST3_AGAIN_FIXTURE" \
+  "$VST3_SYNTH_FIXTURE" \
+  "$again_id" \
+  "$synth_id"
+pnpm --filter @heron/desktop run test:clap-runtime "$CLAP_PLUGIN_FIXTURE"
+HERON_EDITOR_SMOKE_DELAY_MS=0 HERON_EDITOR_SMOKE_NO_SANDBOX=1 \
+  xvfb-run --auto-servernum \
+  pnpm --filter @heron/desktop run test:vst3-editor \
+  "$VST3_SYNTH_FIXTURE" \
+  "$synth_id" \
+  instrument

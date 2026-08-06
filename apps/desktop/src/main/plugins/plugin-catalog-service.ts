@@ -2,6 +2,8 @@ import { join } from "node:path"
 import {
   defaultPluginCategories,
   normalizePluginDescriptor,
+  pluginLocator,
+  pluginTypeKey,
   type PluginCatalogSnapshot,
   type PluginDescriptor,
   type PluginParameterChange,
@@ -91,7 +93,9 @@ export class PluginCatalogService {
       const modulePath = join(this.builtinDirectory, spec.bundleName)
       try {
         const descriptors = await this.probeClient.probe(modulePath)
-        const descriptor = descriptors.find((candidate) => candidate.classId === spec.classId)
+        const descriptor = descriptors.find(
+          (candidate) => pluginLocator(candidate).nativeId === spec.classId
+        )
         if (!descriptor) throw new Error(`Built-in Class ID changed; expected ${spec.classId}`)
         builtins.push({
           ...descriptor,
@@ -101,7 +105,7 @@ export class PluginCatalogService {
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Built-in VST3 probe failed"
         const inputBus = {
-          index: 0,
+          portKey: "vst3:audio:input:0",
           direction: "input" as const,
           kind: "main" as const,
           name: "Stereo In",
@@ -109,7 +113,7 @@ export class PluginCatalogService {
           defaultActive: true
         }
         const outputBus = {
-          index: 0,
+          portKey: "vst3:audio:output:0",
           direction: "output" as const,
           kind: "main" as const,
           name: "Stereo Out",
@@ -118,8 +122,7 @@ export class PluginCatalogService {
         }
         builtins.push({
           source: { kind: "builtin", id: spec.id },
-          classId: spec.classId,
-          modulePath,
+          locator: { format: "vst3", artifactPath: modulePath, nativeId: spec.classId },
           name: spec.name,
           vendor: "Heron Studio",
           version: "",
@@ -134,26 +137,32 @@ export class PluginCatalogService {
         })
       }
     }
-    const builtinClassIds = new Set(builtins.map((plugin) => plugin.classId))
+    const builtinTypeKeys = new Set(builtins.map(pluginTypeKey))
     this.catalog = {
       ...this.catalog,
-      plugins: [...builtins, ...external.filter((plugin) => !builtinClassIds.has(plugin.classId))]
+      plugins: [
+        ...builtins,
+        ...external.filter((plugin) => !builtinTypeKeys.has(pluginTypeKey(plugin)))
+      ]
     }
   }
 
   resolveDescriptor(snapshot: PluginDescriptor): PluginDescriptor {
     const descriptor = this.catalog.plugins.find((candidate) => {
+      const candidateLocator = pluginLocator(candidate)
+      const snapshotLocator = pluginLocator(snapshot)
       if (snapshot.source.kind === "builtin") {
         return (
           candidate.source.kind === "builtin" &&
           candidate.source.id === snapshot.source.id &&
-          candidate.classId === snapshot.classId
+          pluginTypeKey(candidateLocator) === pluginTypeKey(snapshotLocator)
         )
       }
       return (
         candidate.source.kind === "external" &&
-        candidate.classId === snapshot.classId &&
-        candidate.modulePath === snapshot.modulePath
+        candidateLocator.format === snapshotLocator.format &&
+        candidateLocator.nativeId === snapshotLocator.nativeId &&
+        candidateLocator.artifactPath === snapshotLocator.artifactPath
       )
     })
     return normalizePluginDescriptor(descriptor ? structuredClone(descriptor) : snapshot)
@@ -162,27 +171,32 @@ export class PluginCatalogService {
   async resolveDescriptorForRuntime(snapshot: PluginDescriptor): Promise<PluginDescriptor> {
     const resolved = this.resolveDescriptor(snapshot)
     if (resolved.source.kind === "builtin") return resolved
-    let pending = this.runtimeBundleProbes.get(resolved.modulePath)
+    const locator = pluginLocator(resolved)
+    let pending = this.runtimeBundleProbes.get(locator.artifactPath)
     if (!pending) {
-      pending = this.probeClient.probe(resolved.modulePath, "deep")
-      this.runtimeBundleProbes.set(resolved.modulePath, pending)
+      pending = this.probeClient.probe(locator.artifactPath, "deep")
+      this.runtimeBundleProbes.set(locator.artifactPath, pending)
     }
     try {
       const descriptors = await pending
-      const byClassId = new Map(descriptors.map((descriptor) => [descriptor.classId, descriptor]))
+      const byNativeId = new Map(
+        descriptors.map((descriptor) => [pluginLocator(descriptor).nativeId, descriptor])
+      )
       this.catalog = {
         ...this.catalog,
         plugins: this.catalog.plugins.map((descriptor) =>
-          descriptor.source.kind === "external" && descriptor.modulePath === resolved.modulePath
-            ? (byClassId.get(descriptor.classId) ?? descriptor)
+          descriptor.source.kind === "external" &&
+          pluginLocator(descriptor).artifactPath === locator.artifactPath
+            ? (byNativeId.get(pluginLocator(descriptor).nativeId) ?? descriptor)
             : descriptor
         )
       }
       return structuredClone(
-        descriptors.find((descriptor) => descriptor.classId === resolved.classId) ?? resolved
+        descriptors.find((descriptor) => pluginLocator(descriptor).nativeId === locator.nativeId) ??
+          resolved
       )
     } catch {
-      this.runtimeBundleProbes.delete(resolved.modulePath)
+      this.runtimeBundleProbes.delete(locator.artifactPath)
       return resolved
     }
   }

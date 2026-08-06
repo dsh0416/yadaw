@@ -5,6 +5,14 @@ use super::{
 };
 
 impl NativeMixerRuntime {
+    pub(in crate::runtime) fn retire_plugin_processors(&mut self) {
+        for plugin in self.plugins_by_channel.iter_mut().flatten() {
+            if let Some(processor) = plugin.processor.as_mut() {
+                processor.retire();
+            }
+        }
+    }
+
     pub(in crate::runtime) fn set_plugin_enabled(
         &mut self,
         instance_id: &str,

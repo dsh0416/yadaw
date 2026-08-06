@@ -86,7 +86,7 @@ fn application_snapshot(
 pub(super) fn live_graph(
     generation: u64,
     value: &LiveMixerGraph,
-    processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
+    processors: Option<&HashMap<String, vst3::AudioPluginProcessorHandle>>,
 ) -> Result<engine::NativeMixerGraph, String> {
     let channel_indexes = value
         .channels
@@ -208,7 +208,18 @@ pub(super) fn live_graph(
                     .iter()
                     .map(|bus| {
                         Ok(engine::NativePluginAuxInputBus {
-                            input_bus_index: bus.input_bus_index,
+                            input_port_key: bus.input_port_key.clone(),
+                            input_port_token: bus
+                                .input_port_key
+                                .rsplit(':')
+                                .next()
+                                .and_then(|value| value.parse().ok())
+                                .ok_or_else(|| {
+                                    format!(
+                                        "plug-in input port key '{}' has no numeric runtime token",
+                                        bus.input_port_key
+                                    )
+                                })?,
                             name: bus.name.clone(),
                             channels: bus.channels,
                             source_index: bus
@@ -379,7 +390,7 @@ fn recording_waveform(value: NativeWaveformSnapshot) -> RecordingWaveform {
 pub(super) fn engine_command(
     audio_engine: &engine::AudioEngine,
     command: ControlCommand,
-    processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
+    processors: Option<&HashMap<String, vst3::AudioPluginProcessorHandle>>,
 ) -> Option<ControlResult> {
     let result = match command {
         ControlCommand::ListAudioBackends => ControlResult::AudioBackends {

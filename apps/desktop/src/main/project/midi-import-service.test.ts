@@ -86,8 +86,7 @@ function channel(overrides: Partial<MixerChannelState> = {}): MixerChannelState 
 function descriptor(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor {
   return {
     source: { kind: "builtin", id: "heron-sine" },
-    classId: "sine-class",
-    modulePath: "/plugins/Sine.vst3",
+    locator: { format: "vst3", artifactPath: "/plugins/Sine.vst3", nativeId: "sine-class" },
     name: "Sine",
     vendor: "Heron",
     version: "1.0.0",
@@ -600,14 +599,23 @@ describe("commit", () => {
       plan({
         token,
         tracks: [
-          { sourceTrack: 0, sequence: 0, target: { type: "new", instrumentClassId: "sine-class" } }
+          {
+            sourceTrack: 0,
+            sequence: 0,
+            target: { type: "new", instrumentTypeKey: "vst3:sine-class" }
+          }
         ]
       })
     )
 
     const created = commandsFrom(mixer).find((command) => command.type === "create-plugin")
     expect(created).toMatchObject({
-      plugin: { role: "instrument", slotOrder: 0, classId: "sine-class", audioMode: "stereo" }
+      plugin: {
+        role: "instrument",
+        slotOrder: 0,
+        locator: { format: "vst3", nativeId: "sine-class" },
+        audioMode: "stereo"
+      }
     })
   })
 
@@ -622,7 +630,11 @@ describe("commit", () => {
       plan({
         token,
         tracks: [
-          { sourceTrack: 0, sequence: 0, target: { type: "new", instrumentClassId: "sine-class" } }
+          {
+            sourceTrack: 0,
+            sequence: 0,
+            target: { type: "new", instrumentTypeKey: "vst3:sine-class" }
+          }
         ]
       })
     )
@@ -640,13 +652,14 @@ describe("commit", () => {
           channelId: "instrument-1",
           role: "instrument",
           slotOrder: 0,
-          classId: "old-class",
-          descriptor: descriptor({ classId: "old-class" }),
+          locator: { format: "vst3", artifactPath: "old.vst3", nativeId: "old-class" },
+          descriptor: descriptor({
+            locator: { format: "vst3", artifactPath: "old.vst3", nativeId: "old-class" }
+          }),
           audioMode: "stereo",
           enabled: true,
           sidechainInputs: [],
-          componentState: new Uint8Array(),
-          controllerState: new Uint8Array()
+          state: { version: 1, chunks: [] }
         }
       ]
     })
@@ -663,7 +676,7 @@ describe("commit", () => {
             target: {
               type: "existing",
               trackId: "track:instrument-1",
-              instrumentClassId: "sine-class"
+              instrumentTypeKey: "vst3:sine-class"
             }
           }
         ]
@@ -672,7 +685,10 @@ describe("commit", () => {
 
     expect(commandsFrom(mixer).find((command) => command.type === "replace-plugin")).toMatchObject({
       pluginId: "plugin-1",
-      plugin: { id: "plugin-1", classId: "sine-class" }
+      plugin: {
+        id: "plugin-1",
+        locator: { format: "vst3", nativeId: "sine-class" }
+      }
     })
   })
 
@@ -696,7 +712,7 @@ describe("commit", () => {
               {
                 sourceTrack: 0,
                 sequence: 0,
-                target: { type: "new", instrumentClassId: "sine-class" }
+                target: { type: "new", instrumentTypeKey: "vst3:sine-class" }
               }
             ]
           })

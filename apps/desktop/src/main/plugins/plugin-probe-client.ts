@@ -21,13 +21,15 @@ const runProbeCommand: PluginProbeCommandRunner = async (executable, arguments_,
 
 export class PluginProbeClient {
   constructor(
-    private readonly executable: string,
-    private readonly runner: PluginProbeCommandRunner = runProbeCommand
+    private readonly vst3Executable: string,
+    private readonly runner: PluginProbeCommandRunner = runProbeCommand,
+    private readonly clapExecutable = vst3Executable.replace("vst3-probe", "clap-probe")
   ) {}
 
   async probe(bundlePath: string, mode: PluginProbeMode = "deep"): Promise<PluginDescriptor[]> {
+    const clap = bundlePath.toLocaleLowerCase().endsWith(".clap")
     const { stdout } = await this.runner(
-      this.executable,
+      clap ? this.clapExecutable : this.vst3Executable,
       mode === "soft" ? ["--soft", bundlePath] : [bundlePath],
       {
         timeout: 600_000,
@@ -36,21 +38,25 @@ export class PluginProbeClient {
         encoding: "utf8",
         env: {
           ...process.env,
-          ...(mode === "soft" ? { HERON_VST3_PROBE_MODE: "soft" } : {})
+          ...(mode === "soft"
+            ? clap
+              ? { HERON_CLAP_PROBE_MODE: "soft" }
+              : { HERON_VST3_PROBE_MODE: "soft" }
+            : {})
         }
       }
     )
     const parsed = parseProbeStdout(stdout)
     const module = parsed.module
     if (!module || !Array.isArray(module.classes)) {
-      throw new Error("VST3 probe returned an invalid descriptor")
+      throw new Error("AudioPlugin probe returned an invalid descriptor")
     }
     const factoryVendor = typeof module.vendor === "string" ? module.vendor.trim() : ""
     const descriptors = module.classes.flatMap((classInfo) => {
       const descriptor = descriptorFromProbe(bundlePath, factoryVendor, classInfo)
       return descriptor ? [descriptor] : []
     })
-    if (descriptors.length === 0) throw new Error("Module has no VST3 Audio Module classes")
+    if (descriptors.length === 0) throw new Error("Artifact has no supported audio plug-ins")
     return descriptors
   }
 }

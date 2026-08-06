@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { rpcFailure, rpcSuccess } from "@heron/contracts"
+import { pluginLocator, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   ProjectGraphRef,
   ProjectGraphSnapshot,
@@ -41,10 +41,14 @@ export class AudioGraphPublisher {
 
   resolve(graph: ProjectGraphSnapshot): ProjectGraphSnapshot {
     const resolved = cloneGraph(graph)
-    resolved.plugins = resolved.plugins.map((plugin) => ({
-      ...plugin,
-      descriptor: this.plugins?.resolveDescriptor(plugin.descriptor) ?? plugin.descriptor
-    }))
+    resolved.plugins = resolved.plugins.map((plugin) => {
+      const descriptor = this.plugins?.resolveDescriptor(plugin.descriptor) ?? plugin.descriptor
+      return {
+        ...plugin,
+        locator: { ...pluginLocator(descriptor) },
+        descriptor
+      }
+    })
     return resolved
   }
 
@@ -53,10 +57,14 @@ export class AudioGraphPublisher {
     const plugins = this.plugins
     if (!plugins) return resolved
     resolved.plugins = await Promise.all(
-      resolved.plugins.map(async (plugin) => ({
-        ...plugin,
-        descriptor: await plugins.resolveDescriptorForRuntime(plugin.descriptor)
-      }))
+      resolved.plugins.map(async (plugin) => {
+        const descriptor = await plugins.resolveDescriptorForRuntime(plugin.descriptor)
+        return {
+          ...plugin,
+          locator: { ...pluginLocator(descriptor) },
+          descriptor
+        }
+      })
     )
     return resolved
   }

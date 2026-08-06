@@ -1,5 +1,8 @@
 use std::{error::Error, fmt};
 
+use heron_audio_plugin::{
+    AudioPluginProcessorHandle, AudioPortToken, ParameterToken, ProcessContext, SidechainSource,
+};
 use heron_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, GraphError, HardwareOutputFrame, MixerGraph,
     RouteTarget, SendSpec, SendTap, StereoFrame,
@@ -7,8 +10,8 @@ use heron_dsp_core::mixer::{
 use heron_dsp_runtime::tempo::{TempoMap, TempoMapError};
 
 use crate::{
-    PluginProcessContext, PluginProcessor, RenderChannelKind, RenderClipSpec, RenderGraphSpec,
-    RenderResources, RenderRoute, RenderSendTap, resources::AudioClipSource,
+    RenderChannelKind, RenderClipSpec, RenderGraphSpec, RenderResources, RenderRoute,
+    RenderSendTap, resources::AudioClipSource,
 };
 
 struct RuntimeClip {
@@ -19,7 +22,15 @@ struct RuntimeClip {
 
 struct RuntimePlugin {
     id: String,
-    processor: Box<dyn PluginProcessor>,
+    processor: AudioPluginProcessorHandle,
+}
+
+struct NoSidechains;
+
+impl SidechainSource for NoSidechains {
+    fn frames(&self, _port: AudioPortToken) -> Option<&[[f32; 2]]> {
+        None
+    }
 }
 
 struct RuntimeMidi {
@@ -276,9 +287,11 @@ impl RenderRuntime {
 
     pub fn preview_plugin_parameter(&mut self, plugin: usize, parameter_id: u32, normalized: f64) {
         if let Some(plugin) = self.plugins.get_mut(plugin) {
-            plugin
-                .processor
-                .set_parameter(parameter_id, normalized.clamp(0.0, 1.0));
+            let _ = plugin.processor.parameter(
+                0,
+                ParameterToken::new(parameter_id),
+                normalized.clamp(0.0, 1.0),
+            );
         }
     }
 
@@ -371,7 +384,12 @@ impl RenderRuntime {
             &self.channel_sources,
             &mut |channel, mut frame| {
                 for plugin in &plugins_by_channel[channel] {
-                    frame = plugins[*plugin].processor.process_frame(frame, context);
+                    let frame_block = std::slice::from_mut(&mut frame);
+                    let _ = plugins[*plugin].processor.process_block(
+                        frame_block,
+                        &NoSidechains,
+                        &context,
+                    );
                 }
                 frame
             },
@@ -409,7 +427,7 @@ impl RenderRuntime {
         }
     }
 
-    fn process_context(&self) -> PluginProcessContext {
+    fn process_context(&self) -> ProcessContext {
         let tick = self
             .tempo_map
             .frame_to_tick(self.sample_position, self.sample_rate)
@@ -433,15 +451,20 @@ impl RenderRuntime {
         let quarter_position = tick as f64 / 960.0;
         let quarters_per_bar =
             f64::from(signature.numerator) * 4.0 / f64::from(signature.denominator);
-        PluginProcessContext {
-            sample_position: self.sample_position,
-            quarter_position,
-            bar_position: quarter_position / quarters_per_bar,
+        ProcessContext {
+            project_time_samples: self.sample_position as i64,
+            continuous_time_samples: self.sample_position as i64,
+            steady_time_samples: self.sample_position as i64,
+            project_time_quarters: quarter_position,
+            bar_position_quarters: quarter_position / quarters_per_bar,
             tempo: tempo.beats_per_minute,
-            time_signature_numerator: signature.numerator,
-            time_signature_denominator: signature.denominator,
+            time_signature_numerator: i32::from(signature.numerator),
+            time_signature_denominator: i32::from(signature.denominator),
             playing: self.transport != RenderTransport::Stopped,
             recording: self.transport == RenderTransport::Recording,
+            loop_active: false,
+            loop_start_quarters: 0.0,
+            loop_end_quarters: 0.0,
         }
     }
 
@@ -453,17 +476,21 @@ impl RenderRuntime {
         for midi in &self.midi {
             for note in &midi.notes {
                 if note.start_tick == tick {
-                    self.plugins[midi.plugin_index].processor.note_on(
+                    let _ = self.plugins[midi.plugin_index].processor.note_on(
+                        0,
                         note.channel,
                         note.key,
                         note.velocity,
+                        i32::from(note.key),
                     );
                 }
                 if note.start_tick.saturating_add(note.duration_ticks) == tick {
-                    self.plugins[midi.plugin_index].processor.note_off(
+                    let _ = self.plugins[midi.plugin_index].processor.note_off(
+                        0,
                         note.channel,
                         note.key,
                         note.release_velocity,
+                        i32::from(note.key),
                     );
                 }
             }
@@ -479,16 +506,20 @@ impl RenderRuntime {
             for note in &midi.notes {
                 let end = note.start_tick.saturating_add(note.duration_ticks);
                 if note.start_tick <= tick && tick < end {
-                    self.plugins[midi.plugin_index].processor.note_on(
+                    let _ = self.plugins[midi.plugin_index].processor.note_on(
+                        0,
                         note.channel,
                         note.key,
                         note.velocity,
+                        i32::from(note.key),
                     );
                 } else {
-                    self.plugins[midi.plugin_index].processor.note_off(
+                    let _ = self.plugins[midi.plugin_index].processor.note_off(
+                        0,
                         note.channel,
                         note.key,
                         note.release_velocity,
+                        i32::from(note.key),
                     );
                 }
             }

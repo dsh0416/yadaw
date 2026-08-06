@@ -33,7 +33,7 @@ describe("AudioHostService events", () => {
           dispatchSidechain(request: {
             requestId: number
             instanceId: string
-            inputBusIndex: number
+            inputPortKey: string
             sourceChannelId: string | null
           }): void
         }
@@ -41,7 +41,7 @@ describe("AudioHostService events", () => {
     ).events.dispatchSidechain({
       requestId: 41,
       instanceId: "sidechain-1",
-      inputBusIndex: 2,
+      inputPortKey: "vst3:audio:input:2",
       sourceChannelId: "audio-1"
     })
 
@@ -76,14 +76,14 @@ describe("AudioHostService events", () => {
       async () => {}
     )
     service.start()
-    service.setVst3HostNotificationHandler(() => handler.promise)
+    service.setPluginHostNotificationHandler(() => handler.promise)
     ;(
       service as unknown as {
         events: {
-          dispatchVst3(notification: { instanceId: string; kind: string; value: string }): void
+          dispatchPlugin(notification: { instanceId: string; kind: string; value: string }): void
         }
       }
-    ).events.dispatchVst3({
+    ).events.dispatchPlugin({
       instanceId: "plugin-1",
       kind: "dirty-changed",
       value: "true"

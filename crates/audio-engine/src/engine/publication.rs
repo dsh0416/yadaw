@@ -252,6 +252,31 @@ impl AudioEngine {
         Ok(Some(graph.clone()))
     }
 
+    /// Replaces one plug-in endpoint in the control-plane graph and returns a
+    /// same-revision graph for transactional retirement or reactivation.
+    pub fn replace_plugin_processor(
+        &self,
+        instance_id: &str,
+        processor: Option<heron_audio_plugin::AudioPluginProcessorHandle>,
+    ) -> Result<Option<NativeMixerGraph>> {
+        let mut guard = self
+            .last_native_graph
+            .lock()
+            .map_err(|_| audio_error("last mixer graph lock", "poisoned"))?;
+        let Some(graph) = guard.as_mut() else {
+            return Ok(None);
+        };
+        let Some(plugin) = graph
+            .plugins
+            .iter_mut()
+            .find(|plugin| plugin.instance_id == instance_id)
+        else {
+            return Ok(None);
+        };
+        plugin.processor = processor;
+        Ok(Some(graph.clone()))
+    }
+
     /// Synchronous timing rebuild for the MessagePack compatibility path.
     pub fn update_plugin_timing(
         &self,

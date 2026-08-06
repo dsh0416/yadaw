@@ -10,7 +10,7 @@ use super::{
     validate_graph_meta, validate_graph_request, wait_for_graph_publication,
 };
 
-pub(in crate::runtime) async fn vst3_actor(
+pub(in crate::runtime) async fn audio_plugin_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     deps: Vst3ActorDeps,
 ) {
@@ -79,44 +79,44 @@ pub(in crate::runtime) async fn vst3_actor(
                 }
                 ControlCommand::LoadPlugin {
                     instance_id,
-                    module_path,
-                    class_id,
+                    locator,
                     plugin_kind,
                     audio_mode,
                     active_aux_inputs,
                     sample_rate,
-                    component_state,
-                    controller_state,
+                    state,
                     ara_factory_class_id,
-                    ara_document_state,
                 } => {
-                    let component_state = resolve_deferred_binary(component_state);
-                    let controller_state = resolve_deferred_binary(controller_state);
-                    let ara_document_state = resolve_deferred_binary(ara_document_state);
-                    match (component_state, controller_state, ara_document_state) {
-                        (Ok(component_state), Ok(controller_state), Ok(ara_document_state)) => {
+                    let chunks = state
+                        .chunks
+                        .into_iter()
+                        .map(|chunk| {
+                            resolve_deferred_binary(chunk.bytes).map(|bytes| {
+                                heron_dsp_runtime::protocol::PluginStateChunk {
+                                    key: chunk.key,
+                                    bytes: BinaryPayload::inline(bytes.as_slice().to_vec()),
+                                }
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>();
+                    match chunks {
+                        Ok(chunks) => {
                             forward_to_ui(
                                 &ui_sender,
                                 &ui_proxy,
                                 ActorRequest {
                                     command: ActorCommand::Control(ControlCommand::LoadPlugin {
                                         instance_id,
-                                        module_path,
-                                        class_id,
+                                        locator,
                                         plugin_kind,
                                         audio_mode,
                                         active_aux_inputs,
                                         sample_rate,
-                                        component_state: BinaryPayload::inline(
-                                            component_state.as_slice().to_vec(),
-                                        ),
-                                        controller_state: BinaryPayload::inline(
-                                            controller_state.as_slice().to_vec(),
-                                        ),
+                                        state: heron_dsp_runtime::protocol::PluginStateEnvelope {
+                                            version: state.version,
+                                            chunks,
+                                        },
                                         ara_factory_class_id,
-                                        ara_document_state: BinaryPayload::inline(
-                                            ara_document_state.as_slice().to_vec(),
-                                        ),
                                     }),
                                     reply: message.reply,
                                 },
@@ -124,7 +124,7 @@ pub(in crate::runtime) async fn vst3_actor(
                             .await;
                             continue;
                         }
-                        (Err(message), _, _) | (_, Err(message), _) | (_, _, Err(message)) => {
+                        Err(message) => {
                             control_error! { message }
                         }
                     }

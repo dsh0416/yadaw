@@ -186,8 +186,6 @@ pub struct ClassInfo {
 /// library / bundle is unloaded.
 pub struct Module {
     factory: Option<ComPtr<IPluginFactory>>,
-    // The factory is explicitly released in Drop before this context is released.
-    host_context: Option<Box<HostContext>>,
     #[cfg(target_os = "macos")]
     mac_bundle: Option<MacBundle>,
     #[cfg(not(target_os = "macos"))]
@@ -195,6 +193,9 @@ pub struct Module {
     binary_path: PathBuf,
     #[cfg(not(target_os = "macos"))]
     exit: Option<heron_vst3_host_sys::abi::ModuleExit>,
+    // Keep callbacks valid through ExitDll and dynamic-library static destructors. This must be
+    // the last field so Rust drops it after the bundle/library fields above.
+    host_context: Option<Box<HostContext>>,
 }
 
 impl Module {
@@ -253,6 +254,11 @@ impl Module {
         self.host_context
             .as_deref()
             .expect("module host context is installed before use")
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn dispatch_run_loop(&self, now: std::time::Instant) -> Option<std::time::Instant> {
+        self.host_context().dispatch_run_loop(now)
     }
 
     #[must_use]

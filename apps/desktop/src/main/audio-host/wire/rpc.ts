@@ -105,42 +105,55 @@ export interface ControlResponse {
     latency_samples?: number
     tail_samples?: number | null
     parameters?: Array<{
-      id: number
+      parameter_key: string
+      runtime_token: number
       title: string
       units: string
       step_count: number
       default_normalized: number
       normalized: number
+      min_value: number
+      max_value: number
+      default_value: number
+      value: number
+      normalized_value: number
+      module_path: string
+      read_only: boolean
+      hidden: boolean
+      stepped: boolean
+      automatable: boolean
+      bypass: boolean
       formatted?: string
-      flags: number
     }>
-    component_state?: BinaryPayloadWire
-    controller_state?: BinaryPayloadWire
-    ara_document_state?: BinaryPayloadWire
     payload?: BinaryPayloadWire
     report?: AudioHostBenchmarkReport
     active_mode?: PluginEditorMode
     open?: boolean
-    state?: {
-      active_mode: PluginEditorMode
-      zoom_percent: number
-      compare_slot: "a" | "b"
-      can_compare: boolean
-      can_paste: boolean
-      can_undo: boolean
-      can_redo: boolean
-      sidechain_buses: Array<{
-        input_bus_index: number
-        name: string
-        source_channel_id: string | null
-      }>
-      sidechain_sources: Array<{
-        id: string
-        name: string
-        kind: "audio" | "instrument" | "aux"
-      }>
-      sidechain_pending: boolean
-    }
+    state?:
+      | {
+          version: number
+          chunks: Array<{ key: string; bytes: BinaryPayloadWire }>
+        }
+      | {
+          active_mode: PluginEditorMode
+          zoom_percent: number
+          compare_slot: "a" | "b"
+          can_compare: boolean
+          can_paste: boolean
+          can_undo: boolean
+          can_redo: boolean
+          sidechain_buses: Array<{
+            input_port_key: string
+            name: string
+            source_channel_id: string | null
+          }>
+          sidechain_sources: Array<{
+            id: string
+            name: string
+            kind: "audio" | "instrument" | "aux"
+          }>
+          sidechain_pending: boolean
+        }
     backends?: AudioBackendDescriptor[]
     devices?: { inputs: AudioHostDevice[]; outputs: AudioHostDevice[] }
     targets?: AudioHostApplicationCaptureTarget[]
@@ -172,7 +185,7 @@ export interface ControlResponse {
         target: string
         kind: CompiledAudioGraphSnapshot["edges"][number]["kind"]
         signal_width: CompiledAudioGraphSnapshot["edges"][number]["signalWidth"]
-        target_input_bus_index?: number
+        target_input_port_key?: string
       }>
     } | null
     transport?: AudioHostTransport

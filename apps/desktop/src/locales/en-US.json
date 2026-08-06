@@ -1129,6 +1129,7 @@
     },
     "pluginPicker": {
       "vst3": "VST3",
+      "audioPlugins": "AUDIO PLUG-INS",
       "searchPlaceholder": "Search plug-ins",
       "clearSearch": "Clear plug-in search",
       "addPlugin": "Add {name}",
@@ -1440,17 +1441,19 @@
         "plugins": "Plugins"
       },
       "headings": {
-        "instruments": "VST3 instruments",
-        "effects": "VST3 audio effects",
+        "instruments": "Audio plug-in instruments",
+        "effects": "Audio plug-in effects",
         "samples": "Project audio",
         "catalog": "Plugin catalog"
       },
       "empty": {
-        "instruments": "No compatible VST3 instruments found.",
-        "effects": "No compatible VST3 effects found."
+        "instruments": "No compatible audio plug-in instruments found.",
+        "effects": "No compatible audio plug-in effects found."
       },
       "builtIn": "Built-in · ",
-      "rescan": "Rescan VST3",
+      "rescan": "Rescan Audio Plug-ins",
+      "formatFilter": "Filter audio plug-ins by format",
+      "allFormats": "All",
       "scanning": "Scanning…"
     },
     "trackInspector": {

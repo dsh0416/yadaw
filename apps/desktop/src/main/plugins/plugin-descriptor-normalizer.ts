@@ -21,7 +21,7 @@ function busesForMode(kind: PluginDescriptor["kind"], mode: PluginAudioMode) {
   const buses: PluginDescriptor["buses"] = []
   if (kind === "effect") {
     buses.push({
-      index: 0,
+      portKey: "vst3:audio:input:0",
       direction: "input",
       kind: "main",
       name: inputChannels === 1 ? "Mono In" : "Stereo In",
@@ -30,7 +30,7 @@ function busesForMode(kind: PluginDescriptor["kind"], mode: PluginAudioMode) {
     })
   }
   buses.push({
-    index: 0,
+    portKey: "vst3:audio:output:0",
     direction: "output",
     kind: "main",
     name: outputChannels === 1 ? "Mono Out" : "Stereo Out",
@@ -78,8 +78,11 @@ export function descriptorsFromModuleInfo(
     return [
       {
         source: { kind: "external" },
-        classId: `unprobed:${bundlePath}`,
-        modulePath: bundlePath,
+        locator: {
+          format: "vst3",
+          artifactPath: bundlePath,
+          nativeId: `unprobed:${bundlePath}`
+        },
         name: fallbackName,
         vendor,
         version: textValue(moduleInfo?.["Version"], ""),
@@ -109,8 +112,11 @@ export function descriptorsFromModuleInfo(
     return [
       {
         source: { kind: "external" },
-        classId: textValue(classInfo["CID"], `unprobed:${bundlePath}`),
-        modulePath: bundlePath,
+        locator: {
+          format: "vst3",
+          artifactPath: bundlePath,
+          nativeId: textValue(classInfo["CID"], `unprobed:${bundlePath}`)
+        },
         name: textValue(classInfo["Name"], fallbackName),
         vendor: textValue(classInfo["Vendor"], vendor),
         version: textValue(classInfo["Version"], textValue(moduleInfo?.["Version"])),
@@ -148,6 +154,7 @@ interface ProbeOutput {
       supportedAudioModes?: unknown[]
       buses?: Array<{
         index?: number
+        portKey?: string
         direction?: string
         kind?: string
         name?: string
@@ -174,6 +181,7 @@ export function descriptorFromProbe(
 ): PluginDescriptor | null {
   const classId = textValue(value.classId)
   if (!classId) return null
+  const format = bundlePath.toLocaleLowerCase().endsWith(".clap") ? "clap" : "vst3"
   const categories = parsePluginCategories(value.categories ?? value.category)
   const kind = pluginLooksLikeInstrument(categories) ? "instrument" : "effect"
   const resolvedCategories = categories.length > 0 ? categories : defaultPluginCategories(kind)
@@ -183,7 +191,7 @@ export function descriptorFromProbe(
     kind === "instrument" ? mode === "mono" || mode === "stereo" : mode !== "dual-mono"
   )
   const supportedAudioModes: PluginAudioMode[] =
-    kind === "effect" && !araFactoryClassId && nativeModes.includes("mono")
+    format === "vst3" && kind === "effect" && !araFactoryClassId && nativeModes.includes("mono")
       ? [...nativeModes, "dual-mono"]
       : nativeModes
   let compatibility: PluginDescriptor["compatibility"] = "compatible"
@@ -221,7 +229,9 @@ export function descriptorFromProbe(
     }
     return [
       {
-        index: bus.index!,
+        portKey:
+          textValue(bus.portKey) ||
+          `${format}:audio:${bus.direction}:${format === "clap" ? bus.index! : bus.index!}`,
         direction: bus.direction,
         kind: bus.kind,
         name: textValue(bus.name, `${bus.kind === "main" ? "Main" : "Aux"} ${bus.index! + 1}`),
@@ -247,9 +257,8 @@ export function descriptorFromProbe(
   }
   return {
     source: { kind: "external" },
-    classId,
-    modulePath: bundlePath,
-    name: textValue(value.name, basename(bundlePath).replace(/\.vst3$/i, "")),
+    locator: { format, artifactPath: bundlePath, nativeId: classId },
+    name: textValue(value.name, basename(bundlePath).replace(/\.(vst3|clap)$/i, "")),
     vendor: textValue(value.vendor, factoryVendor || "Unknown vendor"),
     version: textValue(value.version),
     categories: resolvedCategories,

@@ -6,8 +6,8 @@ import { AudioHostMidiInputClient } from "./audio-host-midi-input-client"
 import { drainHostEvents } from "./audio-host-events"
 import type {
   AraHostCallback,
-  PluginSidechainRouteRequest,
-  Vst3HostNotification
+  PluginHostNotification,
+  PluginSidechainRouteRequest
 } from "./audio-host-events"
 import { graphDiff } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
@@ -177,7 +177,7 @@ export class AudioHostService {
     private readonly editorOwnerWindowHandle: Buffer | undefined,
     private readonly onFailure: (message: string) => void,
     private readonly onEditorPreferenceChanged: (
-      classId: string,
+      pluginTypeKey: string,
       preference: PluginEditorPreference
     ) => Promise<void>,
     private readonly onEditorClosed: (instanceId: string) => void = () => {},
@@ -193,7 +193,7 @@ export class AudioHostService {
         onEditorClosed(instanceId)
       },
       (callback) => this.events.dispatchAra(callback),
-      (notification) => this.events.dispatchVst3(notification),
+      (notification) => this.events.dispatchPlugin(notification),
       (request) => this.events.dispatchSidechain(request)
     )
   }
@@ -202,10 +202,10 @@ export class AudioHostService {
     this.events.setAraHandler(handler)
   }
 
-  setVst3HostNotificationHandler(
-    handler: (notification: Vst3HostNotification) => void | Promise<void>
+  setPluginHostNotificationHandler(
+    handler: (notification: PluginHostNotification) => void | Promise<void>
   ): void {
-    this.events.setVst3Handler(handler)
+    this.events.setPluginHandler(handler)
   }
 
   setPluginSidechainRouteRequestHandler(
@@ -607,8 +607,21 @@ export class AudioHostService {
       () => this.plugins.openPluginEditor(instanceId, preference, context),
       (action) => this.plugins.applyPluginEditorAction(instanceId, action),
       () => this.plugins.pluginParameters(instanceId),
-      (parameterId, normalized, gesture) =>
-        this.plugins.setPluginParameter({ instanceId, parameterId, normalized, gesture }),
+      async (parameterId, normalized, gesture) => {
+        const parameter = (await this.plugins.pluginParameters(instanceId)).find(
+          (candidate) => candidate.runtimeToken === parameterId
+        )
+        if (!parameter) throw new Error("Plugin parameter token is stale")
+        const value =
+          parameter.minValue +
+          Math.max(0, Math.min(1, normalized)) * (parameter.maxValue - parameter.minValue)
+        await this.plugins.setPluginParameter({
+          instanceId,
+          parameterKey: parameter.parameterKey,
+          value,
+          gesture
+        })
+      },
       () => this.plugins.closePluginEditor(instanceId)
     )
   }
@@ -635,11 +648,7 @@ export class AudioHostService {
     return this.plugins.enqueuePluginParameter(command)
   }
 
-  savePluginState(instanceId: string): Promise<{
-    componentState: Uint8Array
-    controllerState: Uint8Array
-    araDocumentState: Uint8Array
-  }> {
+  savePluginState(instanceId: string): Promise<import("@heron/contracts").PluginStateEnvelope> {
     return this.plugins.savePluginState(instanceId)
   }
 
@@ -699,7 +708,7 @@ export class AudioHostService {
       this.pendingPreferenceWrites,
       this.onEditorClosed,
       (callback) => this.events.dispatchAra(callback),
-      (notification) => this.events.dispatchVst3(notification),
+      (notification) => this.events.dispatchPlugin(notification),
       (request) => this.events.dispatchSidechain(request)
     )
     if (this.client === client) this.client = null

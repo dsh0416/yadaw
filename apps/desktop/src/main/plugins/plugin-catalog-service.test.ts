@@ -93,7 +93,11 @@ describe("descriptorsFromModuleInfo", () => {
 
     expect(descriptors).toHaveLength(2)
     expect(descriptors[0]).toMatchObject({
-      classId: "ABCDEF0123456789ABCDEF0123456789",
+      locator: {
+        format: "vst3",
+        artifactPath: "/Library/Audio/Plug-Ins/VST3/Demo.vst3",
+        nativeId: "ABCDEF0123456789ABCDEF0123456789"
+      },
       name: "Demo Delay",
       vendor: "Acme Audio",
       kind: "effect",
@@ -102,7 +106,11 @@ describe("descriptorsFromModuleInfo", () => {
       supportedAudioModes: ["mono", "mono-to-stereo", "stereo", "dual-mono"]
     })
     expect(descriptors[1]).toMatchObject({
-      classId: "FEDCBA9876543210FEDCBA9876543210",
+      locator: {
+        format: "vst3",
+        artifactPath: "/Library/Audio/Plug-Ins/VST3/Demo.vst3",
+        nativeId: "FEDCBA9876543210FEDCBA9876543210"
+      },
       name: "Demo Synth",
       kind: "instrument",
       categories: ["Instrument", "Synth"],
@@ -117,7 +125,11 @@ describe("descriptorsFromModuleInfo", () => {
       Classes: []
     })
     expect(descriptor).toMatchObject({
-      classId: "unprobed:legacy.vst3",
+      locator: {
+        format: "vst3",
+        artifactPath: "legacy.vst3",
+        nativeId: "unprobed:legacy.vst3"
+      },
       compatibility: "load-error",
       supportedAudioModes: []
     })

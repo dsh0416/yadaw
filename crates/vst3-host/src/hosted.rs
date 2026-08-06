@@ -51,8 +51,17 @@ pub struct HostedParameter {
     pub step_count: i32,
     pub default_normalized: f64,
     pub normalized: f64,
+    pub min_value: f64,
+    pub max_value: f64,
+    pub default_value: f64,
+    pub value: f64,
     pub formatted: String,
     pub flags: u32,
+    pub read_only: bool,
+    pub hidden: bool,
+    pub stepped: bool,
+    pub automatable: bool,
+    pub bypass: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -436,6 +445,9 @@ pub struct HostedPlugin {
     output_parameter_reader: OutputParameterReader,
     controller_initialized: bool,
     class_id: ClassId,
+    // Keep the module and its HostContext alive until every plug-in interface above is released.
+    #[cfg(target_os = "linux")]
+    module: Rc<Module>,
 }
 
 struct ComponentConnections {
@@ -725,6 +737,8 @@ impl HostedPlugin {
                 output_parameter_reader,
                 controller_initialized,
                 class_id,
+                #[cfg(target_os = "linux")]
+                module,
             },
             hook_result,
         ))
@@ -742,6 +756,11 @@ impl HostedPlugin {
     #[must_use]
     pub fn class_id(&self) -> ClassId {
         self.class_id
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn dispatch_run_loop(&self, now: std::time::Instant) -> Option<std::time::Instant> {
+        self.module.dispatch_run_loop(now)
     }
 
     #[must_use]
@@ -1111,6 +1130,26 @@ impl HostedPlugin {
                 // SAFETY: controller is live and raw.id came from this controller.
                 ((*table).parameter_normalized)(controller.as_ptr(), raw.id)
             };
+            let min_value = unsafe {
+                // SAFETY: Controller and parameter ID are valid for this call.
+                ((*table).normalized_to_plain)(controller.as_ptr(), raw.id, 0.0)
+            };
+            let max_value = unsafe {
+                // SAFETY: Controller and parameter ID are valid for this call.
+                ((*table).normalized_to_plain)(controller.as_ptr(), raw.id, 1.0)
+            };
+            let default_value = unsafe {
+                // SAFETY: Controller and parameter ID are valid for this call.
+                ((*table).normalized_to_plain)(
+                    controller.as_ptr(),
+                    raw.id,
+                    raw.defaultNormalizedValue,
+                )
+            };
+            let value = unsafe {
+                // SAFETY: Controller and parameter ID are valid for this call.
+                ((*table).normalized_to_plain)(controller.as_ptr(), raw.id, normalized)
+            };
             let mut text = [0_u16; 128];
             let string_result = unsafe {
                 // SAFETY: controller is live, raw.id belongs to it, and text is writable String128 storage.
@@ -1133,12 +1172,21 @@ impl HostedPlugin {
                 step_count: raw.stepCount,
                 default_normalized: raw.defaultNormalizedValue,
                 normalized,
+                min_value,
+                max_value,
+                default_value,
+                value,
                 formatted: if string_result == 0 {
                     utf16_string(&text)
                 } else {
                     String::new()
                 },
                 flags,
+                read_only: flags & as_uint32(Vst::ParameterInfo_ParameterFlags_kIsReadOnly) != 0,
+                hidden: flags & as_uint32(Vst::ParameterInfo_ParameterFlags_kIsHidden) != 0,
+                stepped: raw.stepCount > 0,
+                automatable: flags & as_uint32(Vst::ParameterInfo_ParameterFlags_kCanAutomate) != 0,
+                bypass: flags & as_uint32(Vst::ParameterInfo_ParameterFlags_kIsBypass) != 0,
             });
         }
         Ok(parameters)
@@ -1184,6 +1232,24 @@ impl HostedPlugin {
                 .with_paused(StereoProcessor::flush_parameters)?;
         }
         Ok(())
+    }
+
+    pub fn set_parameter_plain(&self, id: u32, value: f64, flush: bool) -> HostResult<()> {
+        if !value.is_finite() {
+            return Err(HostError::Operation {
+                operation: "parameter plain value is not finite",
+                result: -2147024809,
+            });
+        }
+        let Some(controller) = &self.controller else {
+            return Err(HostError::NullInterface("IEditController"));
+        };
+        let normalized = unsafe {
+            // SAFETY: Controller is live and the ID is validated by the same
+            // checks performed by `set_parameter`.
+            ((*controller_table(controller)).plain_to_normalized)(controller.as_ptr(), id, value)
+        };
+        self.set_parameter(id, normalized, flush)
     }
 
     pub fn format_parameter_value(&self, id: u32, normalized: f64) -> HostResult<String> {

@@ -85,11 +85,14 @@ function project(): ProjectGraphSnapshot {
         channelId: "audio-1",
         role: "insert",
         slotOrder: 0,
-        classId: "class-1",
+        locator: { format: "vst3", artifactPath: "/plugins/Effect.vst3", nativeId: "class-1" },
         descriptor: {
           source: { kind: "external" },
-          classId: "class-1",
-          modulePath: "/plugins/Effect.vst3",
+          locator: {
+            format: "vst3",
+            artifactPath: "/plugins/Effect.vst3",
+            nativeId: "class-1"
+          },
           name: "Effect",
           vendor: "Heron Studio",
           version: "1.0",
@@ -105,8 +108,7 @@ function project(): ProjectGraphSnapshot {
         audioMode: "stereo",
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array(),
-        controllerState: new Uint8Array()
+        state: { version: 1, chunks: [] }
       } satisfies PluginInstanceState
     ],
     midiClips: [],

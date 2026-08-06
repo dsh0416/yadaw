@@ -57,8 +57,11 @@ const output: MixerChannelState = {
 
 const compressorDescriptor: PluginDescriptor = {
   source: { kind: "builtin", id: "manual-compressor" },
-  classId: "manual-compressor",
-  modulePath: "",
+  locator: {
+    format: "vst3",
+    artifactPath: "",
+    nativeId: "manual-compressor"
+  },
   name: "Compressor",
   vendor: "Heron",
   version: "1.0",
@@ -78,12 +81,18 @@ const plugins = shallowRef<PluginInstanceState[]>([
     channelId: props.channel.id,
     role: "insert",
     slotOrder: 0,
-    classId: compressorDescriptor.classId,
+    locator: compressorDescriptor.locator,
     descriptor: compressorDescriptor,
     audioMode: "stereo",
     enabled: true,
-    componentState: new Uint8Array(),
-    controllerState: new Uint8Array()
+    sidechainInputs: [],
+    state: {
+      version: 1,
+      chunks: [
+        { key: "component", bytes: new Uint8Array() },
+        { key: "controller", bytes: new Uint8Array() }
+      ]
+    }
   }
 ])
 

@@ -18,8 +18,11 @@ import { projectContentEndSeconds } from "./selectors"
 
 const effectDescriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "effect-class",
-  modulePath: "/plugins/Effect.vst3",
+  locator: {
+    format: "vst3",
+    artifactPath: "/plugins/Effect.vst3",
+    nativeId: "effect-class"
+  },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -39,12 +42,17 @@ function plugin(overrides: Partial<PluginInstanceState> = {}): PluginInstanceSta
     channelId: "instrument-1",
     role: "insert",
     slotOrder: 0,
-    classId: effectDescriptor.classId,
+    locator: effectDescriptor.locator,
     descriptor: effectDescriptor,
     audioMode: "stereo",
     enabled: true,
-    componentState: new Uint8Array([1]),
-    controllerState: new Uint8Array([2]),
+    state: {
+      version: 1,
+      chunks: [
+        { key: "component", bytes: new Uint8Array([1]) },
+        { key: "controller", bytes: new Uint8Array([2]) }
+      ]
+    },
     ...overrides,
     sidechainInputs: overrides.sidechainInputs ?? []
   }
@@ -263,7 +271,7 @@ describe("project graph command characterization", () => {
       ...effectDescriptor,
       buses: [
         {
-          index: 1,
+          portKey: "vst3:audio:input:1",
           direction: "input",
           kind: "aux",
           name: "Stereo Side Chain",
@@ -277,7 +285,7 @@ describe("project graph command characterization", () => {
       pluginId: "plugin-1",
       patch: {
         descriptor,
-        sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: "aux-1" }]
+        sidechainInputs: [{ inputPortKey: "vst3:audio:input:1", sourceChannelId: "aux-1" }]
       }
     }
 
@@ -286,7 +294,7 @@ describe("project graph command characterization", () => {
     expect(() => validateGraph(after)).not.toThrow()
     expect(after.plugins[0]).toMatchObject({
       descriptor,
-      sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: "aux-1" }]
+      sidechainInputs: [{ inputPortKey: "vst3:audio:input:1", sourceChannelId: "aux-1" }]
     })
     expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
   })
@@ -306,7 +314,7 @@ describe("project graph command characterization", () => {
       ...effectDescriptor,
       buses: [
         {
-          index: 0,
+          portKey: "vst3:audio:input:0",
           direction: "input",
           kind: "main",
           name: "Main In",
@@ -314,7 +322,7 @@ describe("project graph command characterization", () => {
           defaultActive: true
         },
         {
-          index: 1,
+          portKey: "vst3:audio:input:1",
           direction: "input",
           kind: "aux",
           name: "Side-chain",
@@ -322,7 +330,7 @@ describe("project graph command characterization", () => {
           defaultActive: false
         },
         {
-          index: 0,
+          portKey: "vst3:audio:output:0",
           direction: "output",
           kind: "main",
           name: "Main Out",
@@ -334,7 +342,7 @@ describe("project graph command characterization", () => {
     value.plugins.push(
       plugin({
         descriptor: sidechainDescriptor,
-        sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: "aux-1" }]
+        sidechainInputs: [{ inputPortKey: "vst3:audio:input:1", sourceChannelId: "aux-1" }]
       })
     )
     expect(() => validateGraph(value)).not.toThrow()
@@ -352,7 +360,9 @@ describe("project graph command characterization", () => {
     expect(() => validateGraph(value)).toThrow("feedback loop")
 
     value.sends = []
-    value.plugins[0]!.sidechainInputs = [{ inputBusIndex: 1, sourceChannelId: "instrument-1" }]
+    value.plugins[0]!.sidechainInputs = [
+      { inputPortKey: "vst3:audio:input:1", sourceChannelId: "instrument-1" }
+    ]
     expect(() => validateGraph(value)).toThrow("own channel")
   })
 
@@ -376,7 +386,7 @@ describe("project graph command characterization", () => {
           ...effectDescriptor,
           buses: [
             {
-              index: 1,
+              portKey: "vst3:audio:input:1",
               direction: "input",
               kind: "aux",
               name: "Side-chain",
@@ -385,7 +395,7 @@ describe("project graph command characterization", () => {
             }
           ]
         },
-        sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: sourceChannel.id }]
+        sidechainInputs: [{ inputPortKey: "vst3:audio:input:1", sourceChannelId: sourceChannel.id }]
       })
     )
     const command: ProjectCommand = { type: "delete-track", trackId: "track:audio-1" }
@@ -742,7 +752,10 @@ describe("additional project graph commands", () => {
     const replacement = plugin({
       id: "plugin-1",
       enabled: true,
-      componentState: new Uint8Array([9])
+      state: {
+        version: 1,
+        chunks: [{ key: "component", bytes: new Uint8Array([9]) }]
+      }
     })
     const replaceCommand: ProjectCommand = {
       type: "replace-plugin",
@@ -750,7 +763,7 @@ describe("additional project graph commands", () => {
       plugin: replacement
     }
     const replaced = applyToGraph(created, replaceCommand)
-    expect(replaced.plugins[0]?.componentState).toEqual(new Uint8Array([9]))
+    expect(replaced.plugins[0]?.state.chunks[0]?.bytes).toEqual(new Uint8Array([9]))
     expect(applyToGraph(replaced, inverseFor(created, replaceCommand))).toEqual(created)
 
     const deleteCommand: ProjectCommand = { type: "delete-plugin", pluginId: "plugin-1" }
@@ -994,7 +1007,11 @@ describe("project graph validation and command guards", () => {
   it("rejects moving an instrument into an occupied slot and replacing a missing plugin", () => {
     const instrumentDescriptor: PluginDescriptor = {
       ...effectDescriptor,
-      classId: "instrument-class",
+      locator: {
+        format: "vst3",
+        artifactPath: "/plugins/Instrument.vst3",
+        nativeId: "instrument-class"
+      },
       kind: "instrument",
       name: "Synth",
       supportedAudioModes: ["stereo"]
@@ -1006,7 +1023,7 @@ describe("project graph validation and command guards", () => {
         id: "inst-1",
         role: "instrument",
         slotOrder: 0,
-        classId: instrumentDescriptor.classId,
+        locator: instrumentDescriptor.locator,
         descriptor: instrumentDescriptor,
         audioMode: "stereo"
       })
@@ -1018,7 +1035,7 @@ describe("project graph validation and command guards", () => {
         channelId: "master",
         role: "instrument",
         slotOrder: 0,
-        classId: instrumentDescriptor.classId,
+        locator: instrumentDescriptor.locator,
         descriptor: instrumentDescriptor,
         audioMode: "stereo"
       })
@@ -1226,7 +1243,7 @@ describe("project graph validation and command guards", () => {
       plugin({
         role: "instrument",
         descriptor: { ...effectDescriptor, kind: "effect" },
-        classId: effectDescriptor.classId
+        locator: effectDescriptor.locator
       })
     )
     expect(() => validateGraph(badPlugin)).toThrow(

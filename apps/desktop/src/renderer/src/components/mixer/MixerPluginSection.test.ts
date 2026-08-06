@@ -26,8 +26,7 @@ const channel: MixerChannelState = {
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "compressor",
-  modulePath: "compressor.vst3",
+  locator: { format: "vst3", artifactPath: "compressor.vst3", nativeId: "compressor" },
   name: "Compressor",
   vendor: "Heron Studio",
   version: "1.0",
@@ -46,13 +45,12 @@ const plugin: PluginInstanceState = {
   channelId: "audio",
   role: "insert",
   slotOrder: 0,
-  classId: descriptor.classId,
+  locator: descriptor.locator,
   descriptor,
   audioMode: "stereo",
   enabled: true,
   sidechainInputs: [],
-  componentState: new Uint8Array(),
-  controllerState: new Uint8Array()
+  state: { version: 1, chunks: [] }
 }
 
 function rackDragData(instanceId: string) {
@@ -94,7 +92,11 @@ afterEach(() => {
 
 describe("MixerPluginSection", () => {
   it("offers compact open, bypass, remove, catalog drop, and empty-slot picker actions", async () => {
-    const nextDescriptor = { ...descriptor, classId: "delay", name: "Delay" }
+    const nextDescriptor = {
+      ...descriptor,
+      locator: { ...descriptor.locator, nativeId: "delay" },
+      name: "Delay"
+    }
     const wrapper = mount(MixerPluginSection, {
       attachTo: document.body,
       props: {
@@ -220,11 +222,15 @@ describe("MixerPluginSection", () => {
   })
 
   it("snaps rack moves before or after a row and previews the final slot", async () => {
-    const delayDescriptor = { ...descriptor, classId: "delay", name: "Delay" }
+    const delayDescriptor = {
+      ...descriptor,
+      locator: { ...descriptor.locator, nativeId: "delay" },
+      name: "Delay"
+    }
     const delayPlugin: PluginInstanceState = {
       ...plugin,
       id: "delay-plugin",
-      classId: delayDescriptor.classId,
+      locator: delayDescriptor.locator,
       descriptor: delayDescriptor,
       slotOrder: 1
     }
@@ -272,12 +278,16 @@ describe("MixerPluginSection", () => {
   })
 
   it("transfers the snap preview when a drag enters an adjacent mixer strip", async () => {
-    const adjacentDescriptor = { ...descriptor, classId: "adjacent-fx", name: "Adjacent FX" }
+    const adjacentDescriptor = {
+      ...descriptor,
+      locator: { ...descriptor.locator, nativeId: "adjacent-fx" },
+      name: "Adjacent FX"
+    }
     const adjacentPlugin: PluginInstanceState = {
       ...plugin,
       id: "adjacent-plugin",
       channelId: "adjacent",
-      classId: adjacentDescriptor.classId,
+      locator: adjacentDescriptor.locator,
       descriptor: adjacentDescriptor
     }
     const commonProps = {

@@ -15,7 +15,12 @@ import type {
   RpcRequestMeta,
   TempoMapSnapshot
 } from "@heron/contracts"
-import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@heron/contracts"
+import {
+  DEFAULT_INSTRUMENT_COLOR,
+  MUSICAL_TICKS_PER_QUARTER,
+  pluginLocator,
+  pluginTypeKey
+} from "@heron/contracts"
 import { parseMidiFile } from "@heron/dsp-node"
 import type { NativeNormalizedSmf } from "@heron/dsp-node"
 import type { PluginCatalogService } from "../plugins"
@@ -199,9 +204,9 @@ export class MidiImportService {
         channelId = target.id
       }
 
-      const instrumentClassId = targetPlan.instrumentClassId
-      if (instrumentClassId) {
-        commands.push(...this.instrumentCommands(graph.plugins, channelId, instrumentClassId))
+      const instrumentTypeKey = targetPlan.instrumentTypeKey
+      if (instrumentTypeKey) {
+        commands.push(...this.instrumentCommands(graph.plugins, channelId, instrumentTypeKey))
       }
       const clip: MidiClipState = {
         id: randomUUID(),
@@ -248,9 +253,11 @@ export class MidiImportService {
   private instrumentCommands(
     existingPlugins: PluginInstanceState[],
     channelId: string,
-    classId: string
+    typeKey: string
   ): ProjectCommand[] {
-    const descriptor = this.plugins.list().plugins.find((plugin) => plugin.classId === classId)
+    const descriptor = this.plugins
+      .list()
+      .plugins.find((plugin) => pluginTypeKey(plugin) === typeKey)
     this.validateInstrument(descriptor)
     const existing = existingPlugins.find(
       (plugin) => plugin.channelId === channelId && plugin.role === "instrument"
@@ -260,13 +267,12 @@ export class MidiImportService {
       channelId,
       role: "instrument",
       slotOrder: 0,
-      classId,
+      locator: pluginLocator(descriptor),
       descriptor: structuredClone(descriptor),
       audioMode: descriptor.supportedAudioModes.includes("stereo") ? "stereo" : "mono",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     }
     return existing
       ? [{ type: "replace-plugin", pluginId: existing.id, plugin }]

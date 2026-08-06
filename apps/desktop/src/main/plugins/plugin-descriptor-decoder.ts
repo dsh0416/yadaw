@@ -23,5 +23,5 @@ export function parseProbeStdout(stdout: string): ProbeOutput {
       // Try earlier lines.
     }
   }
-  throw new Error("VST3 probe returned an invalid descriptor")
+  throw new Error("AudioPlugin probe returned an invalid descriptor")
 }

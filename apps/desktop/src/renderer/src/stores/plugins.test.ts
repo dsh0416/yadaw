@@ -17,8 +17,7 @@ import { useProjectStore } from "./project"
 
 const effectDescriptor: PluginDescriptor = {
   source: { kind: "external" },
-  classId: "effect",
-  modulePath: "effect.vst3",
+  locator: { format: "vst3", artifactPath: "effect.vst3", nativeId: "effect" },
   name: "Effect",
   vendor: "Heron Studio",
   version: "1.0",
@@ -34,8 +33,7 @@ const effectDescriptor: PluginDescriptor = {
 
 const instrumentDescriptor: PluginDescriptor = {
   ...effectDescriptor,
-  classId: "instrument",
-  modulePath: "instrument.vst3",
+  locator: { format: "vst3", artifactPath: "instrument.vst3", nativeId: "instrument" },
   name: "Instrument",
   categories: ["Instrument"],
   kind: "instrument",
@@ -44,8 +42,11 @@ const instrumentDescriptor: PluginDescriptor = {
 
 const replacementInstrumentDescriptor: PluginDescriptor = {
   ...instrumentDescriptor,
-  classId: "replacement-instrument",
-  modulePath: "replacement-instrument.vst3",
+  locator: {
+    format: "vst3",
+    artifactPath: "replacement-instrument.vst3",
+    nativeId: "replacement-instrument"
+  },
   name: "Replacement Instrument"
 }
 
@@ -188,13 +189,12 @@ function editorOpenResult() {
         channelId: "audio",
         role: "insert" as const,
         slotOrder: 0,
-        classId: effectDescriptor.classId,
+        locator: effectDescriptor.locator,
         descriptor: effectDescriptor,
         audioMode: "stereo" as const,
         enabled: true,
         sidechainInputs: [],
-        componentState: new Uint8Array(),
-        controllerState: new Uint8Array()
+        state: { version: 1, chunks: [] }
       }
     },
     status: {
@@ -318,13 +318,12 @@ describe("plugin store", () => {
             channelId: "audio",
             role: "insert",
             slotOrder: 0,
-            classId: effectDescriptor.classId,
+            locator: effectDescriptor.locator,
             descriptor: effectDescriptor,
             audioMode: "stereo",
             enabled: true,
             sidechainInputs: [],
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
+            state: { version: 1, chunks: [] }
           }
         },
         status: {
@@ -374,14 +373,19 @@ describe("plugin store", () => {
     store.parameters = {
       "plugin-1": [
         {
-          id: 7,
+          parameterKey: "vst3:7",
+          runtimeToken: 7,
           title: "Mix",
           shortTitle: "Mix",
           units: "%",
           stepCount: 0,
           defaultNormalized: 1,
           normalized: 0.5,
-          flags: 0
+          minValue: 0,
+          maxValue: 1,
+          defaultValue: 1,
+          value: 0.5,
+          normalizedValue: 0.5
         }
       ]
     }
@@ -400,21 +404,20 @@ describe("plugin store", () => {
           channelId: "audio",
           role: "insert",
           slotOrder: 0,
-          classId: effectDescriptor.classId,
+          locator: effectDescriptor.locator,
           descriptor: effectDescriptor,
           audioMode: "stereo",
           enabled: true,
           sidechainInputs: [],
-          componentState: new Uint8Array(),
-          controllerState: new Uint8Array()
+          state: { version: 1, chunks: [] }
         }
       }
     }
 
     await store.setParameter({
       instanceId: "plugin-1",
-      parameterId: 7,
-      normalized: 0.75,
+      parameterKey: "vst3:7",
+      value: 0.75,
       gesture: "perform"
     })
 
@@ -426,8 +429,9 @@ describe("plugin store", () => {
         helperEpoch: "helper-epoch",
         pluginGeneration: 1,
         sequence: "1",
-        parameterId: 7,
-        normalized: 0.75,
+        parameterKey: "vst3:7",
+        runtimeToken: 7,
+        value: 0.75,
         gesture: "perform"
       })
     )
@@ -495,13 +499,12 @@ describe("plugin store", () => {
       channelId: "instrument",
       role: "instrument",
       slotOrder: 0,
-      classId: instrumentDescriptor.classId,
+      locator: instrumentDescriptor.locator,
       descriptor: instrumentDescriptor,
       audioMode: "stereo",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     })
     mixerStore.graph = initialGraph
     window.heron.listPlugins = vi.fn().mockResolvedValue(
@@ -569,13 +572,12 @@ describe("plugin store", () => {
       channelId: "audio",
       role: "insert",
       slotOrder: 0,
-      classId: effectDescriptor.classId,
+      locator: effectDescriptor.locator,
       descriptor: effectDescriptor,
       audioMode: "mono-to-stereo",
       enabled: true,
       sidechainInputs: [],
-      componentState: new Uint8Array(),
-      controllerState: new Uint8Array()
+      state: { version: 1, chunks: [] }
     })
     expect(pluginStore.effectInputWidth("audio", 1)).toBe("stereo")
   })

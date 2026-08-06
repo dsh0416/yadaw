@@ -19,6 +19,7 @@ import { RecordingService } from "../recording"
 import { TransportService } from "../audio"
 import { normalizeAudioRuntime } from "../ipc"
 import { WaveformService } from "../project"
+import { pluginTypeKey } from "@heron/contracts"
 
 export interface ApplicationServices {
   projectGraph: ProjectGraphService
@@ -81,7 +82,7 @@ export async function createApplicationServices(
       if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
       const channel = graph.channels.find((candidate) => candidate.id === plugin.channelId)
       if (!channel) throw new Error(`Plugin channel '${plugin.channelId}' was not found`)
-      const preference = await settings.pluginEditorPreference(plugin.classId)
+      const preference = await settings.pluginEditorPreference(pluginTypeKey(plugin.descriptor))
       return audioHost.openPluginEditor(instanceId, preference, {
         channelName: channel.name,
         channelColor: channel.color,

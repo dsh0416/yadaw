@@ -50,15 +50,10 @@ export class PluginRuntimeService {
   }
 
   async setParameter(change: PluginParameterChange): Promise<void> {
-    if (
-      !Number.isInteger(change.parameterId) ||
-      !Number.isFinite(change.normalized) ||
-      change.normalized < 0 ||
-      change.normalized > 1
-    ) {
-      throw new TypeError("Invalid VST3 parameter change")
+    if (!change.parameterKey.trim() || !Number.isFinite(change.value)) {
+      throw new TypeError("Invalid audio plug-in parameter change")
     }
-    if (!this.runtime) throw new Error("The native VST3 runtime is not running")
+    if (!this.runtime) throw new Error("The native audio plug-in runtime is not running")
     await this.runtime.setParameter(change)
   }
 }
