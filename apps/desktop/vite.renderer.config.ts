@@ -4,8 +4,8 @@ import vue from "@vitejs/plugin-vue"
 import { heronFontsOptions } from "@heron/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig } from "vite"
-import { appVersionDefine } from "./build/app-version"
-import { injectRendererContentSecurityPolicy } from "./src/shared/renderer-csp"
+import { appVersionDefine } from "./build/app-version.ts"
+import { injectRendererContentSecurityPolicy } from "./src/shared/renderer-csp.ts"
 
 export default defineConfig(({ command }) => ({
   base: "./",

@@ -1,7 +1,7 @@
 import { heronFontsOptions } from "@heron/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig, type HeadConfig, type MarkdownOptions, type PageData } from "vitepress"
-import { createBlogSidebar } from "./blog-sidebar"
+import { createBlogSidebar } from "./blog-sidebar.ts"
 
 const markdown: MarkdownOptions = {
   config(md) {
@@ -90,7 +90,7 @@ export default defineConfig({
     },
     plugins: [Unfonts(heronFontsOptions)],
     ssr: {
-      noExternal: ["vue-i18n"]
+      noExternal: ["pinia", "vue-i18n"]
     }
   },
   head: [

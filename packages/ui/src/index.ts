@@ -30,7 +30,6 @@ export { default as UiToolbar } from "./components/UiToolbar.vue"
 export { default as AsioCompatibleLogo } from "./components/AsioCompatibleLogo.vue"
 export { default as HeronLogo } from "./components/HeronLogo.vue"
 export { default as VstCompatibleLogo } from "./components/VstCompatibleLogo.vue"
-export { useLocaleFonts } from "./composables/useLocaleFonts"
 export { UI_DOMAIN_COLORS } from "./domainColors"
 export {
   countMenuTerminals,

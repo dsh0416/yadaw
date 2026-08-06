@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { HeronLogo, useLocaleFonts } from "@heron/ui"
+import { HeronLogo } from "@heron/ui"
+import { useLocaleFonts } from "@heron/ui/locale-fonts"
 import { computed, onMounted } from "vue"
 import { DEFAULT_LOCALE } from "../../../shared/i18n"
 import { useStartupStore } from "../stores/startup"

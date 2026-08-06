@@ -367,6 +367,9 @@ importers:
       '@heron/ui':
         specifier: workspace:*
         version: link:../packages/ui
+      pinia:
+        specifier: 'catalog:'
+        version: 4.0.2(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.40(typescript@5.9.3))
       vue-i18n:
         specifier: ^11.4.8
         version: 11.4.8(vue@3.5.40(typescript@5.9.3))

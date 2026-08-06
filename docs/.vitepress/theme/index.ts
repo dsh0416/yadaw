@@ -1,5 +1,6 @@
 import DefaultTheme from "vitepress/theme-without-fonts"
 import type { Theme } from "vitepress"
+import { createPinia } from "pinia"
 import BlogIndex from "./components/BlogIndex.vue"
 import DocsLayout from "./components/DocsLayout.vue"
 import HomePage from "./components/HomePage.vue"
@@ -17,6 +18,7 @@ export default {
   extends: DefaultTheme,
   Layout: DocsLayout,
   enhanceApp({ app }) {
+    app.use(createPinia())
     app.use(createMixerDemoI18n())
     app.component("AudioBackendSupportFigure", AudioBackendSupportFigure)
     app.component("BlogIndex", BlogIndex)
