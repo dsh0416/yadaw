@@ -128,10 +128,10 @@ Tagged releases require the macOS universal artifact to be signed with the
 Developer ID Application identity stored in the `MAC_CSC_LINK` and
 `MAC_CSC_KEY_PASSWORD` Actions secrets. Notarization uses the App Store Connect
 API secrets `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`;
-`APPLE_API_KEY_P8` contains the Base64-encoded `.p8` private key. Pull requests,
-ordinary CI builds, and manual Build runs leave `sign_macos` disabled so
-untrusted code never receives these credentials; a manual Build run can opt in
-explicitly. Tagged releases use `electron-builder.release.yml`, which forces
-code signing and enables electron-builder's notarization integration. Before
-upload, CI independently checks the Developer ID authority, Team ID, Gatekeeper
+`APPLE_API_KEY_P8` contains the Base64-encoded `.p8` private key. Pull requests
+and ordinary CI builds never receive these credentials. The `sign_macos` input
+only takes effect for a `v*` tag, so a branch or manual Build run cannot opt into
+signing. Tagged releases use `electron-builder.release.yml`, which forces code
+signing and enables electron-builder's notarization integration. Before upload,
+CI independently checks the Developer ID authority, Team ID, Gatekeeper
 assessment, and stapled notarization ticket.
