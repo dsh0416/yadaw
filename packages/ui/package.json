@@ -9,6 +9,7 @@
       "default": "./src/index.ts"
     },
     "./fonts": "./fonts.ts",
+    "./locale-fonts": "./src/composables/useLocaleFonts.ts",
     "./styles.css": "./src/styles/index.css"
   },
   "scripts": {

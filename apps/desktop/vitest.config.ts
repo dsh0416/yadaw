@@ -2,7 +2,7 @@ import { resolve } from "node:path"
 import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vitest/config"
-import { appVersionDefine } from "./build/app-version"
+import { appVersionDefine } from "./build/app-version.ts"
 
 export default defineConfig({
   plugins: [
@@ -21,6 +21,9 @@ export default defineConfig({
     }
   },
   test: {
+    // Node 26 exposes its own file-backed Web Storage globals. Disable them in
+    // test workers so happy-dom can install its isolated in-memory storage.
+    execArgv: ["--no-experimental-webstorage"],
     environment: "happy-dom",
     setupFiles: [resolve(import.meta.dirname, "src/renderer/src/test/setup.ts")],
     include: ["src/renderer/src/**/*.test.ts", "src/main/**/*.test.ts", "src/shared/**/*.test.ts"],
