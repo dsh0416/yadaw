@@ -5,6 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[package.metadata.cargo-shear]
+# Referenced by the expansion of `windows::core::implement` in the Windows
+# application-capture backend, so cargo-shear cannot observe the source usage.
+ignored = ["windows-core"]
+
 [dependencies]
 bwavfile.workspace = true
 ebur128.workspace = true
@@ -34,6 +39,7 @@ windows = { workspace = true, features = [
   "Win32_System_Threading",
   "Win32_System_WinRT"
 ] }
+windows-core = "0.61.2"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 cpal = { workspace = true, features = ["custom"] }
