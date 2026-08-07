@@ -98,15 +98,6 @@ runs:
         printf 'RUSTC_WRAPPER=%s\n' "${SCCACHE_PATH:-sccache}" >> "$GITHUB_ENV"
         echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
-    - name: Verify cargo-llvm-cov on Windows
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        if ! cargo llvm-cov --version; then
-          mise install --force 'cargo:cargo-llvm-cov@0.8.7'
-        fi
-        cargo llvm-cov --version
-
     - name: Locate Cargo and pnpm caches
       id: cache-paths
       shell: bash

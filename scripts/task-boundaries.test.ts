@@ -65,6 +65,17 @@ await test("GitHub workflows use mise for repository task execution", async () =
   assert.deepEqual(violations, [])
 })
 
+await test("Windows native coverage exposes the mise cargo-llvm-cov binary", async () => {
+  const task = await readFile(
+    resolve(workspaceRoot, ".mise/tasks/ci/check/native-coverage"),
+    "utf8"
+  )
+
+  assert.match(task, /RUNNER_OS:-.*Windows/u)
+  assert.match(task, /mise which cargo-llvm-cov/u)
+  assert.match(task, /cygpath -u/u)
+})
+
 await test("universal macOS packaging includes only the universal DSP binding", async () => {
   const universalConfig = await readFile(
     resolve(workspaceRoot, "apps/desktop/electron-builder.universal.yml"),

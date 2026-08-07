@@ -3,6 +3,11 @@
 #MISE depends=["install"]
 set -euo pipefail
 
+if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+  llvm_cov_bin="$(cygpath -u "$(mise which cargo-llvm-cov)")"
+  export PATH="$(dirname "$llvm_cov_bin"):$PATH"
+fi
+
 mise run rust:format:check ::: rust:clippy
 
 target="$(cargo xtask host-target)"
