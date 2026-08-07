@@ -369,7 +369,7 @@ pub(super) fn electron_dimension(value: u32, _display_scale: f64) -> u32 {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn electron_dimension(value: u32, display_scale: f64) -> u32 {
+pub(super) fn electron_dimension(value: u32, display_scale: f64) -> u32 {
     (f64::from(value) / display_scale.max(0.01))
         .round()
         .max(1.0) as u32
