@@ -34,7 +34,6 @@ windows = { workspace = true, features = [
   "Win32_System_Threading",
   "Win32_System_WinRT"
 ] }
-windows-core = "0.61.2"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 cpal = { workspace = true, features = ["custom"] }

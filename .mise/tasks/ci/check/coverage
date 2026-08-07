@@ -4,7 +4,7 @@
 set -euo pipefail
 
 mise run version:check
-mise run js:format-check ::: rust:format:check ::: rust:clippy ::: js:check:configs
+mise run js:format-check ::: rust:format:check ::: rust:shear ::: rust:clippy ::: js:check:configs
 pnpm lint:design
 
 target="$(cargo xtask host-target)"

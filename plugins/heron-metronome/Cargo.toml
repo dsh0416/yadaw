@@ -15,7 +15,6 @@ rt-paranoid = ["truce/rt-paranoid"]
 
 [dependencies]
 truce.workspace = true
-truce-gui-types.workspace = true
 truce-iced.workspace = true
 truce-vst3 = { workspace = true, optional = true }
 heron-plugin-ui.workspace = true
