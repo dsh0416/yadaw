@@ -1,0 +1,8 @@
+extends: ./electron-builder.yml
+
+# napi universalize leaves its arm64 and x64 inputs beside the merged binary.
+# Both electron-builder staging passes otherwise copy all three Mach-O files,
+# and @electron/universal rejects the identical single-architecture copies.
+files:
+  - "!node_modules/@heron/dsp-node/*.darwin-arm64.node"
+  - "!node_modules/@heron/dsp-node/*.darwin-x64.node"

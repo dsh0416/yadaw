@@ -64,3 +64,25 @@ await test("GitHub workflows use mise for repository task execution", async () =
 
   assert.deepEqual(violations, [])
 })
+
+await test("universal macOS packaging includes only the universal DSP binding", async () => {
+  const universalConfig = await readFile(
+    resolve(workspaceRoot, "apps/desktop/electron-builder.universal.yml"),
+    "utf8"
+  )
+  const releaseConfig = await readFile(
+    resolve(workspaceRoot, "apps/desktop/electron-builder.release.yml"),
+    "utf8"
+  )
+  const tasks = await readFile(resolve(workspaceRoot, "mise.toml"), "utf8")
+
+  assert.match(universalConfig, /extends: \.\/electron-builder\.yml/u)
+  assert.match(universalConfig, /\*\.darwin-arm64\.node/u)
+  assert.match(universalConfig, /\*\.darwin-x64\.node/u)
+  assert.match(releaseConfig, /extends: \.\/electron-builder\.universal\.yml/u)
+  assert.match(tasks, /cargo xtask native universal-macos --profile release/u)
+  assert.match(
+    tasks,
+    /electron-builder --config electron-builder\.universal\.yml --publish never --universal/u
+  )
+})

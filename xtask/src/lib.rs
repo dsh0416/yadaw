@@ -77,6 +77,8 @@ enum BenchMode {
 enum NativeCommand {
     /// Build the VST3 probe and bundled plug-ins, then stage them for Electron.
     Build(NativeBuildArgs),
+    /// Build and merge arm64/x64 macOS native artifacts for a universal app.
+    UniversalMacos(NativeUniversalMacosArgs),
 }
 
 #[derive(Debug, Args)]
@@ -86,6 +88,12 @@ struct NativeBuildArgs {
     /// Rust target triple. Defaults to the rustc host target.
     #[arg(long)]
     target: Option<String>,
+}
+
+#[derive(Debug, Args)]
+struct NativeUniversalMacosArgs {
+    #[arg(long, value_enum, default_value_t = BuildProfile::Debug)]
+    profile: BuildProfile,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -184,6 +192,7 @@ fn execute(cli: Cli) -> Result<(), XtaskError> {
         }
         XtaskCommand::Native { command } => match command {
             NativeCommand::Build(args) => native_build(&workspace, &args),
+            NativeCommand::UniversalMacos(args) => native_macos_universal(&workspace, args.profile),
         },
         XtaskCommand::Coverage { command } => {
             let target = host_target(&workspace)?;
@@ -341,6 +350,93 @@ fn native_build(workspace: &Path, args: &NativeBuildArgs) -> Result<(), XtaskErr
     )?;
     run_spec(workspace, &native_plugins_spec(args.profile, &target))?;
     stage_native_artifacts(workspace, args.profile, &target)
+}
+
+fn native_macos_universal(workspace: &Path, profile: BuildProfile) -> Result<(), XtaskError> {
+    const ARM64_TARGET: &str = "aarch64-apple-darwin";
+    const X64_TARGET: &str = "x86_64-apple-darwin";
+
+    for target in [ARM64_TARGET, X64_TARGET] {
+        native_build(
+            workspace,
+            &NativeBuildArgs {
+                profile,
+                target: Some(target.to_owned()),
+            },
+        )?;
+    }
+
+    let arm64 = native_artifact_paths(workspace, profile, ARM64_TARGET, false);
+    let x64 = native_artifact_paths(workspace, profile, X64_TARGET, false);
+    for (arm64_file, x64_file, output) in [
+        (
+            arm64.source_vst3_probe,
+            x64.source_vst3_probe,
+            arm64.stable_vst3_probe,
+        ),
+        (
+            arm64.source_clap_probe,
+            x64.source_clap_probe,
+            arm64.stable_clap_probe,
+        ),
+    ] {
+        run_spec(workspace, &lipo_spec(&arm64_file, &x64_file, &output))?;
+    }
+
+    for relative_path in macos_plugin_binary_relative_paths(&arm64.source_bundles)? {
+        run_spec(
+            workspace,
+            &lipo_spec(
+                &arm64.source_bundles.join(&relative_path),
+                &x64.source_bundles.join(&relative_path),
+                &arm64.stable_bundles.join(relative_path),
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+fn lipo_spec(arm64_file: &Path, x64_file: &Path, output: &Path) -> CommandSpec {
+    CommandSpec {
+        program: OsString::from("lipo"),
+        args: vec![
+            OsString::from("-create"),
+            arm64_file.as_os_str().to_owned(),
+            x64_file.as_os_str().to_owned(),
+            OsString::from("-output"),
+            output.as_os_str().to_owned(),
+        ],
+    }
+}
+
+fn macos_plugin_binary_relative_paths(source_bundles: &Path) -> Result<Vec<PathBuf>, XtaskError> {
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(source_bundles).map_err(|source| XtaskError::Io {
+        operation: "failed to read target-specific VST3 bundles",
+        source,
+    })? {
+        let entry = entry.map_err(|source| XtaskError::Io {
+            operation: "failed to read a VST3 bundle entry",
+            source,
+        })?;
+        let path = entry.path();
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir())
+            || path.extension() != Some(OsStr::new("vst3"))
+        {
+            continue;
+        }
+        let Some(binary_name) = path.file_stem() else {
+            continue;
+        };
+        paths.push(
+            PathBuf::from(entry.file_name())
+                .join("Contents")
+                .join("MacOS")
+                .join(binary_name),
+        );
+    }
+    paths.sort();
+    Ok(paths)
 }
 
 fn native_probe_spec(
@@ -671,6 +767,28 @@ mod tests {
                 .join("target")
                 .join("release")
                 .join("heron-clap-probe.exe")
+        );
+    }
+
+    #[test]
+    fn lipo_spec_merges_architectures_into_the_stable_artifact() {
+        let spec = lipo_spec(
+            Path::new("target/aarch64/probe"),
+            Path::new("target/x64/probe"),
+            Path::new("target/release/probe"),
+        );
+
+        assert_eq!(spec.program, OsString::from("lipo"));
+        assert_eq!(
+            spec.args,
+            [
+                "-create",
+                "target/aarch64/probe",
+                "target/x64/probe",
+                "-output",
+                "target/release/probe",
+            ]
+            .map(OsString::from)
         );
     }
 

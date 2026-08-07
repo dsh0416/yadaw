@@ -1,4 +1,4 @@
-extends: ./electron-builder.yml
+extends: ./electron-builder.universal.yml
 
 # Release artifacts must never silently fall back to an unsigned build.
 forceCodeSigning: true
