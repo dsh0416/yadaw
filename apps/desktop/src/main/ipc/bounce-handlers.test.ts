@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { readFile, unlink, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const electronMocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -146,7 +148,7 @@ describe("registerBounceHandlers", () => {
   })
 
   it("commits only after the dedicated offline host and real-time host are restored", async () => {
-    const destination = `/tmp/heron-bounce-handler-${process.pid}.wav`
+    const destination = join(tmpdir(), `heron-bounce-handler-${process.pid}.wav`)
     await writeFile(destination, "old output")
     electronMocks.showSaveDialog.mockResolvedValue({ canceled: false, filePath: destination })
     const context = createContext()
