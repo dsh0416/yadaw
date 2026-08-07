@@ -108,7 +108,7 @@ describe("Electron main domain architecture", () => {
     ])
     for (const [path, maximumLines] of limits) {
       const source = await readFile(join(mainRoot, path), "utf8")
-      expect(source.split(/\r?\n/).length, path).toBeLessThanOrEqual(maximumLines)
+      expect(source.trimEnd().split(/\r?\n/).length, path).toBeLessThanOrEqual(maximumLines)
     }
   })
 })

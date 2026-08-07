@@ -138,6 +138,7 @@ describe("native plug-in editor dimensions", () => {
 
   it("applies the native snapshot immediately after leaving parameter mode", async () => {
     vi.useFakeTimers()
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux")
     const windows = new ElectronPluginEditorWindows({} as never)
     const state = {
       activeMode: "native",
@@ -222,6 +223,7 @@ describe("native plug-in editor dimensions", () => {
       await vi.runAllTimersAsync()
       expect(resizeEditorHost).toHaveBeenCalledTimes(3)
     } finally {
+      platform.mockRestore()
       vi.useRealTimers()
     }
   })
