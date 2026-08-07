@@ -1,5 +1,6 @@
 export * from "./application-command-events"
 export * from "./application-menu"
+export * from "./application-main-process"
 export * from "./application-services"
 export * from "./application-shell"
 export * from "./audio-host-application-events"

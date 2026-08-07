@@ -699,3 +699,63 @@ pub(super) fn engine_command(
     };
     Some(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn logical_target() -> engine::application_capture::ApplicationCaptureLogicalTarget {
+        engine::application_capture::ApplicationCaptureLogicalTarget {
+            platform: "macos".to_owned(),
+            bundle_identifier: Some("live.minori.player".to_owned()),
+            executable_path: "/Applications/Player.app/Contents/MacOS/Player".to_owned(),
+            executable_name: "Player".to_owned(),
+            include_process_tree: true,
+        }
+    }
+
+    #[test]
+    fn application_target_preserves_logical_identity() {
+        let converted = application_target(
+            engine::application_capture::ApplicationCaptureTargetDescriptor {
+                runtime_id: "macos-process-42".to_owned(),
+                process_id: 42,
+                display_name: "Player".to_owned(),
+                executable_path: "/Applications/Player.app/Contents/MacOS/Player".to_owned(),
+                logical_target: logical_target(),
+                channel_count: 2,
+                status: "inactive".to_owned(),
+            },
+        );
+
+        assert_eq!(converted.runtime_id, "macos-process-42");
+        assert_eq!(
+            converted.logical_target.bundle_identifier.as_deref(),
+            Some("live.minori.player")
+        );
+        assert!(converted.logical_target.include_process_tree);
+    }
+
+    #[test]
+    fn application_snapshot_preserves_status_and_counters() {
+        let converted =
+            application_snapshot(engine::application_capture::ApplicationCaptureSnapshot {
+                runtime_id: "macos-process-42".to_owned(),
+                process_id: Some(42),
+                display_name: "Player".to_owned(),
+                executable_path: "/Applications/Player.app/Contents/MacOS/Player".to_owned(),
+                logical_target: logical_target(),
+                channel_count: 2,
+                status: "capturing".to_owned(),
+                dropout_frames: 3,
+                overflow_frames: 5,
+                underflow_frames: 7,
+            });
+
+        assert_eq!(converted.process_id, Some(42));
+        assert_eq!(converted.status, "capturing");
+        assert_eq!(converted.dropout_frames, 3);
+        assert_eq!(converted.overflow_frames, 5);
+        assert_eq!(converted.underflow_frames, 7);
+    }
+}

@@ -232,6 +232,67 @@ describe("MixerInputCapsule", () => {
     ])
   })
 
+  it.each([
+    ["target-exited", "has exited"],
+    ["target-missing", "is unavailable"],
+    ["ambiguous-target", "more than one application"],
+    ["no-stream", "not currently producing audio"],
+    ["unsupported", "not supported"],
+    ["error", "encountered an error"]
+  ] as const)("shows the %s application capture recovery state", (status, message) => {
+    const applicationStore = useApplicationCaptureStore(pinia)
+    const logicalTarget = {
+      platform: "windows" as const,
+      executablePath: "C:\\Player\\player.exe",
+      executableName: "player.exe",
+      includeProcessTree: true
+    }
+    applicationStore.snapshots = [
+      {
+        runtimeId: "windows-process-42",
+        processId: 42,
+        displayName: "Player",
+        executablePath: logicalTarget.executablePath,
+        logicalTarget,
+        channelCount: 2,
+        status,
+        dropoutFrames: 0,
+        overflowFrames: 0,
+        underflowFrames: 0
+      }
+    ]
+
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 8",
+        inputSource: "application",
+        inputFormat: "stereo",
+        inputChannels: [1, 2],
+        applicationCapture: logicalTarget
+      },
+      global: { plugins: [pinia] }
+    })
+
+    expect(wrapper.get('[role="status"]').text().toLocaleLowerCase()).toContain(message)
+  })
+
+  it("does not emit when a stale application menu option is selected", async () => {
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 9",
+        inputSource: "hardware",
+        inputFormat: "mono",
+        inputChannels: [1]
+      },
+      global: { plugins: [pinia] }
+    })
+
+    wrapper.getComponent(UiCascadingSelect).vm.$emit("update:modelValue", "application:missing")
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted("update")).toBeUndefined()
+  })
+
   it("clears an application target when switching back to a hardware microphone", async () => {
     const applicationCapture = {
       platform: "windows" as const,
