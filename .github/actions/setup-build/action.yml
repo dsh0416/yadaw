@@ -74,7 +74,7 @@ runs:
     - name: Enable sccache for subsequent build steps
       shell: bash
       run: |
-        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        printf 'RUSTC_WRAPPER=%s\n' "${SCCACHE_PATH:-sccache}" >> "$GITHUB_ENV"
         echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
     - name: Locate Cargo and pnpm caches
