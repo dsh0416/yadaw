@@ -546,11 +546,59 @@ mod tests {
     }
 
     #[test]
-    fn error_status_has_a_stable_protocol_name() {
-        assert_eq!(
-            application_capture_status_name(APPLICATION_CAPTURE_STATUS_ERROR),
-            "error"
-        );
+    fn every_status_has_a_stable_protocol_name() {
+        let cases = [
+            (APPLICATION_CAPTURE_STATUS_INACTIVE, "inactive"),
+            (APPLICATION_CAPTURE_STATUS_CAPTURING, "capturing"),
+            (APPLICATION_CAPTURE_STATUS_NO_STREAM, "no-stream"),
+            (APPLICATION_CAPTURE_STATUS_TARGET_MISSING, "target-missing"),
+            (
+                APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET,
+                "ambiguous-target",
+            ),
+            (APPLICATION_CAPTURE_STATUS_TARGET_EXITED, "target-exited"),
+            (APPLICATION_CAPTURE_STATUS_UNSUPPORTED, "unsupported"),
+            (APPLICATION_CAPTURE_STATUS_ERROR, "error"),
+            (
+                APPLICATION_CAPTURE_STATUS_PERMISSION_DENIED,
+                "permission-denied",
+            ),
+            (u32::MAX, "error"),
+        ];
+
+        for (status, expected) in cases {
+            assert_eq!(application_capture_status_name(status), expected);
+        }
+    }
+
+    #[test]
+    fn invalid_sample_rates_are_rejected_before_resampler_creation() {
+        for (source_rate, session_rate) in [(0, 48_000), (48_000, 0)] {
+            let result =
+                PreparedApplicationCapture::new(descriptor(), source_rate, session_rate, 4, 256);
+            assert!(matches!(
+                result,
+                Err(ApplicationCaptureError::InvalidConfiguration(message))
+                    if message == "sample rates must be non-zero"
+            ));
+        }
+    }
+
+    #[test]
+    fn registry_discards_expired_capture_routes() {
+        let registry = ApplicationCaptureRegistry::default();
+        let route = PreparedApplicationCapture::silent(
+            descriptor(),
+            48_000,
+            APPLICATION_CAPTURE_STATUS_INACTIVE,
+        )
+        .expect("silent route");
+        registry.register(&route.state);
+        assert_eq!(registry.snapshot().len(), 1);
+
+        drop(route);
+
+        assert!(registry.snapshot().is_empty());
     }
 
     #[test]
