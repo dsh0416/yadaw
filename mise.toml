@@ -2,7 +2,7 @@
 "github:microsoft/apm" = "latest"
 node = "26"
 pnpm = "latest"
-rust = { version = "latest", components = "rustfmt,clippy,llvm-tools" }
+rust = { version = "stable", components = "rustfmt,clippy,llvm-tools" }
 "cargo:cargo-llvm-cov" = "0.8.7"
 cmake = "3.31.12"
 "cargo:cargo-truce" = "6.1.3"

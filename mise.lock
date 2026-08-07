@@ -51,10 +51,6 @@ url_api = "https://api.github.com/repos/Kitware/CMake/releases/assets/400961027"
 version = "llvmorg-22.1.8"
 backend = "github:llvm/llvm-project"
 
-[[tools."github:llvm/llvm-project"]]
-version = "llvmorg-22.1.8"
-backend = "github:llvm/llvm-project"
-
 [tools."github:llvm/llvm-project".options]
 matching = "clang+llvm"
 
@@ -196,11 +192,7 @@ url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/493764734"
 provenance = "github-attestations"
 
 [[tools.rust]]
-version = "nightly"
-backend = "core:rust"
-
-[[tools.rust]]
-version = "nightly"
+version = "stable"
 backend = "core:rust"
 
 [tools.rust.options]
