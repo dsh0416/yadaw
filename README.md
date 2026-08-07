@@ -59,10 +59,13 @@ products or incompatible project formats.
 
 The foundation is in place: a native real-time audio engine with ASIO® support
 on Windows, project persistence, arrangement and mixer workflows, audio
-recording, MIDI clips, and VST® 3 hosting. The next primary focus is composition
-depth—especially MIDI editing and the piano roll—then mixing/export, live
-performance, and finally a broader built-in plug-in rack for out-of-the-box use.
-After VST 3, hosted formats are planned as ARA, then CLAP, then AU.
+recording, MIDI clips, and VST® 3 hosting. The current product focus is a
+complete Live performance path for singer-songwriters and livestream performers:
+familiar Mixer interaction, external control, visible system health, device
+recovery, and verified two-hour stability on Windows, macOS, and Linux. Studio
+creation completion follows; scene-oriented Studio-to-Stage integration comes
+later. Large plug-in-format and built-in-rack expansions remain backlog work
+unless they block that user path.
 
 <img src="packages/ui/src/assets/VST_Compatible_Logo_Steinberg.svg" alt="VST Compatible" width="128">
 

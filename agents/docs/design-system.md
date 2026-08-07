@@ -8,6 +8,11 @@ The source of truth is `packages/ui`. Storybook in `apps/design-system` is the i
 reference. Product screens may compose these primitives, but they must not create a second
 generic component system.
 
+This document governs visual language, shared components, and accessibility.
+[Product interaction design](interaction-design.md) governs workflow, control exposure, Logic
+behavioral parity, and feedback placement. Passing token and component checks does not justify
+hiding a frequently adjusted parameter in a menu.
+
 ## Visual thesis
 
 Heron is built for musicians, editors, and audio engineers who may keep the same workspace open

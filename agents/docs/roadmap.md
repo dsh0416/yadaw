@@ -1,138 +1,207 @@
-# Roadmap
+# Product roadmap
 
-Heron is experimental. This checklist is the agreed product backlog and
-milestone order. Check items when they ship in a usable form; uncheck or add
-items when scope changes. Releases document what each version actually
-supports.
+Heron's roadmap is ordered by complete user outcomes, not by the number of
+implemented subsystems. A capability belongs in **Current capabilities** only
+after its implementation, tests, documentation, and required human evidence
+all satisfy the definition of done below.
 
-## Compatibility policy
+Heron remains experimental. Before 1.0, project archives, preferences, and
+internal protocols may change without a migration guarantee. A change still
+has to preserve the single-commit, typed-error, and recovery rules documented
+for the affected boundary.
 
-Until **1.0**, the project does **not** promise backward compatibility for
-project archives, preferences, IPC contracts, or plug-in state. Formats may
-carry version markers to aid development, but there is no guaranteed upgrade
-path for older sessions. Compatibility commitments begin with 1.0.
+## Product sequence
 
-## Priorities (ordering constraints)
+1. **Current — Live performance readiness.** Make Heron dependable and
+   understandable for a singer-songwriter or livestream performer during a
+   two-hour session.
+2. **Next — Studio creation completion.** Close the composition-to-export path
+   without relying on another DAW.
+3. **Later — Studio to Stage integration.** Turn material prepared in the
+   studio into a scene-oriented performance without creating a second project
+   model.
 
-- [x] Prefer MIDI editing and the piano roll as the highest near-term product
-      focus after foundation hardening
-- [x] After VST3, host formats in order: ARA → CLAP → AU
-- [x] Defer the full built-in rack until after Studio → Stage (M4), without
-      blocking M1–M3
-- [x] Accept breaking project-format changes freely before 1.0
+Large feature blocks do not enter Current merely because work has already
+started. [The Live performance contract](product-live.md) is the authority for
+Current scope and release evidence.
 
-## Vertical slice (baseline)
+## Definition of done
 
-Already usable for experimentation; keep these checked as the floor.
+A roadmap item is done only when all applicable evidence exists in the same
+change or release candidate:
 
-- [x] Native real-time audio engine (cpal / audio-host)
-- [x] Project persistence (open / save / reopen)
-- [x] Arrangement timeline with audio clips
-- [x] MIDI clip import, display, move, and playback
-- [x] Mixer with BUS routing, sends, meters, and Master
-- [x] Audio recording with pending recovery path
-- [x] VST3 scan, insert, editor windows, and state sync
-- [x] Built-in VST3s: Gain, Sine, Metronome
-- [x] Mixer-oriented undo / project commands
+- the user-visible behavior and failure states are implemented;
+- tests match the risk matrix in [Engineering standards](engineering-standards.md);
+- public documentation describes behavior that has actually shipped;
+- agent-facing architecture and interaction documents match the implementation;
+- supported keyboard, focus, theme, localization, and accessibility states pass;
+- cross-process or real-time changes satisfy their boundary-specific checks;
+- no linked blocking defect or architecture-policy violation remains; and
+- any required manual hardware, soak, or usability evidence has been recorded.
 
-## M0 — Foundation hardening
+Checking off an internal API, component, or protocol is not sufficient when the
+user journey still breaks. Partially implemented work remains in Current or
+Backlog with its missing exit conditions stated explicitly.
 
-Make the existing vertical slice reliable for daily experimentation.
+## Current capabilities
 
-- [x] Embed the audio host in `@heron/dsp-node`, removing the helper process,
-      audio-host client addon, OS IPC transport, shared-memory arenas, watchdog,
-      and per-crash restart/reconciliation state machine
+These capabilities form the existing experimental baseline. They are not a
+claim that the Live or Studio journey is complete.
 
-- [x] Recording pending recovery across stop / crash / relaunch (swap sidecars,
-      `partial` → `ready` repair, commit into the open project; covered by e2e)
-- [x] Plug-in missing-module and failed-load states keep legal graph topology;
-      fatal native failures follow the application crash/relaunch path
-- [x] Contributor-facing CI and multi-platform packaging (signed/notarized
-      installers stay in M3)
-- [x] Graph construction moves to the supervised graph worker (see
-      `playback-runtime.md`)
-- [x] Project Settings exposes session sample rate; recording finalization
-      resamples to that rate
-- [x] Audio engine session clock follows the project sample rate across device
-      open / reconfiguration (streams still open at the device native default)
-- [x] Authoritative round-trip latency measurement (guided physical loopback
-      with quiet-input validation and matched-probe detection; callback/ring
-      estimate remains visible for comparison)
+- Embedded native audio runtime with cpal device streams and a format-neutral
+  plug-in graph.
+- Project create, open, save, working-copy recovery, and recording-media
+  recovery.
+- Arrangement playback with audio and MIDI clips, editing, loop, count-in, and
+  project commands with undo.
+- Audio and MIDI recording, including MIDI hardware input, hot-plug state,
+  external MIDI Clock, and journal recovery.
+- Mixer channels, buses, outputs, sends, meters, Master, and plug-in chains.
+- VST3 instruments and effects, editor windows, state persistence, and ARA 2.
+- Offline full-mix export.
+- A single-output low-latency mode with latency budgeting and explicit bypass
+  policy.
+- Cross-platform development builds for Windows, macOS, and Linux.
 
-## M1 — Composition MVP
+## Current — Live performance readiness
 
-**Complete.** Write and edit music inside Heron without an external DAW for
-MIDI work.
+### Outcome
 
-- [x] Piano roll UI
-- [x] Note-level MIDI create / edit / delete
-- [x] Velocity and basic note properties editing
-- [x] MIDI clip trim / split (minimum useful set)
-- [x] Audio clip trim / split / fade basics (minimum useful set)
-- [x] Transport loop
-- [x] Count-in
-- [x] Arrangement undo covering edit operations (not only mixer commands)
-- [x] MIDI hardware input into the session (routing, monitoring, hot-plug
-      recovery, external MIDI Clock slave, journal capture, take commit, and
-      crash-recovery integration)
+A DAW-experienced singer-songwriter or livestream performer can create or open
+a project, configure one microphone, one instrument, and multiple MIDI
+controllers, build a monitored plug-in and mixer signal chain, play prepared
+audio or MIDI material, understand system health, and keep the session running
+for at least two hours without reading source or developer documentation.
 
-## M2 — Mix and deliver
+### Workflow and interaction
 
-Finish and hand off a mix.
+- [ ] A DAW-experienced user completes the canonical Live task within 30
+      minutes using existing DAW knowledge and in-product copy only.
+- [ ] Mixer behavior follows Logic Pro unless a documented decision explicitly
+      defines an exception.
+- [ ] Send level is directly adjustable on the channel strip; routing, tap,
+      enablement, and deletion remain available as secondary configuration.
+- [ ] Frequently read or adjusted state is not hidden behind a menu or popover.
+- [ ] The project asset library browses audio and MIDI already in the project
+      and imports both formats.
+- [ ] MIDI can be dropped on an empty arrangement area, dropped on an existing
+      Instrument track, or passed through the import-mapping dialog.
+- [ ] Audio becomes available for audition after import; pre-import audition,
+      disk-wide browsing, and library indexing do not block this milestone.
+- [ ] User-facing health information follows the status, detail, notification,
+      blocking-decision, and diagnostic layers in
+      [Interaction design](interaction-design.md).
 
-- [ ] Channel automation (fader / pan / mute)
-- [ ] Plug-in parameter automation
-- [x] Offline bounce / export of an Output (full-mix delivery path)
-- [ ] Stem export
-- [ ] Mixer groups (or equivalent grouping workflow)
-- [x] VST3+ARA 2 hosting (ordinary insert workflow, non-destructive playback,
-      independent archive state; Wayland-specific editor work remains in M3)
-- [ ] CLAP hosting (format-neutral core, scanning, processing, parameters,
-      state, latency/tail, MIDI, timer/POSIX-FD, native editor embedding and
-      graph-retirement-driven restart/rescan reactivation landed; the
-      repository-owned conformance plug-in and broader platform matrix remain)
-- [ ] AU hosting
+### External MIDI control
 
-## M3 — Studio to stage
+- [ ] Existing note routing, controller routing to instruments, and application
+      command bindings remain available.
+- [ ] System preferences map a device ID and MIDI message to Mixer Gain, Pan,
+      Mute, or Solo. Sends are not MIDI targets in Current.
+- [ ] Mixer targets resolve against the current shared ordering of Audio,
+      Instrument, BUS, Output, and Master channels. Reordering intentionally
+      changes which channel an ordered target controls.
+- [ ] Mute and Solo bindings can choose toggle or absolute behavior.
+- [ ] A plug-in instance can receive a project-unique `controlAlias` while its
+      display name remains non-unique.
+- [ ] System preferences map MIDI controls to an arbitrary plug-in parameter by
+      `controlAlias`; moving the instance between channels does not break the
+      mapping.
+- [ ] Missing ordered Mixer targets and missing plug-in aliases ignore input
+      without retargeting another plug-in.
+- [ ] A disconnected controller retains mappings by device ID until the user
+      changes them.
 
-Live half of the product vision.
+### Runtime resilience
 
-- [ ] Minimal live set / scene-oriented workflow
-- [x] Single-Output low-latency monitoring mode with a session-scoped target,
-      plug-in budget, temporary effect bypass, and low-latency PDC policy
-- [ ] Performance tooling usable outside developer diagnostics
-- [ ] Wayland native VST3 editor path (beyond parameter-editor fallback)
-- [ ] Signed / notarized release distribution
+- [ ] A lost audio device immediately opens a recovery decision while Heron
+      continues trying the previous device in the background.
+- [ ] A user's subsequent device choice wins over every earlier reconnect
+      attempt, even if the old device has already returned.
+- [ ] A plug-in load failure bypasses that instance without invalidating the
+      rest of the graph.
+- [ ] CPU pressure, XRUNs, and overload are visible to the user, but Heron does
+      not change buffer size, bypass effects, or otherwise alter the performance
+      without an explicit user action.
+- [ ] A fatal in-process plug-in or native failure may restart Heron. Plug-in
+      process isolation is not part of Current because it would break the
+      existing ARA ownership model.
+- [ ] Relaunch preserves the existing user choice between the saved project and
+      the recoverable working copy.
+- [ ] Existing recording and playback of prepared accompaniment do not regress,
+      although new recording workflows are not part of the Live exit criteria.
 
-## M4 — Built-in rack
+### Release evidence
 
-Large effort after M3. Out-of-the-box sound without third-party plug-ins for
-common chains. Until then, rely on Gain / Sine / Metronome plus third-party
-VST3. Opportunistic iced chrome polish may land earlier, but M4 formally starts
-with a shared native visual language so new built-ins are not redesigned later.
-This work must not block M1–M3.
+- [ ] Windows passes the Live matrix with a 64-bit vendor ASIO driver.
+- [ ] macOS passes the Live matrix with CoreAudio.
+- [ ] Linux passes the Live matrix with ALSA.
+- [ ] VST3 is release-blocking on all three platforms; ARA must not regress.
+      CLAP does not block this milestone, and AU remains deferred.
+- [ ] A manually triggered automated two-hour soak runs through the mock-device
+      Live scenario without an unbounded resource trend, graph corruption, or
+      unexplained XRUN growth.
+- [ ] A two-hour real-hardware session passes on every release platform. These
+      hardware runs belong to the release process, not ordinary CI.
+- [ ] Real target users complete the canonical task within 30 minutes. This is
+      a documented product metric, not an automated test substitute.
 
-### Native iced UI (do first)
+### Governance work before feature expansion
 
-- [ ] Define a shared iced design language (tokens, typography, controls) aligned
-      with `@heron/ui` where practical
-- [ ] Apply it to `audio-host` editor chrome and the generic parameter editor
-- [ ] Apply it to existing built-ins (Gain, Sine, Metronome) via `heron-plugin-ui`
+- [ ] Adopt the engineering, architecture, interaction, and ADR rules linked
+      from `agents/docs/README.md`.
+- [ ] Resolve the current source-size violations recorded in
+      [Engineering standards](engineering-standards.md) before enabling the
+      hard size gate in the default check pipeline.
+- [ ] Add enforceable architecture checks wherever a rule can be checked
+      mechanically; issue-linked exceptions must not expand silently.
+- [ ] Reconcile user-facing documentation with the behavior in the development
+      build before the next release.
 
-### Built-in processors (after UI language)
+## Next — Studio creation completion
 
-- [ ] Utility (gain / pan / phase / width-class basics)
-- [ ] EQ
-- [ ] Compressor / dynamics
-- [ ] Saturator / distortion
-- [ ] Reverb
-- [ ] Delay
-- [ ] Stronger instrument(s) beyond Sine (scope TBD)
-- [ ] Built-ins remain real-time safe and match host width / bypass / state
-      model
+### Outcome
 
-## Explicit non-goals for early 0.x
+A user completes the path below without another DAW:
 
-- No stable project-format guarantees before 1.0.
-- Do not schedule CLAP or AU ahead of ARA.
-- Do not block M1–M3 on a full built-in plug-in suite.
+```text
+create project -> configure devices -> record MIDI or simple audio
+-> edit -> load instruments and effects -> mix -> export a playable file
+```
+
+The milestone will be decomposed into journey-level acceptance criteria after
+Current exits. Candidate scope includes composition depth, recording usability,
+automation, grouping, stem export, and the editing details exposed by real-user
+tests. Existing implementations are inputs to that planning; they are not
+automatically considered complete.
+
+## Later — Studio to Stage integration
+
+### Outcome
+
+Material, instruments, effects, routing, and controller intent prepared in the
+studio can be presented as a scene-oriented performance without conversion to a
+separate project format.
+
+Scene workflow, performance-facing tools, and the transition between editing
+and performance remain deliberately outside Current. Low-latency monitoring and
+Live reliability are prerequisites, not substitutes for this milestone.
+
+## Backlog without schedule
+
+The following work may be refined or landed opportunistically, but it must not
+displace Current unless a documented dependency proves that it blocks the Live
+outcome:
+
+- channel and plug-in automation, mixer grouping, and stem export;
+- full CLAP conformance and platform coverage;
+- Audio Unit hosting;
+- Mackie Control, HUI, MIDI soft takeover, motor-fader feedback, controller
+  displays, and Send MIDI targets;
+- indexed disk libraries, favorites, tags, metadata search, and pre-import
+  audition;
+- dedicated JACK, PipeWire, and PulseAudio backends;
+- native Wayland plug-in editor improvements;
+- signed and notarized distribution;
+- the shared iced plug-in visual language and a broader built-in processor and
+  instrument rack.

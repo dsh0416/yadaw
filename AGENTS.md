@@ -44,9 +44,18 @@ under `.agents/skills/`.
   `.cjs` for generated files or bundle outputs whose consumers require those
   extensions.
 - Treat 800 lines in a hand-authored production source file as a review trigger,
-  not a hard limit. Keep binary entry points, package barrels, route views, and
-  application composition roots thin; split growing modules by feature and
-  ownership boundary rather than by arbitrary type categories.
+  and 1200 lines as a hard split threshold. New production files must not enter
+  above 800 lines. Tests, generated sources, ABI declarations, and derived FFI
+  may be reviewed exceptions. Keep binary entry points, package barrels, route
+  views, and application composition roots thin; split by feature and ownership
+  boundary rather than by arbitrary type categories. See
+  `agents/docs/engineering-standards.md`.
+- Treat Logic Pro as the default behavior reference for Mixer, channel-strip,
+  routing, Send, plug-in-slot, and parameter gestures. Material deviations need
+  a documented decision. See `agents/docs/interaction-design.md`.
+- Create an ADR for changes to process/thread boundaries, persistence, cross-
+  process protocols, real-time assumptions, foundational dependencies,
+  compatibility commitments, or material interaction semantics.
 
 ## Common Commands
 
@@ -97,7 +106,11 @@ mise exec -- pnpm lint
 - [Repository overview](README.md)
 - [User manual](docs/content/manual/index.md)
 - [Architecture and real-time constraints](agents/docs/architecture.md)
+- [Architecture decision records](agents/docs/adr/README.md)
 - [Product roadmap](agents/docs/roadmap.md)
+- [Live performance product contract](agents/docs/product-live.md)
+- [Engineering standards](agents/docs/engineering-standards.md)
+- [Product interaction design](agents/docs/interaction-design.md)
 - [Rust performance benchmarks](agents/docs/benchmarks.md)
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)

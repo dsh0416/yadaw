@@ -36,6 +36,11 @@ Use one shared menu content renderer behind these public interaction primitives:
 or multiple independent inputs. A menu is for choosing a command or value and closes after a
 terminal choice. Do not put text fields in a menu except for the optional menu search field.
 
+A menu or popover is not a substitute for a primary control on its owning surface. Apply the
+promotion rules in [Product interaction design](interaction-design.md) before choosing a floating
+primitive. In particular, time-sensitive, frequently adjusted, comparison-worthy, or
+signal-defining values remain visible and directly operable.
+
 The existing `UiCascadingMenu` should converge on the shared renderer rather than remain a
 separate visual system. Product code must not import Reka menu primitives directly.
 

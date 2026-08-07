@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-06T18:16:01.229638+00:00'
+generated_at: '2026-08-07T16:04:01.938773+00:00'
 apm_version: 0.26.0
 dependencies:
 - repo_url: antfu/skills
@@ -880,6 +880,52 @@ dependencies:
     .agents/skills/rust-skills/rules/unsafe-safety-comment.md: sha256:4892500c59f446eb8031fcf2cc98bf64f3323276abee0355409f4af53cbdcaab
     .agents/skills/rust-skills/rules/unsafe-send-sync-manual.md: sha256:106ca8ba1843ec8dfe9658c5db41fd99d106bcf2b8b4ece41e8db1dd347372f2
   content_hash: sha256:b0a055da7be8a53d7e9a15fa84ea7371d8564a7498f0a531aecf16b75213ee72
+- repo_url: mattpocock/skills
+  name: grill-me
+  host: github.com
+  resolved_commit: 84fdeffd12f2ee307994d1eb6feb48173b6e0502
+  version: unknown
+  virtual_path: skills/productivity/grill-me
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/grill-me
+  - .agents/skills/grill-me/SKILL.md
+  - .agents/skills/grill-me/agents/openai.yaml
+  deployed_file_hashes:
+    .agents/skills/grill-me/SKILL.md: sha256:6189dfceb7304a6e5558f75d87e68fa3bc7fcf7ba120e44f21f8a61fe01eba54
+    .agents/skills/grill-me/agents/openai.yaml: sha256:c061e39c3e0f9d865fb1b97556d485704af2a8a58f4b8221a8917a5c2074a32b
+  content_hash: sha256:0ac1a28d5e7ab05c4a51046c9d74fd7bfc070ba6a3b9ec8451bd274e746d67b6
+- repo_url: microsoft/apm
+  name: apm-usage
+  host: github.com
+  resolved_commit: 3aa0365540e3d9ef4685740cea6a09094ff35377
+  version: unknown
+  virtual_path: packages/apm-guide/.apm/skills/apm-usage
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/apm-usage
+  - .agents/skills/apm-usage/SKILL.md
+  - .agents/skills/apm-usage/authentication.md
+  - .agents/skills/apm-usage/commands.md
+  - .agents/skills/apm-usage/dependencies.md
+  - .agents/skills/apm-usage/governance.md
+  - .agents/skills/apm-usage/installation.md
+  - .agents/skills/apm-usage/package-authoring.md
+  - .agents/skills/apm-usage/troubleshooting.md
+  - .agents/skills/apm-usage/workflow.md
+  deployed_file_hashes:
+    .agents/skills/apm-usage/SKILL.md: sha256:a76e5e768e5d2257cf910d04063418424a6dc1ff7c02949c69c9824d90e05565
+    .agents/skills/apm-usage/authentication.md: sha256:f70e5d0392824f03fce4d02f609613760ec9d51cc962f9db2c97561918cfa875
+    .agents/skills/apm-usage/commands.md: sha256:edcaae43378cb8d5b846ba45adffe9f6e821945371bb62eaeca2ad3447564110
+    .agents/skills/apm-usage/dependencies.md: sha256:00032d181004beee1904cccb4a1508e63460752749fc57a2bba7e699e085b761
+    .agents/skills/apm-usage/governance.md: sha256:cf6ea374a298321a5651d81937d3741b0632a3ee1ec1aaad9308f47c5caa56e8
+    .agents/skills/apm-usage/installation.md: sha256:8361fde8ce2deabbfdf02bc966704de52f14e9130f1422e6bf9dc9e8016d9e6e
+    .agents/skills/apm-usage/package-authoring.md: sha256:ca9609eaec7e8422a5cc30601e2d53795d2172b294f5666db19eb0810de1d24d
+    .agents/skills/apm-usage/troubleshooting.md: sha256:9ee88100a64857f25e9cb49d1a56d3921d8e69974158c11b0d9431f4ce68362d
+    .agents/skills/apm-usage/workflow.md: sha256:7e893102a2fe51bb691a5f00851b67ad474d0e0cd86630816be809ad63d1eb95
+  content_hash: sha256:039fd8fc3d9f71ffdeed49982d4433e9e904b92fd1ecb89be80c9902c2590ee2
 - repo_url: vueuse/skills
   name: skills
   host: github.com
@@ -1429,6 +1475,96 @@ dependencies:
 deployments:
 - kind: project-relative
   target: agent-skills
+  value: .agents/skills/apm-usage
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:a76e5e768e5d2257cf910d04063418424a6dc1ff7c02949c69c9824d90e05565
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/authentication.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:f70e5d0392824f03fce4d02f609613760ec9d51cc962f9db2c97561918cfa875
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/commands.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:edcaae43378cb8d5b846ba45adffe9f6e821945371bb62eaeca2ad3447564110
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:00032d181004beee1904cccb4a1508e63460752749fc57a2bba7e699e085b761
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/governance.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:cf6ea374a298321a5651d81937d3741b0632a3ee1ec1aaad9308f47c5caa56e8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/installation.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:8361fde8ce2deabbfdf02bc966704de52f14e9130f1422e6bf9dc9e8016d9e6e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/package-authoring.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:ca9609eaec7e8422a5cc30601e2d53795d2172b294f5666db19eb0810de1d24d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/troubleshooting.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:9ee88100a64857f25e9cb49d1a56d3921d8e69974158c11b0d9431f4ce68362d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/apm-usage/workflow.md
+  runtime: null
+  scope: project
+  owners:
+  - microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  active_owner: microsoft/apm/packages/apm-guide/.apm/skills/apm-usage
+  content_hash: sha256:7e893102a2fe51bb691a5f00851b67ad474d0e0cd86630816be809ad63d1eb95
+- kind: project-relative
+  target: agent-skills
   value: .agents/skills/frontend-design
   runtime: null
   scope: project
@@ -1454,6 +1590,33 @@ deployments:
   - anthropics/skills/skills/frontend-design
   active_owner: anthropics/skills/skills/frontend-design
   content_hash: sha256:1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/grill-me
+  runtime: null
+  scope: project
+  owners:
+  - mattpocock/skills/skills/productivity/grill-me
+  active_owner: mattpocock/skills/skills/productivity/grill-me
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/grill-me/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - mattpocock/skills/skills/productivity/grill-me
+  active_owner: mattpocock/skills/skills/productivity/grill-me
+  content_hash: sha256:6189dfceb7304a6e5558f75d87e68fa3bc7fcf7ba120e44f21f8a61fe01eba54
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/grill-me/agents/openai.yaml
+  runtime: null
+  scope: project
+  owners:
+  - mattpocock/skills/skills/productivity/grill-me
+  active_owner: mattpocock/skills/skills/productivity/grill-me
+  content_hash: sha256:c061e39c3e0f9d865fb1b97556d485704af2a8a58f4b8221a8917a5c2074a32b
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/pinia
