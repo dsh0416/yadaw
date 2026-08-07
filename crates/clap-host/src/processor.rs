@@ -831,4 +831,191 @@ mod tests {
         assert!(!unsafe { push_output_event(&list, &malformed) });
         assert_eq!(queue.pop(), None);
     }
+
+    #[test]
+    fn parameter_queue_preserves_every_gesture_and_rejects_overflow() {
+        let queue = ParameterQueue::new();
+        for index in 0..PARAMETER_QUEUE_CAPACITY - 1 {
+            let gesture = match index % 3 {
+                0 => ClapParameterGesture::Begin,
+                1 => ClapParameterGesture::Perform,
+                _ => ClapParameterGesture::End,
+            };
+            assert!(queue.push(index as u32, index as f64, gesture, index as u32));
+        }
+        assert!(!queue.push(9_999, 1.0, ClapParameterGesture::Perform, 0));
+        for index in 0..PARAMETER_QUEUE_CAPACITY - 1 {
+            let expected = match index % 3 {
+                0 => ClapParameterGesture::Begin,
+                1 => ClapParameterGesture::Perform,
+                _ => ClapParameterGesture::End,
+            };
+            assert_eq!(
+                queue.pop(),
+                Some((index as u32, index as f64, expected, index as u32))
+            );
+        }
+        assert_eq!(queue.pop(), None);
+    }
+
+    #[test]
+    fn port_buffers_refresh_raw_pointers_and_clone_independent_storage() {
+        let mut original = PortBuffer::new(7, 2, 16);
+        original.channels[0][0] = 0.25;
+        let raw = original.raw();
+        assert_eq!(raw.channel_count, 2);
+        assert!(!raw.data32.is_null());
+        assert!(raw.data64.is_null());
+
+        let mut cloned = original.clone();
+        assert_eq!(cloned.id, 7);
+        assert_eq!(cloned.channels.len(), 2);
+        assert_eq!(cloned.channels[0], vec![0.0; 16]);
+        assert_ne!(cloned.raw().data32, raw.data32);
+    }
+
+    #[test]
+    fn input_event_callbacks_expose_headers_and_guard_invalid_pointers() {
+        let mut buffer = InputEventBuffer {
+            events: vec![
+                InputEvent::Midi(clap_event_midi {
+                    header: event_header(size_of::<clap_event_midi>(), 4, CLAP_EVENT_MIDI),
+                    port_index: 0,
+                    data: [0x90, 60, 100],
+                }),
+                InputEvent::Gesture(clap_event_param_gesture {
+                    header: event_header(
+                        size_of::<clap_event_param_gesture>(),
+                        8,
+                        CLAP_EVENT_PARAM_GESTURE_BEGIN,
+                    ),
+                    param_id: 3,
+                }),
+            ],
+            sysex: Vec::with_capacity(SYSEX_CAPACITY),
+        };
+        let list = clap_input_events {
+            ctx: (&mut buffer as *mut InputEventBuffer).cast(),
+            size: Some(input_event_count),
+            get: Some(input_event_get),
+        };
+
+        // SAFETY: the list and backing buffer remain live for each callback.
+        assert_eq!(unsafe { input_event_count(&list) }, 2);
+        // SAFETY: index zero is present and the returned header belongs to the buffer.
+        let first = unsafe { input_event_get(&list, 0) };
+        assert!(!first.is_null());
+        // SAFETY: first points to the live MIDI event header.
+        assert_eq!(unsafe { (*first).time }, 4);
+        // SAFETY: out-of-range and null list inputs are explicitly supported fallbacks.
+        assert!(unsafe { input_event_get(&list, 9) }.is_null());
+        // SAFETY: a null list is an explicitly supported fallback.
+        assert_eq!(unsafe { input_event_count(std::ptr::null()) }, 0);
+        // SAFETY: a null list is an explicitly supported fallback.
+        assert!(unsafe { input_event_get(std::ptr::null(), 0) }.is_null());
+
+        let clone = buffer.clone();
+        assert!(clone.events.is_empty());
+        assert!(clone.sysex.is_empty());
+        assert_eq!(clone.events.capacity(), EVENT_CAPACITY);
+        assert_eq!(clone.sysex.capacity(), SYSEX_CAPACITY);
+    }
+
+    #[test]
+    fn output_callback_accepts_values_and_balanced_gestures() {
+        let queue = ParameterQueue::new();
+        let list = clap_output_events {
+            ctx: (&queue as *const ParameterQueue).cast_mut().cast(),
+            try_push: Some(push_output_event),
+        };
+        let value = clap_event_param_value {
+            header: event_header(
+                size_of::<clap_event_param_value>(),
+                5,
+                CLAP_EVENT_PARAM_VALUE,
+            ),
+            param_id: 8,
+            cookie: std::ptr::null_mut(),
+            note_id: -1,
+            port_index: -1,
+            channel: -1,
+            key: -1,
+            value: 0.75,
+        };
+        let begin = clap_event_param_gesture {
+            header: event_header(
+                size_of::<clap_event_param_gesture>(),
+                2,
+                CLAP_EVENT_PARAM_GESTURE_BEGIN,
+            ),
+            param_id: 8,
+        };
+        let end = clap_event_param_gesture {
+            header: event_header(
+                size_of::<clap_event_param_gesture>(),
+                7,
+                CLAP_EVENT_PARAM_GESTURE_END,
+            ),
+            param_id: 8,
+        };
+
+        // SAFETY: every event has the matching CLAP layout and remains live for the call.
+        assert!(unsafe {
+            push_output_event(&list, (&begin as *const clap_event_param_gesture).cast())
+        });
+        // SAFETY: the value event has the matching CLAP layout and remains live for the call.
+        assert!(unsafe {
+            push_output_event(&list, (&value as *const clap_event_param_value).cast())
+        });
+        // SAFETY: the end event has the matching CLAP layout and remains live for the call.
+        assert!(unsafe {
+            push_output_event(&list, (&end as *const clap_event_param_gesture).cast())
+        });
+        assert_eq!(queue.pop(), Some((8, 0.0, ClapParameterGesture::Begin, 2)));
+        assert_eq!(
+            queue.pop(),
+            Some((8, 0.75, ClapParameterGesture::Perform, 5))
+        );
+        assert_eq!(queue.pop(), Some((8, 0.0, ClapParameterGesture::End, 7)));
+
+        let mut non_finite = value;
+        non_finite.value = f64::NAN;
+        // SAFETY: the event layout is valid; the callback must reject its invalid value.
+        assert!(!unsafe {
+            push_output_event(&list, (&non_finite as *const clap_event_param_value).cast())
+        });
+        // SAFETY: null pointers are callback fallbacks and never dereferenced.
+        assert!(!unsafe { push_output_event(std::ptr::null(), std::ptr::null()) });
+    }
+
+    #[test]
+    fn transport_maps_timeline_flags_positions_and_bounded_signatures() {
+        let context = ProcessContext {
+            project_time_samples: 12,
+            continuous_time_samples: 13,
+            steady_time_samples: 14,
+            project_time_quarters: 2.5,
+            bar_position_quarters: 2.0,
+            tempo: 130.0,
+            time_signature_numerator: -4,
+            time_signature_denominator: i32::MAX,
+            playing: true,
+            recording: true,
+            loop_active: true,
+            loop_start_quarters: 1.0,
+            loop_end_quarters: 5.0,
+        };
+        let event = transport(&context);
+        assert_ne!(event.flags & CLAP_TRANSPORT_IS_PLAYING, 0);
+        assert_ne!(event.flags & CLAP_TRANSPORT_IS_RECORDING, 0);
+        assert_ne!(event.flags & CLAP_TRANSPORT_IS_LOOP_ACTIVE, 0);
+        assert_eq!(event.song_pos_beats, fixed(2.5, CLAP_BEATTIME_FACTOR));
+        assert_eq!(event.loop_start_beats, fixed(1.0, CLAP_BEATTIME_FACTOR));
+        assert_eq!(event.loop_end_beats, fixed(5.0, CLAP_BEATTIME_FACTOR));
+        assert_eq!(event.tsig_num, 0);
+        assert_eq!(event.tsig_denom, u16::MAX);
+
+        assert_eq!(fixed(f64::INFINITY, 1), i64::MAX);
+        assert_eq!(fixed(f64::NEG_INFINITY, 1), i64::MIN);
+    }
 }

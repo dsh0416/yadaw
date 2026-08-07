@@ -288,3 +288,138 @@ fn resolve_module_path(artifact_path: &Path) -> PathBuf {
     }
     artifact_path.to_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap_sys::version::CLAP_VERSION;
+
+    fn descriptor(
+        id: *const c_char,
+        name: *const c_char,
+        vendor: *const c_char,
+        version: *const c_char,
+        description: *const c_char,
+        features: *const *const c_char,
+    ) -> clap_plugin_descriptor {
+        clap_plugin_descriptor {
+            clap_version: CLAP_VERSION,
+            id,
+            name,
+            vendor,
+            url: std::ptr::null(),
+            manual_url: std::ptr::null(),
+            support_url: std::ptr::null(),
+            version,
+            description,
+            features,
+        }
+    }
+
+    #[test]
+    fn descriptor_decoding_copies_required_optional_and_feature_strings() {
+        let id = CString::new("com.heron.test").unwrap();
+        let name = CString::new("Test Instrument").unwrap();
+        let vendor = CString::new("Heron").unwrap();
+        let version = CString::new("1.2.3").unwrap();
+        let instrument = CString::new("instrument").unwrap();
+        let stereo = CString::new("stereo").unwrap();
+        let feature_pointers = [instrument.as_ptr(), stereo.as_ptr(), std::ptr::null()];
+        let raw = descriptor(
+            id.as_ptr(),
+            name.as_ptr(),
+            vendor.as_ptr(),
+            version.as_ptr(),
+            std::ptr::null(),
+            feature_pointers.as_ptr(),
+        );
+
+        // SAFETY: Every descriptor pointer refers to live, NUL-terminated test storage.
+        let decoded = unsafe { decode_descriptor(&raw) }.unwrap();
+        assert_eq!(
+            decoded,
+            ClapDescriptor {
+                id: "com.heron.test".into(),
+                name: "Test Instrument".into(),
+                vendor: "Heron".into(),
+                version: "1.2.3".into(),
+                description: String::new(),
+                features: vec!["instrument".into(), "stereo".into()],
+            }
+        );
+    }
+
+    #[test]
+    fn string_decoding_reports_null_and_invalid_utf8_fields() {
+        let valid = CString::new("valid").unwrap();
+        let invalid = [0xff_u8 as c_char, 0];
+
+        // SAFETY: Test pointers are either deliberately null or valid through each call.
+        unsafe {
+            assert!(matches!(
+                required_string(std::ptr::null(), "id"),
+                Err(ClapModuleError::NullString { field: "id" })
+            ));
+            assert_eq!(optional_string(std::ptr::null(), "vendor").unwrap(), "");
+            assert_eq!(required_string(valid.as_ptr(), "id").unwrap(), "valid");
+            assert_eq!(optional_string(valid.as_ptr(), "vendor").unwrap(), "valid");
+            assert!(matches!(
+                required_string(invalid.as_ptr(), "id"),
+                Err(ClapModuleError::InvalidUtf8 { field: "id" })
+            ));
+            assert!(matches!(
+                optional_string(invalid.as_ptr(), "vendor"),
+                Err(ClapModuleError::InvalidUtf8 { field: "vendor" })
+            ));
+        }
+    }
+
+    #[test]
+    fn descriptor_decoding_preserves_the_failing_required_field() {
+        let valid = CString::new("valid").unwrap();
+        let raw = descriptor(
+            valid.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+
+        // SAFETY: The ID is valid and the deliberately null name exercises validation.
+        let decoded = unsafe { decode_descriptor(&raw) };
+        assert!(matches!(
+            decoded,
+            Err(ClapModuleError::NullString { field: "name" })
+        ));
+    }
+
+    #[test]
+    fn feature_arrays_accept_absence_and_require_a_bounded_terminator() {
+        let feature = CString::new("audio-effect").unwrap();
+        let terminated = [feature.as_ptr(), std::ptr::null()];
+        let unterminated = vec![feature.as_ptr(); MAX_FEATURES];
+        let invalid = [0xff_u8 as c_char, 0];
+        let invalid_features = [invalid.as_ptr(), std::ptr::null()];
+
+        // SAFETY: Arrays remain live and contain the documented pointers for each call.
+        unsafe {
+            assert!(features(std::ptr::null()).unwrap().is_empty());
+            assert_eq!(features(terminated.as_ptr()).unwrap(), ["audio-effect"]);
+            assert!(matches!(
+                features(unterminated.as_ptr()),
+                Err(ClapModuleError::UnterminatedFeatures)
+            ));
+            assert!(matches!(
+                features(invalid_features.as_ptr()),
+                Err(ClapModuleError::InvalidUtf8 { field: "features" })
+            ));
+        }
+    }
+
+    #[test]
+    fn module_path_is_unchanged_on_non_bundle_platforms() {
+        let path = Path::new("/plugins/Heron Test.clap");
+        assert_eq!(resolve_module_path(path), path);
+    }
+}

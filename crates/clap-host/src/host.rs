@@ -607,4 +607,129 @@ mod tests {
         // SAFETY: The pinned host remains live; this verifies unknown-ID rejection.
         assert!(!unsafe { unregister_timer(host.raw(), timer_id) });
     }
+
+    #[test]
+    fn host_metadata_extensions_and_thread_checks_follow_the_clap_contract() {
+        let host_requests = Arc::new(ClapHostRequests::default());
+        let host = HostContext::new(Arc::clone(&host_requests));
+        // SAFETY: Raw metadata strings and callbacks belong to the live pinned host.
+        unsafe {
+            assert_eq!(CStr::from_ptr((*host.raw()).name), HOST_NAME);
+            assert_eq!(CStr::from_ptr((*host.raw()).vendor), HOST_VENDOR);
+            assert_eq!(CStr::from_ptr((*host.raw()).url), HOST_URL);
+            assert_eq!(CStr::from_ptr((*host.raw()).version), HOST_VERSION);
+            assert!(context(host.raw()).is_some());
+            assert!(requests(host.raw()).is_some());
+            assert!(context(std::ptr::null()).is_none());
+            assert!(requests(std::ptr::null()).is_none());
+            assert!(is_main_thread(host.raw()));
+            assert!(!is_main_thread(std::ptr::null()));
+            assert!(!is_audio_thread(host.raw()));
+
+            for identifier in [
+                CLAP_EXT_THREAD_CHECK,
+                CLAP_EXT_LOG,
+                CLAP_EXT_PARAMS,
+                CLAP_EXT_AUDIO_PORTS,
+                CLAP_EXT_AUDIO_PORTS_CONFIG,
+                CLAP_EXT_LATENCY,
+                CLAP_EXT_TAIL,
+                CLAP_EXT_TIMER_SUPPORT,
+            ] {
+                assert!(!get_extension(host.raw(), identifier.as_ptr()).is_null());
+            }
+            #[cfg(unix)]
+            assert!(!get_extension(host.raw(), CLAP_EXT_POSIX_FD_SUPPORT.as_ptr()).is_null());
+            assert!(get_extension(host.raw(), c"unknown".as_ptr()).is_null());
+            assert!(get_extension(std::ptr::null(), CLAP_EXT_LOG.as_ptr()).is_null());
+            assert!(get_extension(host.raw(), std::ptr::null()).is_null());
+
+            params_clear(host.raw(), 7, u32::MAX);
+            params_request_flush(host.raw());
+            audio_ports_config_rescan(host.raw());
+            assert!(audio_ports_rescan_supported(host.raw(), u32::MAX));
+            log(host.raw(), 0, std::ptr::null());
+        }
+        assert!(host_requests.process_requested());
+        let snapshot = host_requests.take();
+        assert_eq!(snapshot.audio_port_rescan, u32::MAX);
+
+        {
+            let _scope = AudioThreadScope::enter();
+            // SAFETY: This callback only reads thread-local state.
+            assert!(unsafe { is_audio_thread(host.raw()) });
+        }
+        // SAFETY: Dropping the scope restores the thread marker.
+        assert!(!unsafe { is_audio_thread(host.raw()) });
+
+        let raw = host.raw() as usize;
+        assert!(
+            !std::thread::spawn(move || {
+                // SAFETY: The host outlives the joined thread and this callback only compares IDs.
+                unsafe { is_main_thread(raw as *const clap_host) }
+            })
+            .join()
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn invalid_timer_requests_are_rejected_without_mutating_host_state() {
+        let host = HostContext::new(Arc::new(ClapHostRequests::default()));
+        let mut timer_id = 0;
+        // SAFETY: Inputs intentionally cover null and invalid callback contracts.
+        unsafe {
+            assert!(!register_timer(host.raw(), 0, &mut timer_id));
+            assert!(!register_timer(host.raw(), 1, std::ptr::null_mut()));
+            assert!(!register_timer(std::ptr::null(), 1, &mut timer_id));
+            assert!(!unregister_timer(std::ptr::null(), 1));
+            request_restart(std::ptr::null());
+            request_process(std::ptr::null());
+            request_callback(std::ptr::null());
+            params_rescan(std::ptr::null(), 1);
+            latency_changed(std::ptr::null());
+        }
+        assert!(host.take_due_timers(Instant::now()).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn posix_fd_registration_reports_ready_flags_and_balances_cleanup() {
+        let host = HostContext::new(Arc::new(ClapHostRequests::default()));
+        let mut pipe = [-1; 2];
+        // SAFETY: The two-element array is valid writable storage for `pipe`.
+        assert_eq!(unsafe { libc::pipe(pipe.as_mut_ptr()) }, 0);
+        let [read_fd, write_fd] = pipe;
+        // SAFETY: Both descriptors remain open until the end of the test.
+        unsafe {
+            assert!(!register_fd(host.raw(), -1, CLAP_POSIX_FD_READ));
+            assert!(!register_fd(host.raw(), read_fd, u32::MAX));
+            assert!(register_fd(host.raw(), read_fd, CLAP_POSIX_FD_READ));
+            assert!(!register_fd(host.raw(), read_fd, CLAP_POSIX_FD_READ));
+            assert!(!modify_fd(host.raw(), write_fd, CLAP_POSIX_FD_WRITE));
+            assert!(modify_fd(host.raw(), read_fd, CLAP_POSIX_FD_READ));
+            assert!(host.ready_posix_fds().is_empty());
+
+            let byte = 1_u8;
+            assert_eq!(libc::write(write_fd, (&raw const byte).cast(), 1), 1);
+            let ready = host.ready_posix_fds();
+            assert_eq!(ready.len(), 1);
+            assert_eq!(ready[0].fd, read_fd);
+            assert_ne!(ready[0].flags & CLAP_POSIX_FD_READ, 0);
+
+            assert!(unregister_fd(host.raw(), read_fd));
+            assert!(!unregister_fd(host.raw(), read_fd));
+            assert!(!unregister_fd(std::ptr::null(), read_fd));
+            assert_eq!(libc::close(read_fd), 0);
+            assert_eq!(libc::close(write_fd), 0);
+        }
+        assert_eq!(posix_to_poll(CLAP_POSIX_FD_READ), libc::POLLIN);
+        assert_eq!(posix_to_poll(CLAP_POSIX_FD_WRITE), libc::POLLOUT);
+        assert_eq!(poll_to_posix(libc::POLLIN), CLAP_POSIX_FD_READ);
+        assert_eq!(poll_to_posix(libc::POLLOUT), CLAP_POSIX_FD_WRITE);
+        assert_eq!(
+            poll_to_posix(libc::POLLERR | libc::POLLHUP | libc::POLLNVAL),
+            CLAP_POSIX_FD_ERROR
+        );
+    }
 }

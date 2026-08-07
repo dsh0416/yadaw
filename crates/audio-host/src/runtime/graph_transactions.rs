@@ -379,3 +379,213 @@ pub(super) async fn wait_for_graph_publication(
         tokio::time::sleep(std::time::Duration::from_millis(2)).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heron_dsp_runtime::protocol::{RpcMutationMeta, RpcStaleReason};
+
+    fn resource(kind: ResourceKind, epoch: &str, generation: u32) -> ResourceRef {
+        ResourceRef {
+            kind,
+            id: format!("{kind:?}"),
+            epoch: epoch.to_owned(),
+            generation,
+        }
+    }
+
+    fn meta() -> RpcRequestMeta {
+        RpcRequestMeta {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            request_id: "request-1".to_owned(),
+            target: Some(resource(ResourceKind::AudioEngine, "42", 1)),
+            expected_revision: Some(7),
+            mutation: Some(RpcMutationMeta {
+                operation_id: "operation-1".to_owned(),
+                idempotency_key: "graph:8".to_owned(),
+            }),
+        }
+    }
+
+    fn request() -> GraphTransactionRequest {
+        GraphTransactionRequest {
+            helper_epoch: "42".to_owned(),
+            project_graph: resource(ResourceKind::ProjectGraph, "project", 1),
+            base_revision: 7,
+        }
+    }
+
+    #[test]
+    fn transaction_state_reports_empty_active_and_degraded_snapshots() {
+        let mut state = GraphTransactionState::new(42);
+        let empty = state.snapshot_at(0);
+        assert_eq!(empty.status, GraphDeploymentStatus::Empty);
+        assert_eq!(empty.engine.id, "unbound");
+
+        let engine = resource(ResourceKind::AudioEngine, "42", 1);
+        let project = resource(ResourceKind::ProjectGraph, "project", 1);
+        state.observe_engine(engine.clone());
+        state.commit("operation-1".to_owned(), project.clone(), 8);
+        let active = state.snapshot_at(8);
+        assert_eq!(active.status, GraphDeploymentStatus::Active);
+        assert_eq!(active.engine, engine);
+        assert_eq!(active.committed_project_graph, Some(project));
+        assert_eq!(
+            active.last_operation.unwrap().outcome,
+            GraphOperationOutcome::Committed
+        );
+
+        state.finish_not_committed("operation-2".to_owned(), 9);
+        assert_eq!(
+            state.snapshot_at(8).last_operation.unwrap().outcome,
+            GraphOperationOutcome::NotCommitted
+        );
+        assert!(!state.abort("missing"));
+        state.degraded = true;
+        assert_eq!(state.snapshot_at(7).status, GraphDeploymentStatus::Degraded);
+
+        state.observe_legacy_commit(10);
+        let legacy = state.snapshot_at(10);
+        assert_eq!(legacy.status, GraphDeploymentStatus::Active);
+        assert_eq!(legacy.committed_project_graph, None);
+        assert_eq!(legacy.last_operation, None);
+    }
+
+    #[test]
+    fn graph_error_builders_publish_stable_protocol_semantics() {
+        let meta = meta();
+        let dependency = resource(ResourceKind::PluginInstance, "project", 2);
+        let cases = [
+            graph_validation_error(&meta, "target"),
+            graph_stale_error(&meta, dependency.clone(), RpcStaleReason::EpochMismatch),
+            graph_conflict_error(&meta, 7, 8),
+            graph_busy_error(&meta, Some("other-operation".to_owned())),
+            graph_dependency_error(&meta, dependency),
+            graph_timeout_error(&meta),
+        ];
+
+        assert_eq!(graph_correlation(&meta, "busy"), "graph-request-1-busy");
+        assert_eq!(cases[0].code, RpcErrorCode::ValidationFailed);
+        assert_eq!(cases[1].code, RpcErrorCode::StaleResource);
+        assert_eq!(cases[2].category, RpcErrorCategory::Conflict);
+        assert_eq!(cases[3].retry, RpcRetry::Safe);
+        assert_eq!(cases[4].category, RpcErrorCategory::DependencyFailed);
+        assert_eq!(cases[5].outcome, RpcMutationOutcome::Unknown);
+        assert!(cases.iter().all(|error| error.details.is_some()));
+    }
+
+    #[test]
+    fn graph_meta_validation_rejects_each_invalid_boundary() {
+        let valid = meta();
+        let validated = validate_graph_meta(&valid, "42", true).expect("meta should validate");
+        assert_eq!(validated.operation_id.as_deref(), Some("operation-1"));
+
+        let mut invalid = valid.clone();
+        invalid.protocol_version = IPC_PROTOCOL_VERSION + 1;
+        assert_eq!(
+            validate_graph_meta(&invalid, "42", true).unwrap_err().code,
+            RpcErrorCode::ProtocolMismatch
+        );
+
+        invalid = valid.clone();
+        invalid.target = None;
+        assert_eq!(
+            validate_graph_meta(&invalid, "42", true).unwrap_err().code,
+            RpcErrorCode::ValidationFailed
+        );
+
+        for target in [
+            resource(ResourceKind::ProjectGraph, "42", 1),
+            resource(ResourceKind::AudioEngine, "other", 1),
+            resource(ResourceKind::AudioEngine, "42", 0),
+        ] {
+            invalid = valid.clone();
+            invalid.target = Some(target);
+            assert_eq!(
+                validate_graph_meta(&invalid, "42", true).unwrap_err().code,
+                RpcErrorCode::StaleResource
+            );
+        }
+
+        invalid = valid;
+        invalid.mutation = None;
+        assert_eq!(
+            validate_graph_meta(&invalid, "42", true).unwrap_err().code,
+            RpcErrorCode::ValidationFailed
+        );
+        assert!(validate_graph_meta(&invalid, "42", false).is_ok());
+    }
+
+    #[test]
+    fn graph_request_validation_checks_epoch_kind_and_revision() {
+        let meta = meta();
+        assert!(validate_graph_request(&meta, &request(), "42", 7).is_ok());
+
+        let mut invalid = request();
+        invalid.helper_epoch = "other".to_owned();
+        assert_eq!(
+            validate_graph_request(&meta, &invalid, "42", 7)
+                .unwrap_err()
+                .code,
+            RpcErrorCode::StaleResource
+        );
+
+        invalid = request();
+        invalid.project_graph.kind = ResourceKind::PluginInstance;
+        assert_eq!(
+            validate_graph_request(&meta, &invalid, "42", 7)
+                .unwrap_err()
+                .code,
+            RpcErrorCode::ValidationFailed
+        );
+
+        invalid = request();
+        invalid.base_revision = 6;
+        assert_eq!(
+            validate_graph_request(&meta, &invalid, "42", 7)
+                .unwrap_err()
+                .code,
+            RpcErrorCode::RevisionConflict
+        );
+
+        let mut mismatched_meta = meta;
+        mismatched_meta.expected_revision = Some(6);
+        assert_eq!(
+            validate_graph_request(&mismatched_meta, &request(), "42", 7)
+                .unwrap_err()
+                .code,
+            RpcErrorCode::RevisionConflict
+        );
+    }
+
+    #[test]
+    fn graph_results_keep_request_and_operation_identity() {
+        let meta = meta();
+        let snapshot = GraphTransactionState::new(42).snapshot_at(0);
+        let success = graph_success(
+            &meta,
+            0,
+            GraphTransactionValue::Snapshot {
+                snapshot: snapshot.clone(),
+            },
+        );
+        let failure = graph_failure(&meta, graph_validation_error(&meta, "target"));
+
+        let ControlResult::GraphTransaction { result } = success else {
+            panic!("expected graph success result");
+        };
+        let RpcResult::Success(result) = *result else {
+            panic!("expected success envelope");
+        };
+        assert_eq!(result.request_id, "request-1");
+        assert_eq!(result.operation_id.as_deref(), Some("operation-1"));
+
+        let ControlResult::GraphTransaction { result } = failure else {
+            panic!("expected graph failure result");
+        };
+        let RpcResult::Failure(result) = *result else {
+            panic!("expected failure envelope");
+        };
+        assert_eq!(result.error.code, RpcErrorCode::ValidationFailed);
+    }
+}

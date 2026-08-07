@@ -242,3 +242,142 @@ pub fn parse_midi_file(
         project_tempo_map,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heron_dsp_runtime::midi::{NormalizedMidiEvent, NormalizedMidiNote, NormalizedMidiTrack};
+
+    fn representative_smf(format: MidiFileFormat) -> NormalizedSmf {
+        NormalizedSmf {
+            format,
+            source_timing: "metrical:480".to_owned(),
+            tracks: vec![NormalizedMidiTrack {
+                source_track: 1,
+                sequence: 2,
+                name: "Keys".to_owned(),
+                length_ticks: 960,
+                notes: vec![NormalizedMidiNote {
+                    start_tick: 10,
+                    duration_ticks: 20,
+                    channel: 1,
+                    key: 60,
+                    velocity: 100,
+                    release_velocity: 64,
+                }],
+                events: [
+                    NormalizedMidiEventKind::ControlChange,
+                    NormalizedMidiEventKind::PitchBend,
+                    NormalizedMidiEventKind::ProgramChange,
+                    NormalizedMidiEventKind::ChannelPressure,
+                    NormalizedMidiEventKind::PolyPressure,
+                    NormalizedMidiEventKind::SysEx,
+                ]
+                .into_iter()
+                .enumerate()
+                .map(|(tick, kind)| NormalizedMidiEvent {
+                    tick: tick as u64,
+                    channel: (!matches!(kind, NormalizedMidiEventKind::SysEx)).then_some(1),
+                    kind,
+                    data: vec![tick as u8],
+                })
+                .collect(),
+                tempo_events: vec![TempoEvent {
+                    tick: 0,
+                    beats_per_minute: 120.0,
+                }],
+                time_signature_events: vec![TimeSignatureEvent {
+                    tick: 0,
+                    numerator: 4,
+                    denominator: 4,
+                }],
+                warnings: vec!["track warning".to_owned()],
+            }],
+            tempo_events: vec![TempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![TimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+            warnings: vec!["file warning".to_owned()],
+        }
+    }
+
+    #[test]
+    fn tempo_map_validates_native_ranges() {
+        let valid = NativeTempoMap {
+            tempo_events: vec![NativeTempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![NativeTimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        };
+        assert!(tempo_map(&valid).is_ok());
+
+        for invalid in [
+            NativeTempoMap {
+                tempo_events: vec![NativeTempoEvent {
+                    tick: -1,
+                    beats_per_minute: 120.0,
+                }],
+                time_signature_events: Vec::new(),
+            },
+            NativeTempoMap {
+                tempo_events: Vec::new(),
+                time_signature_events: vec![NativeTimeSignatureEvent {
+                    tick: -1,
+                    numerator: 4,
+                    denominator: 4,
+                }],
+            },
+            NativeTempoMap {
+                tempo_events: Vec::new(),
+                time_signature_events: vec![NativeTimeSignatureEvent {
+                    tick: 0,
+                    numerator: 256,
+                    denominator: 4,
+                }],
+            },
+            NativeTempoMap {
+                tempo_events: Vec::new(),
+                time_signature_events: vec![NativeTimeSignatureEvent {
+                    tick: 0,
+                    numerator: 4,
+                    denominator: 256,
+                }],
+            },
+        ] {
+            assert!(tempo_map(&invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn normalized_smf_maps_all_formats_and_event_kinds() {
+        for (format, expected) in [
+            (MidiFileFormat::Format0, 0),
+            (MidiFileFormat::Format1, 1),
+            (MidiFileFormat::Format2, 2),
+        ] {
+            let native = into_native(representative_smf(format)).expect("SMF should convert");
+            assert_eq!(native.format, expected);
+            assert_eq!(native.tracks[0].notes[0].key, 60);
+            assert_eq!(native.tracks[0].events.len(), 6);
+            assert_eq!(native.tracks[0].events[5].kind, "sysex");
+            assert_eq!(native.tempo_events[0].tick, 0);
+            assert_eq!(native.time_signature_events[0].denominator, 4);
+        }
+    }
+
+    #[test]
+    fn tick_conversion_rejects_values_above_i64() {
+        assert!(convert_tick(i64::MAX as u64).is_ok());
+        assert!(convert_tick(i64::MAX as u64 + 1).is_err());
+    }
+}

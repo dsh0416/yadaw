@@ -626,3 +626,145 @@ fn clap_gui_geometry(
         content_height: height,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heron_dsp_runtime::protocol::{
+        PluginAudioMode, PluginEditorContext, PluginEditorMode, PluginEditorPreference,
+        PluginLocator, PluginStateEnvelope,
+    };
+
+    fn locator(format: PluginFormat) -> PluginLocator {
+        PluginLocator {
+            format,
+            artifact_path: "/missing/plugin.clap".to_owned(),
+            native_id: "com.heron.missing".to_owned(),
+        }
+    }
+
+    fn empty_state() -> PluginStateEnvelope {
+        PluginStateEnvelope {
+            version: 1,
+            chunks: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn empty_runtime_reports_stale_resources_without_touching_native_code() {
+        let mut runtime = ClapRuntime::default();
+
+        assert!(!runtime.contains("missing"));
+        assert!(!runtime.contains_runtime_handle(7));
+        assert_eq!(runtime.plugin_type_key("missing"), None);
+        assert!(runtime.processor_handle("missing").is_none());
+        assert!(runtime.processor_handles().is_empty());
+        assert!(runtime.gui_snapshot("missing").is_none());
+        assert!(!runtime.focus_gui("missing"));
+        assert!(!runtime.close_gui("missing"));
+        assert!(!runtime.resize_gui("missing", 0, 0, 0, 1.0, 100));
+        assert!(runtime.editor_state("missing").is_err());
+        assert!(
+            runtime
+                .restore_editor_state("missing", &empty_state())
+                .is_err()
+        );
+        assert!(runtime.take_host_requests().is_empty());
+        assert!(runtime.complete_reconfigures().is_empty());
+        assert!(runtime.take_parameter_outputs().is_empty());
+    }
+
+    #[test]
+    fn execute_rejects_wrong_formats_invalid_keys_and_missing_instances() {
+        let mut runtime = ClapRuntime::default();
+        let commands = [
+            ControlCommand::LoadPlugin {
+                instance_id: "wrong-format".to_owned(),
+                locator: locator(PluginFormat::Vst3),
+                plugin_kind: "effect".to_owned(),
+                audio_mode: PluginAudioMode::Stereo,
+                active_aux_inputs: Vec::new(),
+                sample_rate: 48_000.0,
+                state: empty_state(),
+                ara_factory_class_id: None,
+            },
+            ControlCommand::PluginParameters {
+                instance_id: "missing".to_owned(),
+            },
+            ControlCommand::SavePluginState {
+                instance_id: "missing".to_owned(),
+            },
+            ControlCommand::SetPluginParameter {
+                instance_id: "missing".to_owned(),
+                parameter_key: "vst3:1".to_owned(),
+                value: 0.5,
+                gesture: ParameterGesture::Perform,
+            },
+            ControlCommand::OpenPluginEditor {
+                instance_id: "missing".to_owned(),
+                context: PluginEditorContext::default(),
+                preference: PluginEditorPreference {
+                    mode: PluginEditorMode::Parameters,
+                    zoom_percent: 100,
+                },
+            },
+        ];
+
+        for command in commands {
+            assert!(matches!(
+                runtime.execute(command),
+                ControlResult::Error { .. }
+            ));
+        }
+        assert!(matches!(
+            runtime.execute(ControlCommand::UnloadPlugin {
+                instance_id: "missing".to_owned(),
+            }),
+            ControlResult::Accepted
+        ));
+    }
+
+    #[test]
+    fn parameter_commands_validate_values_before_instance_lookup() {
+        let runtime = ClapRuntime::default();
+        assert!(matches!(
+            runtime.set_parameter("missing", 1, f64::NAN, ParameterGesture::Perform),
+            ControlResult::Error { .. }
+        ));
+        assert!(matches!(
+            runtime.set_parameter("missing", 1, 0.5, ParameterGesture::Perform),
+            ControlResult::Error { .. }
+        ));
+        assert!(matches!(
+            runtime.apply_parameter_command(ParameterCommand {
+                session_epoch: 1,
+                sequence: 1,
+                target_kind: heron_dsp_runtime::protocol::ParameterTargetKind::Plugin,
+                runtime_handle: 99,
+                parameter_token: 0,
+                target_generation: 1,
+                value: 0.5,
+                gesture: ParameterGesture::Perform,
+            }),
+            ControlResult::Error { .. }
+        ));
+    }
+
+    #[test]
+    fn gui_geometry_clamps_invalid_sizes_and_scales_the_native_frame() {
+        assert_eq!(clap_gui_scale(2.0, 150), 3.0);
+        assert_eq!(clap_gui_scale(0.0, 100), 0.01);
+
+        let geometry = clap_gui_geometry(0, 0, u32::MAX, 2.0);
+        assert_eq!(geometry.x, 0);
+        assert_eq!(geometry.y, i32::MAX);
+        assert_eq!(geometry.content_width, 1);
+        assert_eq!(geometry.content_height, 1);
+        if cfg!(target_os = "macos") {
+            assert_eq!((geometry.frame_width, geometry.frame_height), (1, 1));
+        } else {
+            assert_eq!((geometry.frame_width, geometry.frame_height), (2, 2));
+        }
+        assert_eq!(geometry.parent_height, u32::MAX);
+    }
+}

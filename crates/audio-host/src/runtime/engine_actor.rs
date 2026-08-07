@@ -342,3 +342,155 @@ pub(super) fn queue_background_graph_build(
         reply,
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heron_dsp_runtime::protocol::{
+        LiveLatencyPolicy, ParameterCommand, ParameterGesture, ParameterTargetKind,
+    };
+
+    fn parameter(
+        target_kind: ParameterTargetKind,
+        runtime_handle: u32,
+        parameter_token: u32,
+        value: f64,
+    ) -> ParameterCommand {
+        ParameterCommand {
+            session_epoch: 1,
+            sequence: 1,
+            target_kind,
+            runtime_handle,
+            parameter_token,
+            target_generation: 1,
+            value,
+            gesture: ParameterGesture::Perform,
+        }
+    }
+
+    fn empty_graph() -> LiveMixerGraph {
+        LiveMixerGraph {
+            sample_rate: 48_000,
+            project_end_tick: 0,
+            latency_policy: LiveLatencyPolicy::Normal,
+            channels: Vec::new(),
+            sends: Vec::new(),
+            clips: Vec::new(),
+            plugins: Vec::new(),
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn stable_handles_are_deterministic_nonzero_and_namespaced() {
+        assert_eq!(
+            stable_runtime_handle(1, "channel"),
+            stable_runtime_handle(1, "channel")
+        );
+        assert_ne!(
+            stable_runtime_handle(1, "channel"),
+            stable_runtime_handle(2, "channel")
+        );
+        assert_ne!(
+            stable_runtime_handle(1, "channel"),
+            stable_runtime_handle(1, "send")
+        );
+        assert_ne!(stable_runtime_handle(1, ""), 0);
+
+        let handles = Mutex::new(GraphParameterHandles::default());
+        refresh_graph_handles(&handles, &empty_graph());
+        let handles = handles.lock().unwrap();
+        assert!(handles.channels.is_empty());
+        assert!(handles.sends.is_empty());
+    }
+
+    #[test]
+    fn mixer_parameters_reject_stale_unknown_and_misdirected_tokens() {
+        let engine = engine::AudioEngine::new();
+        let handles = Mutex::new(GraphParameterHandles::default());
+        let channel = stable_runtime_handle(1, "channel");
+        let send = stable_runtime_handle(2, "send");
+        {
+            let mut values = handles.lock().unwrap();
+            values.channels.insert(channel, "channel".to_owned());
+            values.sends.insert(send, "send".to_owned());
+        }
+
+        for command in [
+            parameter(ParameterTargetKind::MixerChannel, 99, 0, 0.5),
+            parameter(ParameterTargetKind::MixerChannel, channel, 99, 0.5),
+            parameter(ParameterTargetKind::MixerSend, 99, 0, 0.5),
+            parameter(ParameterTargetKind::MixerSend, send, 99, 0.5),
+            parameter(ParameterTargetKind::Plugin, 1, 0, 0.5),
+        ] {
+            assert!(matches!(
+                mixer_parameter_command(&engine, &handles, command),
+                ControlResult::Error { .. }
+            ));
+        }
+        for command in [
+            parameter(ParameterTargetKind::MixerChannel, channel, 0, 0.5),
+            parameter(ParameterTargetKind::MixerChannel, channel, 1, 0.5),
+            parameter(ParameterTargetKind::MixerSend, send, 0, 0.5),
+            parameter(ParameterTargetKind::MixerSend, send, 1, 0.5),
+        ] {
+            assert!(matches!(
+                mixer_parameter_command(&engine, &handles, command),
+                ControlResult::Accepted | ControlResult::Error { .. }
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn engine_actor_replies_to_control_parameter_and_wrong_owner_commands() {
+        let (sender, inbox) = mpsc::channel(8);
+        let task = tokio::spawn(engine_actor(
+            inbox,
+            Arc::new(Mutex::new(GraphParameterHandles::default())),
+            Arc::new(engine::AudioEngine::new()),
+        ));
+
+        assert!(matches!(
+            dispatch_actor_command(&sender, ActorCommand::Control(ControlCommand::Ping)).await,
+            ControlResult::Error { .. }
+        ));
+        assert!(matches!(
+            dispatch_actor_command(
+                &sender,
+                ActorCommand::Parameter(parameter(ParameterTargetKind::Plugin, 1, 0, 0.5)),
+            )
+            .await,
+            ControlResult::Error { .. }
+        ));
+        assert!(matches!(
+            dispatch_actor_command(&sender, ActorCommand::SyncAraGraph { graph: None }).await,
+            ControlResult::Error { .. }
+        ));
+
+        drop(sender);
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn dispatch_reports_closed_sender_and_dropped_response() {
+        let (sender, inbox) = mpsc::channel(1);
+        drop(inbox);
+        assert!(matches!(
+            dispatch_actor_command(&sender, ActorCommand::Control(ControlCommand::Ping)).await,
+            ControlResult::Error { .. }
+        ));
+
+        let (sender, mut inbox) = mpsc::channel::<ActorRequest>(1);
+        let response = tokio::spawn(async move {
+            let request = inbox.recv().await.unwrap();
+            drop(request.reply);
+        });
+        assert!(matches!(
+            dispatch_actor_command(&sender, ActorCommand::Control(ControlCommand::Ping)).await,
+            ControlResult::Error { .. }
+        ));
+        response.await.unwrap();
+    }
+}
