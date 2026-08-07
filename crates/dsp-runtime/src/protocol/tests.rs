@@ -43,6 +43,36 @@ fn decode_base64(value: &str) -> Vec<u8> {
 }
 
 #[test]
+fn legacy_windows_application_capture_target_defaults_bundle_identifier() {
+    let target: ApplicationCaptureTarget = serde_json::from_value(serde_json::json!({
+        "platform": "windows",
+        "executable_path": "C:\\Program Files\\Player\\player.exe",
+        "executable_name": "player.exe",
+        "include_process_tree": true
+    }))
+    .expect("legacy Windows target must remain readable");
+
+    assert_eq!(target.platform, "windows");
+    assert_eq!(target.bundle_identifier, None);
+}
+
+#[test]
+fn macos_application_capture_target_round_trips_bundle_identifier() {
+    let target = ApplicationCaptureTarget {
+        platform: "macos".to_owned(),
+        bundle_identifier: Some("com.example.player".to_owned()),
+        executable_path: "/Applications/Player.app/Contents/MacOS/Player".to_owned(),
+        executable_name: "Player".to_owned(),
+        include_process_tree: true,
+    };
+    let bytes = rmp_serde::to_vec_named(&target).expect("macOS target must encode");
+    let decoded: ApplicationCaptureTarget =
+        rmp_serde::from_slice(&bytes).expect("macOS target must decode");
+
+    assert_eq!(decoded, target);
+}
+
+#[test]
 fn typescript_messagepack_fixtures_decode_as_rust_protocol_types() {
     let fixtures: Vec<MessagePackFixture> = serde_json::from_str(include_str!(
         "../../tests/fixtures/audio-host-messagepack.json"

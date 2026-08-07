@@ -1,6 +1,6 @@
 use std::{
     mem, ptr,
-    sync::{Arc, RwLock, mpsc},
+    sync::{Arc, mpsc},
     time::Duration,
 };
 
@@ -28,28 +28,23 @@ use windows::Win32::System::Variant::VT_BLOB;
 use windows::core::{IUnknown, Interface, PCSTR, PCWSTR, PWSTR, implement};
 
 use super::{
-    ApplicationCaptureBackend, ApplicationCaptureCounters, ApplicationCaptureFrame,
-    ApplicationCaptureLogicalTarget, ApplicationCaptureSnapshot,
-    ApplicationCaptureTargetDescriptor, PreparedApplicationCapture,
+    APPLICATION_CAPTURE_STATUS_CAPTURING, APPLICATION_CAPTURE_STATUS_ERROR,
+    APPLICATION_CAPTURE_STATUS_TARGET_MISSING, APPLICATION_CAPTURE_STATUS_UNSUPPORTED,
+    ApplicationCaptureBackend, ApplicationCaptureCounters, ApplicationCaptureError,
+    ApplicationCaptureFrame, ApplicationCaptureLogicalTarget, ApplicationCaptureRegistry,
+    ApplicationCaptureSnapshot, ApplicationCaptureState, ApplicationCaptureTargetDescriptor,
+    PreparedApplicationCapture,
 };
 
 const PROCESS_LOOPBACK_DEVICE_INTERFACE: PCWSTR = windows::core::w!("VAD\\Process_Loopback");
-const APPLICATION_CAPTURE_STATUS_CAPTURING: u32 = 1;
-const APPLICATION_CAPTURE_STATUS_NO_STREAM: u32 = 2;
-const APPLICATION_CAPTURE_STATUS_TARGET_MISSING: u32 = 3;
-const APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET: u32 = 4;
-const APPLICATION_CAPTURE_STATUS_TARGET_EXITED: u32 = 5;
-const APPLICATION_CAPTURE_STATUS_UNSUPPORTED: u32 = 6;
-const APPLICATION_CAPTURE_STATUS_ERROR: u32 = 7;
-
 pub(super) struct WindowsApplicationCaptureBackend {
-    snapshots: Arc<RwLock<Vec<ApplicationCaptureSnapshot>>>,
+    registry: Arc<ApplicationCaptureRegistry>,
 }
 
 impl WindowsApplicationCaptureBackend {
     pub(super) fn new() -> Self {
         Self {
-            snapshots: Arc::new(RwLock::new(Vec::new())),
+            registry: Arc::new(ApplicationCaptureRegistry::default()),
         }
     }
 }
@@ -68,70 +63,67 @@ impl ApplicationCaptureBackend for WindowsApplicationCaptureBackend {
     }
 
     fn snapshot(&self) -> Vec<ApplicationCaptureSnapshot> {
-        self.snapshots
-            .read()
-            .map(|value| value.clone())
-            .unwrap_or_default()
+        self.registry.snapshot()
     }
 
     fn prepare_capture(
         &self,
         target: &ApplicationCaptureLogicalTarget,
         session_sample_rate: u32,
-    ) -> Result<PreparedApplicationCapture, String> {
-        let descriptor = self
-            .enumerate_targets()
-            .into_iter()
-            .find(|candidate| {
-                candidate
-                    .logical_target
-                    .executable_path
-                    .eq_ignore_ascii_case(&target.executable_path)
-            })
-            .ok_or_else(|| "application capture target is not running".to_owned())?;
-        let (prepared, producer) =
-            PreparedApplicationCapture::new(session_sample_rate, descriptor.channel_count);
-        let active = prepared.active.clone();
-        let stop = prepared.stop.clone();
-        let counters = prepared.counters.clone();
-        let status = prepared.status.clone();
+    ) -> Result<PreparedApplicationCapture, ApplicationCaptureError> {
+        if target.platform != "windows" {
+            return Err(ApplicationCaptureError::InvalidConfiguration(
+                "Windows application capture requires a windows target".to_owned(),
+            ));
+        }
+        let descriptor = self.enumerate_targets().into_iter().find(|candidate| {
+            candidate
+                .logical_target
+                .executable_path
+                .eq_ignore_ascii_case(&target.executable_path)
+        });
+        let Some(descriptor) = descriptor else {
+            let descriptor = ApplicationCaptureTargetDescriptor {
+                runtime_id: format!("windows-missing:{}", target.executable_path),
+                process_id: 0,
+                display_name: target.executable_name.clone(),
+                executable_path: target.executable_path.clone(),
+                logical_target: target.clone(),
+                channel_count: 2,
+                status: "target-missing".to_owned(),
+            };
+            let prepared = PreparedApplicationCapture::silent(
+                descriptor,
+                session_sample_rate,
+                APPLICATION_CAPTURE_STATUS_TARGET_MISSING,
+            )?;
+            self.registry.register(&prepared.state);
+            return Ok(prepared);
+        };
+        let (prepared, producer) = PreparedApplicationCapture::new(
+            descriptor.clone(),
+            session_sample_rate,
+            session_sample_rate,
+            descriptor.channel_count,
+            512,
+        )?;
+        let state = Arc::clone(&prepared.state);
         let pid = descriptor.process_id;
-        let runtime_id = descriptor.runtime_id.clone();
         let capture_sample_rate = session_sample_rate;
         let include_process_tree = target.include_process_tree;
-        if let Ok(mut snapshots) = self.snapshots.write() {
-            snapshots.retain(|snapshot| snapshot.runtime_id != descriptor.runtime_id);
-            snapshots.push(ApplicationCaptureSnapshot {
-                runtime_id: descriptor.runtime_id.clone(),
-                process_id: Some(descriptor.process_id),
-                display_name: descriptor.display_name.clone(),
-                executable_path: descriptor.executable_path.clone(),
-                logical_target: descriptor.logical_target.clone(),
-                channel_count: descriptor.channel_count,
-                status: "capturing".to_owned(),
-                dropout_frames: 0,
-                overflow_frames: 0,
-                underflow_frames: 0,
-            });
-        }
-        let snapshots = Arc::clone(&self.snapshots);
+        self.registry.register(&prepared.state);
         std::thread::Builder::new()
             .name(format!("wasapi-process-loopback-{pid}"))
             .spawn(move || {
                 capture_thread(
                     pid,
                     include_process_tree,
-                    active,
-                    stop,
-                    counters,
-                    status,
+                    state,
                     producer,
                     capture_sample_rate,
-                    snapshots,
-                    runtime_id,
                 );
             })
-            .map_err(|error| format!("could not start process loopback capture: {error}"))?;
+            .map_err(ApplicationCaptureError::WorkerStart)?;
         Ok(prepared)
     }
 }
@@ -140,27 +132,22 @@ impl ApplicationCaptureBackend for WindowsApplicationCaptureBackend {
 fn capture_thread(
     process_id: u32,
     include_process_tree: bool,
-    active: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    counters: std::sync::Arc<ApplicationCaptureCounters>,
-    status: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    state: Arc<ApplicationCaptureState>,
     producer: ringbuf::HeapProd<ApplicationCaptureFrame>,
     capture_sample_rate: u32,
-    snapshots: Arc<RwLock<Vec<ApplicationCaptureSnapshot>>>,
-    runtime_id: String,
 ) {
-    while !active.load(std::sync::atomic::Ordering::Acquire)
-        && !stop.load(std::sync::atomic::Ordering::Acquire)
+    while !state.active.load(std::sync::atomic::Ordering::Acquire)
+        && !state.stop.load(std::sync::atomic::Ordering::Acquire)
     {
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
-    if stop.load(std::sync::atomic::Ordering::Acquire) {
+    if state.stop.load(std::sync::atomic::Ordering::Acquire) {
         return;
     }
     // SAFETY: this worker owns the COM apartment and all WASAPI interfaces it creates.
     unsafe {
         if CoInitializeEx(None, COINIT_MULTITHREADED).is_err() {
-            status.store(
+            state.status.store(
                 APPLICATION_CAPTURE_STATUS_ERROR,
                 std::sync::atomic::Ordering::Release,
             );
@@ -169,69 +156,23 @@ fn capture_thread(
         let result = run_process_loopback(
             process_id,
             include_process_tree,
-            &stop,
-            &status,
-            &counters,
+            &state.stop,
+            &state.status,
+            &state.counters,
             producer,
             capture_sample_rate,
         );
         windows::Win32::System::Com::CoUninitialize();
         if result.is_err()
-            && !stop.load(std::sync::atomic::Ordering::Acquire)
-            && status.load(std::sync::atomic::Ordering::Acquire)
+            && !state.stop.load(std::sync::atomic::Ordering::Acquire)
+            && state.status.load(std::sync::atomic::Ordering::Acquire)
                 != APPLICATION_CAPTURE_STATUS_UNSUPPORTED
         {
-            status.store(
+            state.status.store(
                 APPLICATION_CAPTURE_STATUS_ERROR,
                 std::sync::atomic::Ordering::Release,
             );
         }
-        update_snapshot(
-            &snapshots,
-            &runtime_id,
-            status.load(std::sync::atomic::Ordering::Acquire),
-            &counters,
-        );
-    }
-}
-
-fn update_snapshot(
-    snapshots: &Arc<RwLock<Vec<ApplicationCaptureSnapshot>>>,
-    runtime_id: &str,
-    status: u32,
-    counters: &ApplicationCaptureCounters,
-) {
-    let Ok(mut snapshots) = snapshots.write() else {
-        return;
-    };
-    let Some(snapshot) = snapshots
-        .iter_mut()
-        .find(|snapshot| snapshot.runtime_id == runtime_id)
-    else {
-        return;
-    };
-    snapshot.status = status_name(status).to_owned();
-    snapshot.dropout_frames = counters
-        .dropout_frames
-        .load(std::sync::atomic::Ordering::Relaxed);
-    snapshot.overflow_frames = counters
-        .overflow_frames
-        .load(std::sync::atomic::Ordering::Relaxed);
-    snapshot.underflow_frames = counters
-        .underflow_frames
-        .load(std::sync::atomic::Ordering::Relaxed);
-}
-
-fn status_name(status: u32) -> &'static str {
-    match status {
-        super::APPLICATION_CAPTURE_STATUS_INACTIVE => "inactive",
-        APPLICATION_CAPTURE_STATUS_CAPTURING => "capturing",
-        APPLICATION_CAPTURE_STATUS_NO_STREAM => "no-stream",
-        APPLICATION_CAPTURE_STATUS_TARGET_MISSING => "target-missing",
-        APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET => "ambiguous-target",
-        APPLICATION_CAPTURE_STATUS_TARGET_EXITED => "target-exited",
-        APPLICATION_CAPTURE_STATUS_UNSUPPORTED => "unsupported",
-        _ => "error",
     }
 }
 
@@ -239,9 +180,9 @@ fn status_name(status: u32) -> &'static str {
 unsafe fn run_process_loopback(
     process_id: u32,
     include_process_tree: bool,
-    stop: &std::sync::Arc<std::sync::atomic::AtomicBool>,
-    status: &std::sync::Arc<std::sync::atomic::AtomicU32>,
-    counters: &std::sync::Arc<ApplicationCaptureCounters>,
+    stop: &std::sync::atomic::AtomicBool,
+    status: &std::sync::atomic::AtomicU32,
+    counters: &ApplicationCaptureCounters,
     mut producer: ringbuf::HeapProd<ApplicationCaptureFrame>,
     capture_sample_rate: u32,
 ) -> Result<(), String> {
@@ -428,8 +369,8 @@ unsafe fn capture_packets(
     capture_client: &IAudioCaptureClient,
     event: HANDLE,
     format: &MixFormat,
-    stop: &std::sync::Arc<std::sync::atomic::AtomicBool>,
-    counters: &std::sync::Arc<ApplicationCaptureCounters>,
+    stop: &std::sync::atomic::AtomicBool,
+    counters: &ApplicationCaptureCounters,
     producer: &mut ringbuf::HeapProd<ApplicationCaptureFrame>,
 ) -> Result<(), String> {
     use ringbuf::traits::Producer;
@@ -501,7 +442,7 @@ fn decode_frame(bytes: &[u8], format: &MixFormat) -> ApplicationCaptureFrame {
     let right = if format.channels > 1 {
         decode_sample(&bytes[format.bytes_per_sample()..], format)
     } else {
-        0.0
+        left
     };
     [left, right]
 }
@@ -599,6 +540,7 @@ unsafe fn enumerate_wasapi_sessions_inner() -> Vec<ApplicationCaptureTargetDescr
                 .unwrap_or_else(|| executable_name.clone());
             let logical_target = ApplicationCaptureLogicalTarget {
                 platform: "windows".to_string(),
+                bundle_identifier: None,
                 executable_path: path.clone(),
                 executable_name: executable_name.clone(),
                 include_process_tree: true,

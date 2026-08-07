@@ -365,3 +365,45 @@ run = [
 CSC_IDENTITY_AUTO_DISCOVERY = "false"
 HERON_REQUIRE_DEVELOPER_ID_SIGNATURE = "false"
 HERON_REQUIRE_NOTARIZATION = "false"
+
+[tasks."ci:build:macos-universal"]
+hide = true
+depends = ["install"]
+run = [
+  "rustup target add aarch64-apple-darwin x86_64-apple-darwin",
+  "pnpm --filter @heron/dsp-node exec napi build --platform --release --target aarch64-apple-darwin",
+  "pnpm --filter @heron/dsp-node exec napi build --platform --release --target x86_64-apple-darwin",
+  "pnpm --filter @heron/dsp-node exec napi universalize",
+  "cargo xtask native build --profile release",
+  "pnpm build:desktop",
+]
+
+[tasks."ci:build:macos-universal".env]
+MACOSX_DEPLOYMENT_TARGET = "14.2"
+
+[tasks."ci:package:macos-universal"]
+hide = true
+depends = ["ci:build:macos-universal"]
+run = [
+  "pnpm --filter @heron/desktop exec electron-builder --publish never --universal",
+  "pnpm --filter @heron/desktop verify:package-security",
+]
+
+[tasks."ci:package:macos-universal".env]
+MACOSX_DEPLOYMENT_TARGET = "14.2"
+CSC_IDENTITY_AUTO_DISCOVERY = "false"
+HERON_REQUIRE_DEVELOPER_ID_SIGNATURE = "false"
+HERON_REQUIRE_NOTARIZATION = "false"
+
+[tasks."ci:package:macos-universal-release"]
+hide = true
+depends = ["ci:build:macos-universal"]
+run = [
+  "pnpm --filter @heron/desktop exec electron-builder --config electron-builder.release.yml --publish never --universal",
+  "pnpm --filter @heron/desktop verify:package-security",
+]
+
+[tasks."ci:package:macos-universal-release".env]
+MACOSX_DEPLOYMENT_TARGET = "14.2"
+HERON_REQUIRE_DEVELOPER_ID_SIGNATURE = "true"
+HERON_REQUIRE_NOTARIZATION = "true"

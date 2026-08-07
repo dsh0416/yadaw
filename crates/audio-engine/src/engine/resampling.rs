@@ -454,6 +454,7 @@ where
                         }
                     } else if let EngineCommand::LoadMixer(mut runtime) = command {
                         runtime.external_sync_enabled = external_sync_enabled;
+                        runtime.activate_application_captures();
                         callback_metrics
                             .published_graph_generation
                             .store(runtime.generation, Ordering::Release);

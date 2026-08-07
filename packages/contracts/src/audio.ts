@@ -21,15 +21,28 @@ export type ApplicationCaptureStatus =
   | "target-missing"
   | "ambiguous-target"
   | "target-exited"
+  | "permission-denied"
   | "unsupported"
   | "error"
 
-export interface ApplicationCaptureLogicalTarget {
-  platform: "windows"
+interface ApplicationCaptureLogicalTargetBase {
   executablePath: string
   executableName: string
   includeProcessTree: boolean
 }
+
+export interface WindowsApplicationCaptureLogicalTarget extends ApplicationCaptureLogicalTargetBase {
+  platform: "windows"
+}
+
+export interface MacOsApplicationCaptureLogicalTarget extends ApplicationCaptureLogicalTargetBase {
+  platform: "macos"
+  bundleIdentifier: string | null
+}
+
+export type ApplicationCaptureLogicalTarget =
+  | WindowsApplicationCaptureLogicalTarget
+  | MacOsApplicationCaptureLogicalTarget
 
 export interface ApplicationCaptureTargetDescriptor {
   runtimeId: string

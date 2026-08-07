@@ -44,6 +44,18 @@ enables those available on the machine; planned backends do not appear yet.
 [Settings and audio devices](settings.md) to choose a backend, devices, and
 buffer size.
 
+### Application audio capture
+
+| Operating system | Support       | Requirements                                                                                                       |
+| ---------------- | ------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Windows          | Supported     | WASAPI Process Loopback; the selected executable and its process tree are captured.                                |
+| macOS            | Supported     | macOS 14.2 or later and System Audio Recording permission; the selected app and its helper processes are captured. |
+| Linux            | Not supported | Application capture is not exposed; use a hardware or system routing input instead.                                |
+
+Application capture follows the selected application rather than the current
+output device. Heron converts the source to the project sample rate and applies
+bounded clock-drift correction. It does not install a virtual audio device.
+
 ### Choosing a Windows backend
 
 Start with WASAPI when using ordinary Windows audio devices. For a dedicated

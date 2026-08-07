@@ -7,8 +7,8 @@ use std::{
 };
 
 use heron_audio_host::engine::bench_support::{
-    ParameterQueueHarness, PluginAdapterHarness, RenderHarness, RenderScenario,
-    SessionRateBridgeHarness,
+    ApplicationCaptureHarness, ParameterQueueHarness, PluginAdapterHarness, RenderHarness,
+    RenderScenario, SessionRateBridgeHarness,
 };
 use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 use heron_dsp_node::bench_support::TapHarness;
@@ -175,5 +175,13 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
     let _ = rate_bridge.render_device_block(1_024);
     assert_no_thread_allocations("input/session/output rate bridge", || {
         black_box(rate_bridge.render_device_block(256));
+    });
+
+    let mut application_capture = ApplicationCaptureHarness::new(48_000);
+    let _ = application_capture.push_and_render([0.25, -0.125]);
+    assert_no_thread_allocations("application capture adaptive reader", || {
+        for _ in 0..256 {
+            black_box(application_capture.push_and_render(black_box([0.25, -0.125])));
+        }
     });
 }

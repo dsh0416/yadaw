@@ -1,11 +1,23 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type {
+  ApplicationCaptureLogicalTarget,
   ApplicationCaptureSnapshot,
   ApplicationCaptureTargetDescriptor
 } from "@heron/contracts"
 import { readMeta } from "../rpc"
 import { useAudioRuntimeStore } from "./audioRuntime"
+
+function normalizedExecutablePath(path: string): string {
+  return path.trim().replaceAll("\\", "/").toLocaleLowerCase()
+}
+
+export function applicationCaptureIdentity(target: ApplicationCaptureLogicalTarget): string {
+  if (target.platform === "macos" && target.bundleIdentifier?.trim()) {
+    return `macos:bundle:${target.bundleIdentifier.trim().toLocaleLowerCase()}`
+  }
+  return `${target.platform}:path:${normalizedExecutablePath(target.executablePath)}`
+}
 
 export const useApplicationCaptureStore = defineStore("application-capture", () => {
   const audioRuntime = useAudioRuntimeStore()
@@ -17,6 +29,24 @@ export const useApplicationCaptureStore = defineStore("application-capture", () 
   let pollingConsumers = 0
 
   const capturing = computed(() => snapshots.value.filter((item) => item.status === "capturing"))
+
+  function targetFor(
+    logicalTarget: ApplicationCaptureLogicalTarget
+  ): ApplicationCaptureTargetDescriptor | undefined {
+    const identity = applicationCaptureIdentity(logicalTarget)
+    return targets.value.find(
+      (candidate) => applicationCaptureIdentity(candidate.logicalTarget) === identity
+    )
+  }
+
+  function snapshotFor(
+    logicalTarget: ApplicationCaptureLogicalTarget
+  ): ApplicationCaptureSnapshot | undefined {
+    const identity = applicationCaptureIdentity(logicalTarget)
+    return snapshots.value.find(
+      (candidate) => applicationCaptureIdentity(candidate.logicalTarget) === identity
+    )
+  }
 
   async function refresh(): Promise<void> {
     const host = audioRuntime.audioHostRef
@@ -54,7 +84,18 @@ export const useApplicationCaptureStore = defineStore("application-capture", () 
     timer = null
   }
 
-  return { targets, snapshots, capturing, loading, error, refresh, startPolling, stopPolling }
+  return {
+    targets,
+    snapshots,
+    capturing,
+    loading,
+    error,
+    targetFor,
+    snapshotFor,
+    refresh,
+    startPolling,
+    stopPolling
+  }
 })
 
 if (import.meta.hot) {

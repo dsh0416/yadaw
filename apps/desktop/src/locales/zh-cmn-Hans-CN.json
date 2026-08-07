@@ -1386,6 +1386,15 @@
       "mono": "单声道",
       "stereo": "立体声",
       "targetMissing": "目标不存在",
+      "status": {
+        "permissionDenied": "请在“系统设置 → 隐私与安全性 → 系统音频录制”中允许 Heron，然后重启 Heron。",
+        "targetExited": "所选应用已退出。应用重新启动后，请重新选择。",
+        "targetMissing": "所选应用当前不可用。",
+        "ambiguousTarget": "多个应用与保存的目标匹配，请重新选择。",
+        "noStream": "所选应用当前没有输出音频。",
+        "unsupported": "此系统不支持应用音频捕获。",
+        "error": "应用音频捕获发生错误，请重新选择应用以重试。"
+      },
       "inPrefix": "输入",
       "busPrefix": "总线"
     },

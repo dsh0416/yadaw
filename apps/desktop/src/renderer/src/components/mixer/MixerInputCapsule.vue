@@ -36,6 +36,30 @@ const { t } = useI18n()
 const applicationCaptureStore = useApplicationCaptureStore()
 
 const isStereo = computed(() => props.inputFormat === "stereo")
+const selectedApplicationTarget = computed(() => {
+  if (!props.applicationCapture) return undefined
+  return applicationCaptureStore.targetFor(props.applicationCapture)
+})
+const selectedApplicationSnapshot = computed(() => {
+  if (!props.applicationCapture) return undefined
+  return applicationCaptureStore.snapshotFor(props.applicationCapture)
+})
+
+const captureStatusMessage = computed(() => {
+  if (props.inputSource !== "application" || !props.applicationCapture) return null
+  const status = selectedApplicationSnapshot.value?.status
+  if (!status) {
+    return selectedApplicationTarget.value ? null : t("mixer.inputCapsule.status.targetMissing")
+  }
+  if (status === "permission-denied") return t("mixer.inputCapsule.status.permissionDenied")
+  if (status === "target-exited") return t("mixer.inputCapsule.status.targetExited")
+  if (status === "target-missing") return t("mixer.inputCapsule.status.targetMissing")
+  if (status === "ambiguous-target") return t("mixer.inputCapsule.status.ambiguousTarget")
+  if (status === "no-stream") return t("mixer.inputCapsule.status.noStream")
+  if (status === "unsupported") return t("mixer.inputCapsule.status.unsupported")
+  if (status === "error") return t("mixer.inputCapsule.status.error")
+  return null
+})
 
 function inputCount(source: MixerInputSource): number {
   if (source === "hardware") return props.hardwareInputCount
@@ -61,7 +85,8 @@ const selectedInput = computed(() => {
     ? adjacentPair(props.inputSource, channel)[0]
     : clampInput(props.inputSource, channel)
   if (props.inputSource === "application") {
-    return `application:${props.applicationCapture?.executablePath ?? ""}`
+    const runtimeId = selectedApplicationTarget.value?.runtimeId
+    return runtimeId ? `application:${runtimeId}` : "application:missing"
   }
   return `${props.inputSource}:${selected}`
 })
@@ -72,16 +97,13 @@ function sourceOptions(source: MixerInputSource) {
     source === "hardware" ? t("mixer.inputCapsule.inPrefix") : t("mixer.inputCapsule.busPrefix")
   if (source === "application") {
     const options = applicationCaptureStore.targets.map((target) => ({
-      value: `${source}:${target.executablePath}`,
+      value: `${source}:${target.runtimeId}`,
       label: `${target.displayName} (${target.channelCount > 1 ? t("mixer.inputCapsule.stereo") : t("mixer.inputCapsule.mono")})`
     }))
     const currentTarget = props.applicationCapture
-    if (
-      currentTarget &&
-      !options.some((option) => option.value === `${source}:${currentTarget.executablePath}`)
-    ) {
+    if (currentTarget && !selectedApplicationTarget.value) {
       options.push({
-        value: `${source}:${currentTarget.executablePath}`,
+        value: `${source}:missing`,
         label: `${currentTarget.executableName} (${t("mixer.inputCapsule.targetMissing")})`
       })
     }
@@ -120,7 +142,7 @@ function selectInput(value: string): void {
   const channelValue = separator === -1 ? "1" : value.slice(separator + 1)
   if (sourceValue === "application") {
     const target = applicationCaptureStore.targets.find(
-      (candidate) => candidate.executablePath === channelValue
+      (candidate) => candidate.runtimeId === channelValue
     )
     if (!target) return
     emit("update", {
@@ -163,39 +185,50 @@ function toggleStereo(): void {
 </script>
 
 <template>
-  <div class="input-capsule">
-    <div class="input-capsule__channel">
-      <UiCascadingSelect
-        :model-value="selectedInput"
-        :groups="inputGroups"
-        size="compact"
-        appearance="embedded"
-        hover-treatment="host-tint"
-        :aria-label="t('mixer.inputCapsule.inputChannel', { name: channelName })"
-        @update:model-value="selectInput"
-      />
-    </div>
+  <div class="input-capsule-field">
+    <div class="input-capsule">
+      <div class="input-capsule__channel">
+        <UiCascadingSelect
+          :model-value="selectedInput"
+          :groups="inputGroups"
+          size="compact"
+          appearance="embedded"
+          hover-treatment="host-tint"
+          :aria-label="t('mixer.inputCapsule.inputChannel', { name: channelName })"
+          @update:model-value="selectInput"
+        />
+      </div>
 
-    <button
-      class="input-capsule__stereo"
-      type="button"
-      :aria-label="
-        isStereo
-          ? t('mixer.inputCapsule.useMono', { name: channelName })
-          : t('mixer.inputCapsule.linkStereo', { name: channelName })
-      "
-      :aria-pressed="isStereo"
-      :title="
-        isStereo ? t('mixer.inputCapsule.stereoLinked') : t('mixer.inputCapsule.linkStereoTitle')
-      "
-      @click="toggleStereo"
-    >
-      <ChannelFormatIcon :channels="isStereo ? 2 : 1" />
-    </button>
+      <button
+        class="input-capsule__stereo"
+        type="button"
+        :aria-label="
+          isStereo
+            ? t('mixer.inputCapsule.useMono', { name: channelName })
+            : t('mixer.inputCapsule.linkStereo', { name: channelName })
+        "
+        :aria-pressed="isStereo"
+        :title="
+          isStereo ? t('mixer.inputCapsule.stereoLinked') : t('mixer.inputCapsule.linkStereoTitle')
+        "
+        @click="toggleStereo"
+      >
+        <ChannelFormatIcon :channels="isStereo ? 2 : 1" />
+      </button>
+    </div>
+    <p v-if="captureStatusMessage" class="input-capsule__status" role="status">
+      {{ captureStatusMessage }}
+    </p>
   </div>
 </template>
 
 <style scoped>
+.input-capsule-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .input-capsule {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 22px;
@@ -209,6 +242,13 @@ function toggleStereo(): void {
   color: var(--ui-domain-color-fff);
   background: linear-gradient(var(--ui-domain-color-3f91d4), var(--ui-domain-color-2871ae));
   box-shadow: 0 1px 0 var(--ui-domain-color-ffffff28) inset;
+}
+
+.input-capsule__status {
+  margin: 0;
+  color: var(--warning);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  line-height: var(--ui-type-leading-compact);
 }
 
 .input-capsule__channel {

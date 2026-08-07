@@ -48,6 +48,8 @@ pub struct LiveMixerChannel {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationCaptureTarget {
     pub platform: String,
+    #[serde(default)]
+    pub bundle_identifier: Option<String>,
     pub executable_path: String,
     pub executable_name: String,
     pub include_process_tree: bool,

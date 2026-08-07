@@ -31,7 +31,8 @@ export interface AudioHostGraph {
     input_source?: "hardware" | "bus" | "application"
     input_channels: number[]
     application_capture?: {
-      platform: "windows"
+      platform: "windows" | "macos"
+      bundle_identifier: string | null
       executable_path: string
       executable_name: string
       include_process_tree: boolean

@@ -6,8 +6,11 @@ fn application_source_reaches_recording_slots_before_monitoring_is_applied() {
 
     let mut runtime = transport_test_runtime(48_000, 1_000, 0, TRANSPORT_RECORDING);
     let (capture, mut producer) =
-        crate::application_capture::PreparedApplicationCapture::new(48_000, 2);
-    producer.try_push([0.25, -0.125]).unwrap();
+        crate::application_capture::PreparedApplicationCapture::for_test(48_000)
+            .expect("application capture fixture");
+    for _ in 0..1_024 {
+        producer.try_push([0.25, -0.125]).unwrap();
+    }
     runtime.application_captures[0] = Some(capture);
     runtime.recording_routes[0] = Some((0, 2));
     runtime.recording_channel_count = 2;
@@ -18,16 +21,19 @@ fn application_source_reaches_recording_slots_before_monitoring_is_applied() {
         TRANSPORT_RECORDING,
         2,
     );
-    let inputs = [[0.0; MAX_INPUT_CHANNELS]; 1];
-    let mut outputs = [[0.0; MAX_OUTPUT_CHANNELS]; 1];
+    let inputs = [[0.0; MAX_INPUT_CHANNELS]; 512];
+    let mut outputs = [[0.0; MAX_OUTPUT_CHANNELS]; 512];
 
     runtime.render_block(&inputs, &mut outputs, None, Some(&mut tap));
 
-    let frame = recorded
-        .try_pop()
-        .expect("application frame must be recorded");
-    assert_eq!([frame[0], frame[1]], [0.25, -0.125]);
-    assert_eq!(outputs[0], [0.0; MAX_OUTPUT_CHANNELS]);
+    let captured = std::iter::from_fn(|| recorded.try_pop())
+        .any(|frame| (frame[0] - 0.25).abs() < 0.01 && (frame[1] + 0.125).abs() < 0.01);
+    assert!(captured, "application frame must be recorded");
+    assert!(
+        outputs
+            .iter()
+            .all(|frame| *frame == [0.0; MAX_OUTPUT_CHANNELS])
+    );
 }
 
 #[test]

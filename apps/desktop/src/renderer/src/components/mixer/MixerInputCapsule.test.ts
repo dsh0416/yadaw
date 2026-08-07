@@ -1,11 +1,15 @@
 import { mount } from "@vue/test-utils"
-import { afterEach, describe, expect, it } from "vitest"
-import { createPinia } from "pinia"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { createPinia, type Pinia } from "pinia"
 import { UiCascadingSelect } from "@heron/ui"
 import { useApplicationCaptureStore } from "../../stores/applicationCapture"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
 
-const pinia = createPinia()
+let pinia: Pinia
+
+beforeEach(() => {
+  pinia = createPinia()
+})
 
 afterEach(() => {
   document.body.innerHTML = ""
@@ -120,7 +124,7 @@ describe("MixerInputCapsule", () => {
 
     wrapper
       .getComponent(UiCascadingSelect)
-      .vm.$emit("update:modelValue", "application:C:\\Program Files\\Player\\player.exe")
+      .vm.$emit("update:modelValue", "application:windows-process-42")
     await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted("update")).toEqual([
@@ -137,6 +141,94 @@ describe("MixerInputCapsule", () => {
           }
         }
       ]
+    ])
+  })
+
+  it("selects a macOS multi-process application by runtime id and persists its bundle id", async () => {
+    const applicationStore = useApplicationCaptureStore(pinia)
+    applicationStore.targets = [
+      {
+        runtimeId: "macos-process-314",
+        processId: 314,
+        displayName: "Browser",
+        executablePath: "/Applications/Browser.app/Contents/MacOS/Browser",
+        logicalTarget: {
+          platform: "macos",
+          bundleIdentifier: "com.example.browser",
+          executablePath: "/Applications/Browser.app/Contents/MacOS/Browser",
+          executableName: "Browser",
+          includeProcessTree: true
+        },
+        channelCount: 2,
+        status: "inactive"
+      }
+    ]
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 6",
+        inputSource: "hardware",
+        inputFormat: "stereo",
+        inputChannels: [1, 2]
+      },
+      global: { plugins: [pinia] }
+    })
+
+    wrapper
+      .getComponent(UiCascadingSelect)
+      .vm.$emit("update:modelValue", "application:macos-process-314")
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted("update")?.[0]?.[0]).toMatchObject({
+      inputSource: "application",
+      applicationCapture: {
+        platform: "macos",
+        bundleIdentifier: "com.example.browser",
+        includeProcessTree: true
+      }
+    })
+  })
+
+  it("keeps a missing macOS target selected and shows the permission recovery message", async () => {
+    const applicationStore = useApplicationCaptureStore(pinia)
+    const logicalTarget = {
+      platform: "macos" as const,
+      bundleIdentifier: "com.example.player",
+      executablePath: "/Applications/Player.app/Contents/MacOS/Player",
+      executableName: "Player",
+      includeProcessTree: true
+    }
+    applicationStore.snapshots = [
+      {
+        runtimeId: "macos-process-90",
+        processId: 90,
+        displayName: "Player",
+        executablePath: logicalTarget.executablePath,
+        logicalTarget,
+        channelCount: 2,
+        status: "permission-denied",
+        dropoutFrames: 0,
+        overflowFrames: 0,
+        underflowFrames: 0
+      }
+    ]
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 7",
+        inputSource: "application",
+        inputFormat: "stereo",
+        inputChannels: [1, 2],
+        applicationCapture: logicalTarget
+      },
+      global: { plugins: [pinia] }
+    })
+
+    expect(wrapper.get('[role="status"]').text()).toContain("System Audio Recording")
+    const applicationOptions = wrapper
+      .getComponent(UiCascadingSelect)
+      .props("groups")
+      ?.find((group) => group.label === "Applications")?.options
+    expect(applicationOptions).toEqual([
+      { value: "application:missing", label: "Player (target missing)" }
     ])
   })
 

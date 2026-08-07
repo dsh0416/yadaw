@@ -61,6 +61,10 @@ win:
 
 mac:
   icon: build/icon.icns
+  minimumSystemVersion: "14.2"
+  extendInfo:
+    NSAudioCaptureUsageDescription: >-
+      Heron captures audio from applications you select for monitoring and recording.
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
