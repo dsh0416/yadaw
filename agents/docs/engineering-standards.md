@@ -144,34 +144,34 @@ Line count is a review signal, not a substitute for design judgment.
   roots SHOULD be substantially smaller than the general threshold.
 
 Run `pnpm audit:source-size` to produce the inventory. The stricter
-`pnpm check:source-size` command is the intended gate; it remains outside the
-default `lint` pipeline until the Current hard violations below are resolved.
-This is a temporary adoption state, not permanent grandfathering.
+`pnpm check:source-size` command is part of the default `lint` pipeline and
+rejects hand-authored production files above the 1200-line hard threshold.
 CI can pass newly added source paths to
 `node scripts/source-size-policy.ts --check-new <paths...>` to reject a new
 production file above the review threshold without waiting for the full hard
 gate.
 
-### Adoption inventory
+### Adoption record
 
-The first audit on 2026-08-08 found these hand-authored production files above
-the 1200-line hard threshold:
+The first audit on 2026-08-08 found seven hand-authored production files above
+the 1200-line hard threshold. They were resolved before enabling the default
+gate:
 
-| Lines | File                                                           |
-| ----: | -------------------------------------------------------------- |
-|  1825 | `crates/vst3-host/src/processor.rs`                            |
-|  1767 | `crates/vst3-host/src/hosted.rs`                               |
-|  1691 | `crates/audio-engine/src/midi_input.rs`                        |
-|  1565 | `crates/audio-host/src/editor_platform.rs`                     |
-|  1524 | `crates/audio-host/src/ara.rs`                                 |
-|  1517 | `crates/audio-host/src/runtime/ui_runtime/embedded_editors.rs` |
-|  1439 | `crates/audio-host/src/vst3.rs`                                |
+| Baseline | Primary file after split                                              | Extracted ownership boundary                                     |
+| -------: | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+|     1825 | `crates/vst3-host/src/processor.rs` (1010)                            | bus negotiation/lifecycle and processor tests                    |
+|     1767 | `crates/vst3-host/src/hosted.rs` (1145)                               | processor leases, VST interfaces, and hosted-plug-in tests       |
+|     1691 | `crates/audio-engine/src/midi_input.rs` (971)                         | MIDI input tests                                                 |
+|     1565 | `crates/audio-host/src/editor_platform.rs` (161)                      | Windows, macOS, Linux, and unsupported platform implementations  |
+|     1524 | `crates/audio-host/src/ara.rs` (1011)                                 | ARA audio, archive, model, playback, and timeline host providers |
+|     1517 | `crates/audio-host/src/runtime/ui_runtime/embedded_editors.rs` (1164) | native editor attachment, scaling, geometry, and teardown        |
+|     1439 | `crates/audio-host/src/vst3.rs` (1183)                                | VST3 instance behavior and runtime tests                         |
 
-These are Current governance blockers. Their remediation must preserve thread
-affinity, ABI ownership, real-time behavior, and test coverage; reducing the
-number without improving responsibility boundaries is not completion.
+The audit now reports zero hard violations. Files between 801 and 1200 lines
+remain review triggers rather than grandfathered exceptions; material changes
+must still demonstrate cohesive ownership or split the file further.
 
-The same audit found review-trigger files between 801 and 1200 lines, including
+The audit also finds review-trigger files between 801 and 1200 lines, including
 audio bounce, project graph validation, macOS capture, embedded runtime,
 VST3/CLAP host modules, recording, the main audio-host service, and `xtask`.
 The generated audit output, rather than this prose snapshot, is authoritative

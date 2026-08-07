@@ -31,7 +31,7 @@
     "design:test": "pnpm --filter @heron/design-system test",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "pnpm lint:oxlint && pnpm lint:eslint && pnpm lint:design",
+    "lint": "pnpm lint:oxlint && pnpm lint:eslint && pnpm lint:design && pnpm check:source-size",
     "lint:oxlint": "oxlint --deny-warnings",
     "lint:oxlint:fix": "oxlint --fix --deny-warnings",
     "lint:eslint": "eslint \"apps/**/*.vue\" \"docs/**/*.vue\" \"packages/**/*.vue\" --no-error-on-unmatched-pattern --max-warnings 0",

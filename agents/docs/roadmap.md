@@ -150,9 +150,9 @@ for at least two hours without reading source or developer documentation.
 
 - [ ] Adopt the engineering, architecture, interaction, and ADR rules linked
       from `agents/docs/README.md`.
-- [ ] Resolve the current source-size violations recorded in
-      [Engineering standards](engineering-standards.md) before enabling the
-      hard size gate in the default check pipeline.
+- [x] Resolve the source-size violations recorded in
+      [Engineering standards](engineering-standards.md) and enable the hard
+      size gate in the default lint pipeline.
 - [ ] Add enforceable architecture checks wherever a rule can be checked
       mechanically; issue-linked exceptions must not expand silently.
 - [ ] Reconcile user-facing documentation with the behavior in the development
