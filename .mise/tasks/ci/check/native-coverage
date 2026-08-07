@@ -3,9 +3,12 @@
 #MISE depends=["install"]
 set -euo pipefail
 
-mise run version:check
-mise run js:format-check ::: rust:format:check ::: rust:clippy ::: js:check:configs
-pnpm lint:design
+if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+  llvm_cov_bin="$(cygpath -u "$(mise which cargo-llvm-cov)")"
+  export PATH="$(dirname "$llvm_cov_bin"):$PATH"
+fi
+
+mise run rust:format:check ::: rust:clippy
 
 target="$(cargo xtask host-target)"
 coverage_target="$PWD/target-coverage"
@@ -22,15 +25,10 @@ fi
   eval "$(cargo llvm-cov show-env --sh --target "$target")"
   cargo xtask coverage prepare
   pnpm --filter @heron/dsp-node build:debug
-  pnpm lint:oxlint
-  pnpm lint:eslint
-  pnpm check:packages
-  pnpm test:coverage:js
   pnpm test:native-bindings
-  mise run test:official-plugin-fixtures
   cargo xtask coverage report
   node scripts/rewrite-lcov-paths.ts coverage/rust/lcov.info
 )
 
-mise run rust:bench:check
-mise run js:design:test ::: js:design:build
+pnpm --filter @heron/desktop test:unit
+pnpm --filter @heron/project-db test:integration

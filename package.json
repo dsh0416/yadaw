@@ -24,7 +24,7 @@
     "test:js": "pnpm --filter @heron/contracts test && pnpm --filter @heron/ui test && pnpm --filter @heron/project-model test && pnpm --filter @heron/desktop test:unit && pnpm --filter @heron/project-db test:integration && pnpm test:native-bindings && pnpm test:scripts",
     "test:coverage:js": "pnpm --filter @heron/desktop test:coverage && pnpm --filter @heron/project-db test:coverage && pnpm --filter @heron/ui test:coverage && pnpm --filter @heron/contracts test:coverage && pnpm --filter @heron/project-model test:coverage && node scripts/rewrite-lcov-paths.ts apps/desktop/coverage/lcov.info apps/desktop/ && node scripts/rewrite-lcov-paths.ts packages/project-db/coverage/lcov.info packages/project-db/ && node scripts/rewrite-lcov-paths.ts packages/ui/coverage/lcov.info packages/ui/ && node scripts/rewrite-lcov-paths.ts packages/contracts/coverage/lcov.info packages/contracts/ && node scripts/rewrite-lcov-paths.ts packages/project-model/coverage/lcov.info packages/project-model/",
     "test:native-bindings": "node scripts/native-bindings.test.ts",
-    "test:scripts": "node --test scripts/task-boundaries.test.ts",
+    "test:scripts": "node --test scripts/task-boundaries.test.ts scripts/rewrite-lcov-paths.test.ts",
     "test:e2e": "pnpm --filter @heron/desktop test:e2e",
     "design:dev": "pnpm --filter @heron/design-system dev",
     "design:build": "pnpm --filter @heron/design-system build",

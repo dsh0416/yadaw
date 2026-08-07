@@ -60,6 +60,27 @@ runs:
         $llvmRoot = mise where 'github:llvm/llvm-project'
         "LIBCLANG_PATH=$llvmRoot\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+    - name: Prepare ASIO SDK on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $downloadRoot = Join-Path $env:RUNNER_TEMP 'asio-sdk-download'
+        $archivePath = Join-Path $env:RUNNER_TEMP 'asio-sdk.zip'
+        New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+
+        Invoke-WebRequest -Uri 'https://www.steinberg.net/asiosdk' -OutFile $archivePath
+        Expand-Archive -Path $archivePath -DestinationPath $downloadRoot -Force
+
+        $asioHeader = Get-ChildItem -Path $downloadRoot -Filter 'asio.h' -File -Recurse |
+          Where-Object { $_.Directory.Name -eq 'common' } |
+          Select-Object -First 1
+        if ($null -eq $asioHeader) {
+          throw 'The downloaded ASIO SDK does not contain common/asio.h'
+        }
+
+        $asioRoot = $asioHeader.Directory.Parent.FullName
+        "CPAL_ASIO_DIR=$asioRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+
     - name: Restore Cargo target directory
       if: inputs.cache-rust-build == 'true'
       uses: Swatinem/rust-cache@v2
@@ -74,7 +95,7 @@ runs:
     - name: Enable sccache for subsequent build steps
       shell: bash
       run: |
-        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        printf 'RUSTC_WRAPPER=%s\n' "${SCCACHE_PATH:-sccache}" >> "$GITHUB_ENV"
         echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
     - name: Locate Cargo and pnpm caches

@@ -1,3 +1,7 @@
+codecov:
+  notify:
+    manual_trigger: true
+
 coverage:
   status:
     project:
@@ -19,7 +23,7 @@ comment:
 
 flag_management:
   default_rules:
-    carryforward: true
+    carryforward: false
   individual_flags:
     - name: javascript
       paths:
@@ -28,10 +32,22 @@ flag_management:
         - packages/project-db/
         - packages/project-model/
         - packages/ui/
-    - name: rust
+      carryforward: false
+    - name: rust-linux
       paths:
         - crates/
         - plugins/
+      carryforward: false
+    - name: rust-windows
+      paths:
+        - crates/
+        - plugins/
+      carryforward: false
+    - name: rust-macos
+      paths:
+        - crates/
+        - plugins/
+      carryforward: false
 
 component_management:
   default_rules:
