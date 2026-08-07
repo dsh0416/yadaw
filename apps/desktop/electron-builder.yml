@@ -82,6 +82,8 @@ mac:
 
 linux:
   icon: build/icons
+  executableArgs:
+    - --ozone-platform=x11
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt

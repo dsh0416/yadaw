@@ -10,6 +10,7 @@ test("loads fixed custom-protocol entrypoints with isolated preload bridges", as
   const application = await electron.launch({
     executablePath,
     args: [
+      ...(process.platform === "linux" ? ["--ozone-platform=x11"] : []),
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-gpu-sandbox",

@@ -11,6 +11,8 @@ if (typeof electronModule !== "string") {
   throw new TypeError("electron did not resolve to its executable path")
 }
 const electronPath = electronModule
+const electronArguments =
+  process.platform === "linux" ? ["--ozone-platform=x11", appDirectory] : [appDirectory]
 type BuildWatcher = Extract<Awaited<ReturnType<typeof build>>, { close(): Promise<void> }>
 
 let electronProcess: ChildProcess | null = null
@@ -88,7 +90,7 @@ function launchElectron(): void {
   const rendererUrl = rendererServer?.resolvedUrls?.local[0]
   if (!rendererUrl) throw new Error("Vite renderer URL is unavailable")
 
-  const launchedProcess = spawn(electronPath, [appDirectory], {
+  const launchedProcess = spawn(electronPath, electronArguments, {
     env: { ...process.env, HERON_RENDERER_URL: rendererUrl },
     stdio: "inherit"
   })

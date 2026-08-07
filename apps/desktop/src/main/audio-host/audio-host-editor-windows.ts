@@ -76,6 +76,8 @@ interface EditorWindowEntry {
   toolbarState: NativeEditorToolbarState | null
   parameters: PluginParameterInfo[]
   loadingParameters: boolean
+  nativeRestackPending: boolean
+  nativeRestackTimer: NodeJS.Timeout | null
   toolbarKey: string
   minimumNativeWidth: number
   minimumNativeHeight: number
@@ -164,6 +166,8 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       toolbarState: null,
       parameters: [],
       loadingParameters: false,
+      nativeRestackPending: false,
+      nativeRestackTimer: null,
       toolbarKey: "",
       minimumNativeWidth: 1,
       minimumNativeHeight: 1
@@ -240,12 +244,19 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       })
     })
 
+    // X11 requires the parent to be mapped before creating the XEmbed child.
+    // The native host raises that child during the post-attachment layout in
+    // case Chromium creates its compositor sibling after this call.
+    if (mapParentBeforeNativeAttach(process.platform) && !window.isDestroyed()) {
+      window.show()
+    }
+
     const scaleFactor = this.scaleFactor(window)
     const [width = 1, height = 1] = window.getContentSize()
     const toolbarHeight = toolbarHeightFor(width)
     this.layoutToolbar(entry, width, toolbarHeight)
     const native = nativeExtent(width, Math.max(1, height - toolbarHeight), scaleFactor)
-    const topInset = nativeDimension(toolbarHeight, scaleFactor)
+    const topInset = nativeParentTopInset(window, toolbarHeight, scaleFactor)
     try {
       client.registerEditorHost({
         instanceId,
@@ -383,7 +394,13 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
         entry.window.setMinimumSize(1, toolbarHeight + 1)
       }
       this.layoutToolbar(entry, width, toolbarHeight)
-      if (modeChanged) entry.client.focusEditorHost(instanceId)
+      if (modeChanged || zoomChanged) {
+        const snapshot = entry.client.editorHostSnapshot(instanceId)
+        if (snapshot?.attached) this.applySnapshot(entry, snapshot)
+      }
+      if (modeChanged) {
+        entry.client.focusEditorHost(instanceId)
+      }
     }
     // The route select updates and disables itself optimistically. Rendering
     // the intermediate pending state would reload the data URL with the old
@@ -407,9 +424,10 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       instanceId,
       width: native.width,
       height: native.height,
-      topInset: nativeDimension(toolbarHeight, scaleFactor),
+      topInset: nativeParentTopInset(entry.window, toolbarHeight, scaleFactor),
       displayScale: scaleFactor
     })
+    this.scheduleNativeRestack(instanceId, entry)
     // applySnapshot calls back into this method after changing the Electron
     // window so the native child receives its final geometry. Do not feed that
     // nested resize back into applySnapshot: fractional Windows DPI rounding
@@ -432,9 +450,51 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
     this.applySnapshot(entry, accepted)
   }
 
+  private scheduleNativeRestack(instanceId: string, entry: EditorWindowEntry): void {
+    if (!mapParentBeforeNativeAttach(process.platform)) return
+    if (!entry.nativeRestackPending) {
+      entry.nativeRestackPending = true
+      setImmediate(() => {
+        entry.nativeRestackPending = false
+        this.restackNativeHost(instanceId, entry)
+      })
+    }
+    if (entry.nativeRestackTimer) clearTimeout(entry.nativeRestackTimer)
+    // A zoom or Parameters -> Editor transition can make Chromium replace its
+    // compositor child after the immediate task has already run. Confirm the
+    // native stacking once that asynchronous replacement has settled.
+    entry.nativeRestackTimer = setTimeout(() => {
+      entry.nativeRestackTimer = null
+      this.restackNativeHost(instanceId, entry)
+    }, 100)
+  }
+
+  private restackNativeHost(instanceId: string, entry: EditorWindowEntry): void {
+    if (
+      this.entries.get(instanceId) !== entry ||
+      entry.closing ||
+      entry.window.isDestroyed() ||
+      entry.toolbarState?.activeMode !== "native"
+    ) {
+      return
+    }
+    const scaleFactor = this.scaleFactor(entry.window)
+    const [width = 1, height = 1] = entry.window.getContentSize()
+    const toolbarHeight = toolbarHeightFor(width)
+    const native = nativeExtent(width, Math.max(1, height - toolbarHeight), scaleFactor)
+    entry.client.resizeEditorHost({
+      instanceId,
+      width: native.width,
+      height: native.height,
+      topInset: nativeParentTopInset(entry.window, toolbarHeight, scaleFactor),
+      displayScale: scaleFactor
+    })
+  }
+
   private cleanup(instanceId: string, entry: EditorWindowEntry): void {
     if (this.entries.get(instanceId) !== entry) return
     this.entries.delete(instanceId)
+    if (entry.nativeRestackTimer) clearTimeout(entry.nativeRestackTimer)
     entry.client.unregisterEditorHost(instanceId)
     if (!entry.toolbarWindow.isDestroyed()) {
       entry.toolbarWindow.contentView.removeChildView(entry.toolbar)
@@ -541,6 +601,10 @@ function toolbarHeightFor(width: number): number {
   return width < NARROW_BREAKPOINT ? NARROW_TOOLBAR_HEIGHT : TOOLBAR_HEIGHT
 }
 
+export function mapParentBeforeNativeAttach(platform: NodeJS.Platform): boolean {
+  return platform === "linux"
+}
+
 function nativeDimension(
   value: number,
   scaleFactor: number,
@@ -548,6 +612,19 @@ function nativeDimension(
 ): number {
   const scale = platform === "darwin" ? 1 : Math.max(0.01, scaleFactor)
   return Math.max(1, Math.round(value * scale))
+}
+
+function nativeParentTopInset(
+  window: BaseWindow,
+  toolbarHeight: number,
+  scaleFactor: number,
+  platform: NodeJS.Platform = process.platform
+): number {
+  const windowBounds = window.getBounds()
+  const contentBounds = window.getContentBounds()
+  const nativeChromeHeight =
+    platform === "linux" ? Math.max(0, contentBounds.y - windowBounds.y) : 0
+  return nativeDimension(toolbarHeight + nativeChromeHeight, scaleFactor, platform)
 }
 
 export function nativeExtent(

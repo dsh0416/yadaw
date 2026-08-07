@@ -8,6 +8,7 @@ if (typeof electronModule !== "string") {
 }
 
 const electronArguments = [
+  ...(process.platform === "linux" ? ["--ozone-platform=x11"] : []),
   ...(process.env.HERON_EDITOR_SMOKE_NO_SANDBOX === "1" ? ["--no-sandbox"] : []),
   resolve(import.meta.dirname, "vst3-editor-smoke-app"),
   "heron-editor-smoke-arguments:",

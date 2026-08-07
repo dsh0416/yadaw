@@ -9,6 +9,7 @@ test("prompts before closing a project with a committed mutation", async () => {
   const application = await electron.launch({
     executablePath: process.env.HERON_E2E_EXECUTABLE,
     args: [
+      ...(process.platform === "linux" ? ["--ozone-platform=x11"] : []),
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-gpu-sandbox",

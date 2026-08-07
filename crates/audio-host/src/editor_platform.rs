@@ -1400,6 +1400,10 @@ mod platform {
                     nonzero_extent(geometry.frame_width),
                     nonzero_extent(geometry.frame_height),
                 );
+                // Chromium may create its compositor child after this XEmbed
+                // container. Keep the native editor above that sibling when
+                // Electron sends the post-attachment layout.
+                XRaiseWindow(self.display, self.window);
                 XFlush(self.display);
             }
         }
@@ -1407,6 +1411,7 @@ mod platform {
         pub fn focus(&self) {
             unsafe {
                 // SAFETY: display/window remain live until Drop.
+                XRaiseWindow(self.display, self.window);
                 XSetInputFocus(self.display, self.window, REVERT_TO_PARENT, CURRENT_TIME);
                 XFlush(self.display);
             }
@@ -1493,6 +1498,7 @@ mod platform {
             width: u32,
             height: u32,
         ) -> c_int;
+        fn XRaiseWindow(display: *mut Display, window: XWindow) -> c_int;
         fn XSetInputFocus(
             display: *mut Display,
             focus: XWindow,
