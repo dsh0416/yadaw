@@ -12,11 +12,22 @@ function normalizedExecutablePath(path: string): string {
   return path.trim().replaceAll("\\", "/").toLocaleLowerCase()
 }
 
-export function applicationCaptureIdentity(target: ApplicationCaptureLogicalTarget): string {
-  if (target.platform === "macos" && target.bundleIdentifier?.trim()) {
-    return `macos:bundle:${target.bundleIdentifier.trim().toLocaleLowerCase()}`
+export function applicationCaptureTargetsMatch(
+  requested: ApplicationCaptureLogicalTarget,
+  candidate: ApplicationCaptureLogicalTarget
+): boolean {
+  if (requested.platform !== candidate.platform) return false
+  if (requested.platform === "macos" && candidate.platform === "macos") {
+    const requestedBundle = requested.bundleIdentifier?.trim()
+    const candidateBundle = candidate.bundleIdentifier?.trim()
+    if (requestedBundle && candidateBundle) {
+      return requestedBundle.toLocaleLowerCase() === candidateBundle.toLocaleLowerCase()
+    }
   }
-  return `${target.platform}:path:${normalizedExecutablePath(target.executablePath)}`
+  return (
+    normalizedExecutablePath(requested.executablePath) ===
+    normalizedExecutablePath(candidate.executablePath)
+  )
 }
 
 export const useApplicationCaptureStore = defineStore("application-capture", () => {
@@ -33,18 +44,16 @@ export const useApplicationCaptureStore = defineStore("application-capture", () 
   function targetFor(
     logicalTarget: ApplicationCaptureLogicalTarget
   ): ApplicationCaptureTargetDescriptor | undefined {
-    const identity = applicationCaptureIdentity(logicalTarget)
-    return targets.value.find(
-      (candidate) => applicationCaptureIdentity(candidate.logicalTarget) === identity
+    return targets.value.find((candidate) =>
+      applicationCaptureTargetsMatch(logicalTarget, candidate.logicalTarget)
     )
   }
 
   function snapshotFor(
     logicalTarget: ApplicationCaptureLogicalTarget
   ): ApplicationCaptureSnapshot | undefined {
-    const identity = applicationCaptureIdentity(logicalTarget)
-    return snapshots.value.find(
-      (candidate) => applicationCaptureIdentity(candidate.logicalTarget) === identity
+    return snapshots.value.find((candidate) =>
+      applicationCaptureTargetsMatch(logicalTarget, candidate.logicalTarget)
     )
   }
 

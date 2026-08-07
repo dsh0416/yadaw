@@ -72,9 +72,22 @@ impl ApplicationCaptureBackend for WindowsApplicationCaptureBackend {
         session_sample_rate: u32,
     ) -> Result<PreparedApplicationCapture, ApplicationCaptureError> {
         if target.platform != "windows" {
-            return Err(ApplicationCaptureError::InvalidConfiguration(
-                "Windows application capture requires a windows target".to_owned(),
-            ));
+            let descriptor = ApplicationCaptureTargetDescriptor {
+                runtime_id: format!("windows-unsupported:{}", target.executable_path),
+                process_id: 0,
+                display_name: target.executable_name.clone(),
+                executable_path: target.executable_path.clone(),
+                logical_target: target.clone(),
+                channel_count: 2,
+                status: "unsupported".to_owned(),
+            };
+            let prepared = PreparedApplicationCapture::silent(
+                descriptor,
+                session_sample_rate,
+                APPLICATION_CAPTURE_STATUS_UNSUPPORTED,
+            )?;
+            self.registry.register(&prepared.state);
+            return Ok(prepared);
         }
         let descriptor = self.enumerate_targets().into_iter().find(|candidate| {
             candidate
@@ -585,7 +598,27 @@ unsafe fn process_path(process_id: u32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PROCESS_LOOPBACK_DEVICE_INTERFACE, requested_capture_format};
+    use super::*;
+
+    #[test]
+    fn foreign_platform_target_prepares_an_unsupported_silent_route() {
+        let backend = WindowsApplicationCaptureBackend::new();
+        let target = ApplicationCaptureLogicalTarget {
+            platform: "macos".to_owned(),
+            bundle_identifier: Some("com.example.player".to_owned()),
+            executable_path: "/Applications/Player.app/Contents/MacOS/Player".to_owned(),
+            executable_name: "Player".to_owned(),
+            include_process_tree: true,
+        };
+
+        let _prepared = backend
+            .prepare_capture(&target, 48_000)
+            .expect("platform mismatches retain a silent application route");
+        let snapshots = backend.snapshot();
+
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].status, "unsupported");
+    }
 
     #[test]
     fn process_loopback_uses_the_virtual_device_and_session_float_format() {

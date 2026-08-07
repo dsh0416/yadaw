@@ -1,4 +1,5 @@
 use super::*;
+use crate::NativeApplicationCaptureTarget;
 
 #[test]
 fn hidden_channel_adapters_downmix_and_upmix_at_chain_boundaries() {
@@ -307,6 +308,40 @@ fn build_mixer_runtime_compiles_a_simple_graph_with_monitoring_and_pdc() {
     assert!(runtime.monitor_input_routes[0].is_some());
     assert_eq!(runtime.tail_end_frame, Some(64));
     assert!(!runtime.has_infinite_tail);
+}
+
+#[test]
+fn build_mixer_runtime_keeps_a_silent_route_for_an_unsupported_application_target() {
+    let mut graph = simple_native_graph();
+    graph.channels[0].input_source = Some("application".to_owned());
+    graph.channels[0].input_monitoring = true;
+    graph.channels[0].application_capture = Some(NativeApplicationCaptureTarget {
+        platform: if cfg!(target_os = "macos") {
+            "windows".to_owned()
+        } else {
+            "macos".to_owned()
+        },
+        bundle_identifier: None,
+        executable_path: "C:/Program Files/Player/player.exe".to_owned(),
+        executable_name: "player.exe".to_owned(),
+        include_process_tree: true,
+    });
+
+    let runtime = build_mixer_runtime(
+        graph,
+        10,
+        test_transport(48_000),
+        Arc::new(InputPeakBank::new()),
+    )
+    .expect("unsupported application capture must not reject the graph");
+
+    assert!(runtime.application_captures[0].is_some());
+    assert!(
+        crate::application_capture::global_manager()
+            .snapshot()
+            .iter()
+            .any(|snapshot| snapshot.status == "unsupported")
+    );
 }
 
 #[test]

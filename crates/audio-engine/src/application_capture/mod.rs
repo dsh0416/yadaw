@@ -19,7 +19,7 @@ use thiserror::Error;
 
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(any(test, not(any(target_os = "windows", target_os = "macos"))))]
 mod unsupported;
 #[cfg(target_os = "windows")]
 mod windows;

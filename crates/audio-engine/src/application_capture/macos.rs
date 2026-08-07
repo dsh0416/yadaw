@@ -31,9 +31,10 @@ use super::{
     APPLICATION_CAPTURE_STATUS_CAPTURING, APPLICATION_CAPTURE_STATUS_ERROR,
     APPLICATION_CAPTURE_STATUS_NO_STREAM, APPLICATION_CAPTURE_STATUS_PERMISSION_DENIED,
     APPLICATION_CAPTURE_STATUS_TARGET_EXITED, APPLICATION_CAPTURE_STATUS_TARGET_MISSING,
-    ApplicationCaptureBackend, ApplicationCaptureError, ApplicationCaptureFrame,
-    ApplicationCaptureLogicalTarget, ApplicationCaptureRegistry, ApplicationCaptureSnapshot,
-    ApplicationCaptureState, ApplicationCaptureTargetDescriptor, PreparedApplicationCapture,
+    APPLICATION_CAPTURE_STATUS_UNSUPPORTED, ApplicationCaptureBackend, ApplicationCaptureError,
+    ApplicationCaptureFrame, ApplicationCaptureLogicalTarget, ApplicationCaptureRegistry,
+    ApplicationCaptureSnapshot, ApplicationCaptureState, ApplicationCaptureTargetDescriptor,
+    PreparedApplicationCapture,
 };
 
 const NO_ERR: i32 = 0;
@@ -69,24 +70,21 @@ impl ApplicationCaptureBackend for MacOsApplicationCaptureBackend {
         session_sample_rate: u32,
     ) -> Result<PreparedApplicationCapture, ApplicationCaptureError> {
         if target.platform != "macos" {
-            return Err(ApplicationCaptureError::InvalidConfiguration(
-                "macOS application capture requires a macos target".to_owned(),
-            ));
+            let descriptor = unavailable_descriptor(target, "unsupported");
+            let prepared = PreparedApplicationCapture::silent(
+                descriptor,
+                session_sample_rate,
+                APPLICATION_CAPTURE_STATUS_UNSUPPORTED,
+            )?;
+            self.registry.register(&prepared.state);
+            return Ok(prepared);
         }
 
         let selected = enumerate_mac_targets()
             .into_iter()
             .find(|candidate| logical_target_matches(target, &candidate.descriptor.logical_target));
         let Some(selected) = selected else {
-            let descriptor = ApplicationCaptureTargetDescriptor {
-                runtime_id: format!("macos-missing:{}", logical_target_key(target)),
-                process_id: 0,
-                display_name: target.executable_name.clone(),
-                executable_path: target.executable_path.clone(),
-                logical_target: target.clone(),
-                channel_count: 2,
-                status: "target-missing".to_owned(),
-            };
+            let descriptor = unavailable_descriptor(target, "target-missing");
             let prepared = PreparedApplicationCapture::silent(
                 descriptor,
                 session_sample_rate,
@@ -238,7 +236,24 @@ fn logical_target_matches(
         (Some(requested), Some(candidate)) if !requested.is_empty() => {
             requested.eq_ignore_ascii_case(candidate)
         }
-        _ => requested.executable_path == candidate.executable_path,
+        _ => requested
+            .executable_path
+            .eq_ignore_ascii_case(&candidate.executable_path),
+    }
+}
+
+fn unavailable_descriptor(
+    target: &ApplicationCaptureLogicalTarget,
+    status: &str,
+) -> ApplicationCaptureTargetDescriptor {
+    ApplicationCaptureTargetDescriptor {
+        runtime_id: format!("macos-{status}:{}", logical_target_key(target)),
+        process_id: 0,
+        display_name: target.executable_name.clone(),
+        executable_path: target.executable_path.clone(),
+        logical_target: target.clone(),
+        channel_count: 2,
+        status: status.to_owned(),
     }
 }
 
@@ -818,6 +833,42 @@ mod tests {
         let mut moved = target.clone();
         moved.executable_path = "/Volumes/Apps/Player.app/Contents/MacOS/Player".to_owned();
         assert!(logical_target_matches(&target, &moved));
+    }
+
+    #[test]
+    fn logical_identity_path_fallback_is_case_insensitive() {
+        let requested = ApplicationCaptureLogicalTarget {
+            platform: "macos".to_owned(),
+            bundle_identifier: None,
+            executable_path: "/Applications/Player.app/Contents/MacOS/Player".to_owned(),
+            executable_name: "Player".to_owned(),
+            include_process_tree: true,
+        };
+        let mut candidate = requested.clone();
+        candidate.executable_path = "/applications/player.app/contents/macos/player".to_owned();
+        candidate.bundle_identifier = Some("com.example.player".to_owned());
+
+        assert!(logical_target_matches(&requested, &candidate));
+    }
+
+    #[test]
+    fn foreign_platform_target_prepares_an_unsupported_silent_route() {
+        let backend = MacOsApplicationCaptureBackend::new();
+        let target = ApplicationCaptureLogicalTarget {
+            platform: "windows".to_owned(),
+            bundle_identifier: None,
+            executable_path: "C:/Program Files/Player/player.exe".to_owned(),
+            executable_name: "player.exe".to_owned(),
+            include_process_tree: true,
+        };
+
+        let _prepared = backend
+            .prepare_capture(&target, 48_000)
+            .expect("platform mismatches retain a silent application route");
+        let snapshots = backend.snapshot();
+
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].status, "unsupported");
     }
 
     #[test]
