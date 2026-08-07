@@ -279,7 +279,7 @@ describe("ProjectService.create", () => {
     await service.deleteAssets([])
     await service.deleteAssets(["asset-1"])
 
-    worker.importLargeObject.mockImplementationOnce(async () => {
+    worker.importLargeObject.mockImplementationOnce(() => {
       worker.onProgress?.({ operationId: "import", completed: 4, total: 8 })
       worker.onProgress?.({ operationId: "other", completed: 8, total: 8 })
       return 32

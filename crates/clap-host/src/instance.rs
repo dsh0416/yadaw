@@ -1269,7 +1269,9 @@ mod tests {
         floating: bool,
     ) -> bool {
         // SAFETY: CLAP supplies a NUL-terminated API identifier.
-        !floating && unsafe { CStr::from_ptr(api) } == clap_sys::ext::gui::CLAP_WINDOW_API_X11
+        !floating
+            && platform_gui_api()
+                .is_some_and(|platform_api| unsafe { CStr::from_ptr(api) } == platform_api)
     }
 
     unsafe extern "C" fn gui_create(

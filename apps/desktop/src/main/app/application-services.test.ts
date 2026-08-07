@@ -105,9 +105,9 @@ describe("createApplicationServices", () => {
     const runtime = attached[0]!
     await expect(runtime.resolveInstance("plugin")).resolves.toMatchObject({ sampleRate: 48_000 })
     await expect(runtime.resolveInstance("missing")).rejects.toThrow("was not found")
-    await runtime.load({ id: "plugin" } as never, 48_000)
+    await runtime.load({ id: "plugin" }, 48_000)
     await runtime.parameters("plugin")
-    await runtime.setParameter({} as never)
+    await runtime.setParameter({})
     await runtime.openEditor("plugin")
     await runtime.closeEditor("plugin")
     expect(audioHost.openPluginEditor).toHaveBeenCalledWith(
