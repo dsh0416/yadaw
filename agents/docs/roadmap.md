@@ -148,7 +148,7 @@ for at least two hours without reading source or developer documentation.
 
 ### Governance work before feature expansion
 
-- [ ] Adopt the engineering, architecture, interaction, and ADR rules linked
+- [x] Adopt the engineering, architecture, interaction, and ADR rules linked
       from `agents/docs/README.md`.
 - [x] Resolve the source-size violations recorded in
       [Engineering standards](engineering-standards.md) and enable the hard

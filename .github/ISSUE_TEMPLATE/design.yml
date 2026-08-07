@@ -8,7 +8,11 @@ body:
       value: |
         Use this for design discussion or feature proposals. Check the
         [roadmap](https://github.com/minori-live/heron/blob/main/agents/docs/roadmap.md) first.
-        Prefer actionable scope over speculative wish lists.
+        Prefer actionable scope over speculative wish lists. Proposals are also
+        governed by the [engineering standards](https://github.com/minori-live/heron/blob/main/agents/docs/engineering-standards.md),
+        [architecture](https://github.com/minori-live/heron/blob/main/agents/docs/architecture.md),
+        [interaction design](https://github.com/minori-live/heron/blob/main/agents/docs/interaction-design.md),
+        and [ADR rules](https://github.com/minori-live/heron/blob/main/agents/docs/adr/README.md).
 
   - type: textarea
     id: problem
@@ -33,6 +37,38 @@ body:
       description: Other approaches, workarounds, or reasons not to do this now.
     validations:
       required: false
+
+  - type: textarea
+    id: workflow_states
+    attributes:
+      label: Workflow and failure states
+      description: |
+        Describe the normal path and the applicable unavailable, busy, failed,
+        recovery, and successful end states. Use N/A with a reason for a purely
+        internal proposal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: interaction_reference
+    attributes:
+      label: Interaction reference
+      description: |
+        For user-facing behavior, describe the matching Logic/DAW convention or
+        the deliberate deviation. A material lasting deviation requires an ADR.
+        Use N/A with a reason when no interaction changes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: governance
+    attributes:
+      label: Architecture and ADR impact
+      description: |
+        Identify affected owners and boundaries. Link a proposed/accepted ADR if
+        a trigger applies, or state why the change stays within current rules.
+    validations:
+      required: true
 
   - type: dropdown
     id: area
