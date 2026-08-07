@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    AudioEngineConfig, BinaryPayload, GraphTransactionRequest, GraphUpdate,
-    MidiRecordingStartConfig, MidiSyncPreferences, MixerParameterPreview, ParameterCommand,
-    ParameterGesture, PluginAudioMode, PluginAuxInputConfiguration, PluginEditorAction,
-    PluginEditorAppearance, PluginEditorContext, PluginEditorPreference, PluginLocator,
-    PluginStateEnvelope, PrepareGraphRequest, RecordingStartConfig,
+    AudioEngineConfig, BinaryPayload, BounceOutputRenderRequest, GraphTransactionRequest,
+    GraphUpdate, MidiRecordingStartConfig, MidiSyncPreferences, MixerParameterPreview,
+    ParameterCommand, ParameterGesture, PluginAudioMode, PluginAuxInputConfiguration,
+    PluginEditorAction, PluginEditorAppearance, PluginEditorContext, PluginEditorPreference,
+    PluginLocator, PluginStateEnvelope, PrepareGraphRequest, RecordingStartConfig,
     RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
 };
 
@@ -102,6 +102,15 @@ pub enum ControlCommand {
         start_frame: i64,
         end_frame: i64,
         max_buckets: u32,
+    },
+    StartBounceOutput {
+        request: Box<BounceOutputRenderRequest>,
+    },
+    BounceOutputStatus {
+        operation_id: String,
+    },
+    CancelBounceOutput {
+        operation_id: String,
     },
     LoadPlugin {
         instance_id: String,

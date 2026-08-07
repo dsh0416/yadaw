@@ -92,6 +92,9 @@
     "chooseSwap": {
       "title": "Choose recording swap directory"
     },
+    "bounceOutput": {
+      "title": "Save bounced output"
+    },
     "createProject": {
       "title": "Create Heron project",
       "filter": "Heron project"
@@ -211,6 +214,8 @@
     "closingProject": "Closing project",
     "finalizingRecording": "Finalizing recording",
     "recoveringRecording": "Recovering recording",
+    "bouncingOutput": "Bouncing output",
+    "tailTruncated": "tail truncated after 30 seconds",
     "recordingDropoutsInput": "{count} input frames were dropped during capture.",
     "recordingDropoutsCaptured": "{count} captured frames were dropped.",
     "state": {
@@ -238,6 +243,11 @@
       "preparingWaveforms": "Preparing waveforms",
       "synchronizingPluginState": "Saving plug-in state",
       "stoppingPlayback": "Stopping playback",
+      "preparingBounce": "Preparing offline bounce",
+      "renderingOffline": "Rendering offline",
+      "analyzingBounce": "Analyzing peaks",
+      "encodingBounce": "Encoding audio",
+      "restoringAudio": "Restoring real-time audio",
       "closingProjectDatabase": "Closing project database",
       "releasingProjectGraph": "Releasing project graph",
       "cleaningUp": "Cleaning swap files"
@@ -969,6 +979,50 @@
       "unconfigured": "unconfigured"
     }
   },
+  "bounce": {
+    "eyebrow": "Offline export",
+    "title": "Bounce {output}",
+    "description": "Render this output faster than real time. Playback stops during the exclusive export.",
+    "sections": {
+      "format": "Format",
+      "channels": "Channels",
+      "normalization": "Level",
+      "range": "Range"
+    },
+    "fields": {
+      "format": "File format",
+      "sampleRate": "Sample rate",
+      "bitDepth": "Encoding",
+      "dither": "Dither",
+      "compression": "Compression",
+      "bitrateMode": "Bitrate mode",
+      "bitrate": "Bitrate",
+      "vbrQuality": "VBR quality",
+      "channels": "Channel mode",
+      "normalization": "Normalization",
+      "truePeakTarget": "Target (dBTP)",
+      "startBar": "Start bar",
+      "endBar": "End bar",
+      "includeTail": "Include plug-in tails"
+    },
+    "sampleRate": { "project": "Project ({rate} kHz)" },
+    "options": { "off": "Off" },
+    "channels": { "stereo": "Stereo", "mono": "Mono" },
+    "normalization": {
+      "off": "Off",
+      "overload": "Overload protection",
+      "truePeak": "True peak target"
+    },
+    "monoHelp": "Mono safely combines left and right at −6 dB each.",
+    "rangeHelp": "Bars are 1-based and inclusive; the end is the bar line after bar {maximum} at most.",
+    "tailHelp": "Continue rendering after the end bar for reverb, delay, and other effect decay.",
+    "actions": {
+      "cancel": "Cancel",
+      "close": "Close bounce dialog",
+      "export": "Choose location & bounce",
+      "starting": "Starting bounce"
+    }
+  },
   "mixer": {
     "console": {
       "ariaLabel": "Mixer console",
@@ -1026,6 +1080,8 @@
       "monitor": "Monitor {name}",
       "inputMonitoring": "Input monitoring",
       "inputMonitoringDisabled": "Select a hardware or application input first",
+      "bounce": "Bounce {name}",
+      "bounceOutput": "Bounce output offline",
       "mute": "Mute {name}",
       "solo": "Solo {name}"
     },

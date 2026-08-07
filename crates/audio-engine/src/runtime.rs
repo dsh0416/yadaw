@@ -159,6 +159,8 @@ fn clip_storage_policy(file_size: u64) -> ClipStoragePolicy {
 pub mod bench_support;
 #[path = "engine/benchmark.rs"]
 mod benchmark;
+#[path = "engine/bounce.rs"]
+mod bounce;
 #[path = "engine/clip_decode.rs"]
 mod clip_decode;
 #[path = "engine/clip_streaming.rs"]
@@ -216,6 +218,10 @@ use transport_midi::{
 };
 
 pub use benchmark::run_audio_benchmark;
+pub use bounce::{
+    NativeBounceChannelMode, NativeBounceDither, NativeBounceFormat, NativeBounceNormalization,
+    NativeBounceProgress, NativeBounceRequest, NativeBounceResult, render_bounce_output,
+};
 pub use clip_decode::decode_clip_audio;
 pub use metering::TransportClockHandle;
 pub use publication::{CompiledGraphBuild, GraphBuildInput, PublishOutcome, compile_graph_build};

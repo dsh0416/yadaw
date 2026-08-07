@@ -9,6 +9,7 @@
 )]
 
 mod audio;
+mod bounce;
 mod commands;
 mod events;
 mod graph;
@@ -21,6 +22,7 @@ mod transport;
 mod wire;
 
 pub use audio::*;
+pub use bounce::*;
 pub use commands::*;
 pub use events::*;
 pub use graph::*;

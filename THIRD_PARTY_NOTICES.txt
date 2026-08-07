@@ -77,3 +77,14 @@ Best Practice recommendation:
 Please refer to the Steinberg ASIO usage guidelines for the use of ASIO, ASIO logo and ASIO
 compatible logos.
 //----------------------------------------------------------------------------------
+
+Offline audio export dependencies
+---------------------------------
+
+Heron uses bwavfile 2.0.1, ebur128 0.1.10, and flac-bound 0.5.0 under the MIT
+License. The bundled libFLAC library is distributed under the BSD 3-Clause
+License. MP3 encoding uses mp3lame-encoder 0.2.4 and mp3lame-sys 0.1.11 under
+the GNU Lesser General Public License, version 3. The bundled LAME 3.100 source
+is distributed under the GNU Library General Public License, version 2.
+License texts and corresponding source are included in the dependency source
+distributions.

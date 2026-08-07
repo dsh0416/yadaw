@@ -19,6 +19,7 @@ import type {
 } from "./audio"
 import type { BinaryPayloadWire } from "./binary"
 import type { AudioHostMidiInputSnapshot } from "./midi"
+import type { AudioHostBounceStatus } from "./bounce"
 import type {
   AudioHostMidiRecordingResultWire,
   AudioHostRecordingResultWire,
@@ -91,6 +92,7 @@ export interface ControlResponse {
       | "busy"
       | "plugin-editor"
       | "plugin-editor-toolbar"
+      | "bounce-output"
       | "error"
     error?: RpcError
     result?: RpcResult<GraphTransactionValue>
@@ -193,6 +195,7 @@ export interface ControlResponse {
     recording?: AudioHostRecordingResultWire
     midi_recording?: AudioHostMidiRecordingResultWire
     waveform?: AudioHostWaveformWire
+    status?: AudioHostBounceStatus
   }
 }
 

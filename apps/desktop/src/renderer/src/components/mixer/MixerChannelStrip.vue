@@ -63,6 +63,7 @@ const emit = defineEmits<{
   deleteChannel: [channelId: string]
   resetMeterClips: []
   selectLowLatencyOutput: [channelId: string]
+  bounceOutput: [channel: MixerChannelState]
 }>()
 
 const { t } = useI18n()
@@ -173,6 +174,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       @preview="emit('preview', $event)"
       @update-channel="emit('updateChannel', channel.id, $event)"
       @reset-meter-clips="emit('resetMeterClips')"
+      @bounce-output="emit('bounceOutput', channel)"
     />
 
     <div class="channel-name" data-section="name" @click="emit('select', channel.id)">

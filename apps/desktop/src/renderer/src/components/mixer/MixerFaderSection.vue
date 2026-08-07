@@ -33,6 +33,7 @@ const emit = defineEmits<{
   preview: [preview: MixerParameterPreview]
   updateChannel: [patch: MixerChannelPatch]
   resetMeterClips: []
+  bounceOutput: []
 }>()
 
 const settingsStore = props.displayOptions ? null : useApplicationSettingsStore()
@@ -264,6 +265,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       :monitoring-available="monitoringAvailable"
       :monitoring-active="monitoringActive"
       @update-channel="updateChannel"
+      @bounce-output="emit('bounceOutput')"
     />
   </section>
 </template>

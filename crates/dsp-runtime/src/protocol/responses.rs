@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ApplicationCaptureSnapshot, ApplicationCaptureTargetDescriptor, AudioBackend,
-    AudioBenchmarkReport, AudioDeviceList, AudioRuntime, BinaryPayload, CompiledAudioGraphSnapshot,
-    GraphTransactionValue, MidiInputSnapshot, MidiRecordingResult, MixerChannelMeter,
-    PluginEditorMode, PluginEditorToolbarState, PluginParameter, PluginStateEnvelope,
-    RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement, RpcError, RpcResult,
-    TransportState,
+    AudioBenchmarkReport, AudioDeviceList, AudioRuntime, BinaryPayload, BounceJobStatus,
+    CompiledAudioGraphSnapshot, GraphTransactionValue, MidiInputSnapshot, MidiRecordingResult,
+    MixerChannelMeter, PluginEditorMode, PluginEditorToolbarState, PluginParameter,
+    PluginStateEnvelope, RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement, RpcError,
+    RpcResult, TransportState,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -108,6 +108,9 @@ pub enum ControlResult {
     },
     RecordingWaveform {
         waveform: RecordingWaveform,
+    },
+    BounceOutput {
+        status: BounceJobStatus,
     },
     PluginLoaded {
         runtime_handle: u32,

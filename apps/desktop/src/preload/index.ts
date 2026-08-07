@@ -51,6 +51,7 @@ const api: HeronDesktopApi = {
   previewMixerParameter: (meta, preview) => invokeRpc(IPC_CHANNELS.mixerPreview, meta, preview),
   mixerSnapshot: (meta) => invokeRpc(IPC_CHANNELS.mixerSnapshot, meta),
   clearMixerMeterClips: (meta) => invokeRpc(IPC_CHANNELS.mixerClearMeterClips, meta),
+  startBounceOutput: (meta, request) => invokeRpc(IPC_CHANNELS.bounceOutputStart, meta, request),
   transportCommand: (meta, command) => invokeRpc(IPC_CHANNELS.transportCommand, meta, command),
   transportSnapshot: (meta) => invokeRpc(IPC_CHANNELS.transportSnapshot, meta),
   lifecycleSnapshot: (meta) => invokeRpc(IPC_CHANNELS.lifecycleSnapshot, meta),

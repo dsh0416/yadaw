@@ -7,7 +7,10 @@ license.workspace = true
 
 [dependencies]
 bwavfile.workspace = true
+ebur128.workspace = true
+flac-bound.workspace = true
 midir.workspace = true
+mp3lame-encoder.workspace = true
 ringbuf.workspace = true
 rubato.workspace = true
 thiserror.workspace = true

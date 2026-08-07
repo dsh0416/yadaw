@@ -8,6 +8,7 @@ import type {
   RpcResult
 } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 
 function sameRef(left: ResourceRef | undefined, right: ResourceRef | null): boolean {
@@ -111,6 +112,8 @@ export function registerLowLatencyHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation || meta.expectedRevision === undefined || !valid(value)) {
       return rpcFailure(meta, failure(meta, "validation"))
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const existing = context.operations.registry.status(meta.mutation.operationId)
     if (existing.ok) {
       return existing.value.result

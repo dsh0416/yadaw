@@ -11,6 +11,7 @@ import type {
   ShortcutPreferences
 } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 import { validateMutationTarget, validateReadTarget } from "./resource-validation"
 import {
@@ -78,6 +79,8 @@ export function registerSettingsRpcHandlers(context: IpcHandlerContext): void {
     const before = await snapshot()
     const invalid = validateMutationTarget(meta, before.settings, before.revision)
     if (invalid) return invalid
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const begun = operations.registry.begin({
       operationId: meta.mutation!.operationId,
       idempotencyKey: meta.mutation!.idempotencyKey,

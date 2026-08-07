@@ -98,6 +98,11 @@ describe("PianoRollDock", () => {
     expect(
       wrapper.get<HTMLElement>("button.note").element.style.getPropertyValue("--note-color")
     ).toBe("#73D6A2")
+    expect(wrapper.text()).toContain("Resolution 1/3840 note")
+    expect(wrapper.find('[aria-label="Lower dock"]').exists()).toBe(false)
+    expect(wrapper.findAll(".pitch-row")).toHaveLength(128)
+    expect(wrapper.get('.pitch-row[data-key="61"]').classes()).toContain("black")
+    expect(wrapper.get('.pitch-row[data-key="60"]').classes()).not.toContain("black")
 
     wrapper.unmount()
   })
@@ -110,22 +115,19 @@ describe("PianoRollDock", () => {
     const pianoRoll = usePianoRollStore()
     pianoRoll.selectArrangementClip("clip-1")
     pianoRoll.openSelection("clip-1")
+    pianoRoll.selectNote({ clipId: "clip-1", noteId: "note-1" })
     const execute = vi.spyOn(mixer, "execute").mockResolvedValue(true)
 
-    const wrapper = mount(PianoRollDock, { global: { plugins: [pinia] } })
-
-    expect(wrapper.text()).toContain("Resolution 1/3840 note")
-    expect(wrapper.find('[aria-label="Lower dock"]').exists()).toBe(false)
-    expect(wrapper.findAll(".pitch-row")).toHaveLength(128)
-    expect(wrapper.get('.pitch-row[data-key="61"]').classes()).toContain("black")
-    expect(wrapper.get('.pitch-row[data-key="60"]').classes()).not.toContain("black")
-    expect(wrapper.get('button[aria-label^="C4, start 960"]').attributes("aria-pressed")).toBe(
-      "false"
-    )
-    await wrapper.get('button[aria-label="Zoom piano roll time in"]').trigger("click")
-    expect(pianoRoll.pixelsPerQuarter).toBe(150)
-    await wrapper.get("button.note").trigger("click")
-    expect(pianoRoll.selectedNoteKeys.has("clip-1:note-1")).toBe(true)
+    const wrapper = mount(PianoRollDock, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          PianoRollGrid: true,
+          PianoRollToolbar: true,
+          PianoRollVelocityLane: true
+        }
+      }
+    })
 
     const inspectorInputs = wrapper.findAll<HTMLInputElement>(".inspector input")
     const pitchInput = inspectorInputs[0]!

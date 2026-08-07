@@ -30,6 +30,8 @@ ara2-bridge-core = "=0.3.0"
 ara2-bridge-host = { path = "third_party/ara2-bridge-host" }
 ara2-bridge-sys = "=0.3.0"
 bwavfile = "2.0.1"
+ebur128 = { version = "0.1.10", features = ["precision-true-peak"] }
+flac-bound = { version = "0.5.0", default-features = false, features = ["libflac-noogg"] }
 bindgen = "0.72.1"
 cc = "1"
 clap = { version = "4.5.61", features = ["derive"] }
@@ -62,6 +64,7 @@ rubato = "4.0.0"
 sha2 = "0.10.9"
 midly = "=0.5.3"
 midir = "0.11"
+mp3lame-encoder = { version = "0.2.4", features = ["std"] }
 pollster = "0.4"
 libloading = "0.8.9"
 rmp-serde = "1.3"

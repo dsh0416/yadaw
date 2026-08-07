@@ -20,12 +20,13 @@ use std::{
 };
 
 use super::{
-    ActorRequest, Arc as RuntimeArc, AtomicU64 as RuntimeAtomicU64, EmbeddedUiHost,
-    GraphParameterHandles, HashMap as RuntimeHashMap, MIDI_INPUT, Mutex as RuntimeMutex,
-    NativeUiContext, RuntimeConfig, UiEvent, UiMailboxWaker, Vst3ActorDeps, WorkerSupervisor,
-    audio_plugin_actor, background_io_actor, clap, dispatch_actor, dispatch_parameter,
-    editor_platform, engine, engine_actor, is_background_io_command, is_vst3_command, mpsc,
-    slow_request_threshold, stable_runtime_handle, std_mpsc as runtime_mpsc, vst3,
+    ActorRequest, Arc as RuntimeArc, AtomicU64 as RuntimeAtomicU64, BounceJobRegistry,
+    EmbeddedUiHost, GraphParameterHandles, HashMap as RuntimeHashMap, MIDI_INPUT,
+    Mutex as RuntimeMutex, NativeUiContext, RuntimeConfig, UiEvent, UiMailboxWaker, Vst3ActorDeps,
+    WorkerSupervisor, audio_plugin_actor, background_io_actor, clap, dispatch_actor,
+    dispatch_parameter, editor_platform, engine, engine_actor, is_background_io_command,
+    is_vst3_command, mpsc, slow_request_threshold, stable_runtime_handle, std_mpsc as runtime_mpsc,
+    vst3,
 };
 use heron_dsp_runtime::protocol::{
     ControlCommand, ControlRequest, ControlResponse, ControlResult, HostEvent, ParameterCommand,
@@ -725,6 +726,7 @@ async fn run_direct_actor(
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (vst3_sender, vst3_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let worker_supervisor = WorkerSupervisor::new();
+    let bounce_jobs = Arc::new(BounceJobRegistry::default());
     tokio::spawn(engine_actor(
         engine_inbox,
         Arc::clone(&handles),
@@ -741,6 +743,7 @@ async fn run_direct_actor(
             engine_sender: engine_sender.clone(),
             audio_engine: Arc::clone(&audio_engine),
             session_epoch,
+            bounce_jobs,
         },
     ));
     tokio::spawn(background_io_actor(

@@ -1,6 +1,7 @@
 export * from "./application"
 export * from "./audio"
 export * from "./bootstrap"
+export * from "./bounce"
 export * from "./desktop-api"
 export * from "./midi"
 export * from "./mixer"

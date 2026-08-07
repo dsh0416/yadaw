@@ -101,4 +101,26 @@ describe("LifecycleCoordinator", () => {
 
     expect(lifecycle.snapshot().recording).toEqual({ status: "idle", error: "disk full" })
   })
+
+  it("makes an offline bounce exclusive across project, audio, transport and graph changes", () => {
+    const lifecycle = new LifecycleCoordinator(project)
+    lifecycle.beginExclusiveOfflineOperation("bounce-1")
+
+    expect(() => lifecycle.beginProject("saving")).toThrow(/offline bounce/)
+    expect(() => lifecycle.beginAudio("starting")).toThrow(/offline bounce/)
+    expect(() => lifecycle.beginRecordingStart()).toThrow(/offline bounce/)
+    expect(() => lifecycle.beginRecordingRecovery("recording-1")).toThrow(/offline bounce/)
+    expect(() => lifecycle.assertTransportAllowed({ type: "play" })).toThrow(/offline bounce/)
+    expect(() => lifecycle.assertMixerLoadAllowed()).toThrow(/offline bounce/)
+    expect(() =>
+      lifecycle.assertMixerCommandAllowed({
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: { gainDb: -3 }
+      })
+    ).toThrow(/offline bounce/)
+
+    lifecycle.endExclusiveOfflineOperation("bounce-1")
+    expect(() => lifecycle.assertTransportAllowed({ type: "play" })).not.toThrow()
+  })
 })

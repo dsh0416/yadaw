@@ -20,6 +20,9 @@ pub(in crate::runtime) fn is_vst3_command(command: &ControlCommand) -> bool {
             | ControlCommand::ResolvePluginSidechainRoute { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::RunAudioBenchmark { .. }
+            | ControlCommand::StartBounceOutput { .. }
+            | ControlCommand::BounceOutputStatus { .. }
+            | ControlCommand::CancelBounceOutput { .. }
     )
 }
 

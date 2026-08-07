@@ -9,6 +9,7 @@ import type {
 } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 
 function sameRef(left: ResourceRef | undefined, right: ResourceRef | null): boolean {
@@ -140,6 +141,8 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation || meta.expectedRevision === undefined || !isTransportCommand(value)) {
       return rpcFailure(meta, error(meta, "validation"))
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const existing = operations.registry.status(meta.mutation.operationId)
     if (existing.ok) {
       return existing.value.result

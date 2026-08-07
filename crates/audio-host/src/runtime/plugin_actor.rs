@@ -18,7 +18,11 @@ pub(super) struct Vst3ActorDeps {
     pub(super) engine_sender: mpsc::Sender<ActorRequest>,
     pub(super) audio_engine: Arc<engine::AudioEngine>,
     pub(super) session_epoch: u64,
+    pub(super) bounce_jobs: Arc<BounceJobRegistry>,
 }
+
+#[path = "plugin_actor/bounce_jobs.rs"]
+mod bounce_jobs;
 
 #[path = "plugin_actor/command_dispatch.rs"]
 mod command_dispatch;
@@ -29,6 +33,7 @@ mod loading;
 #[path = "plugin_actor/request_policy.rs"]
 mod request_policy;
 
+pub(super) use bounce_jobs::BounceJobRegistry;
 pub(super) use command_dispatch::{audio_plugin_actor, dispatch_actor, dispatch_parameter};
 pub(super) use request_policy::{
     is_background_io_command, is_vst3_command, slow_request_threshold,

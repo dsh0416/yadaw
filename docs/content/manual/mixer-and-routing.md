@@ -68,3 +68,31 @@ Keep channel and master peaks below clipping. The meters transition from green
 through yellow to red as headroom runs out. Lower the source, plug-in output, or
 channel level when a stage clips; lowering only the final master may leave an
 earlier stage overloaded.
+
+## Bounce an Output
+
+Each hardware Output strip has a **Bnc** button in its input-control row. Use it
+to export exactly the signal feeding that Output without changing the project.
+Choose WAV, FLAC, or MP3, then set the sample rate, stereo or mono output,
+encoding quality, normalization, and bar range.
+
+The start and end bars are both included and bar numbers start at 1. For
+example, bars 3–8 begin at the bar line for bar 3 and stop at the bar line after
+bar 8. Mono exports combine left and right at −6 dB per channel.
+
+**Overload protection** is the default: it lowers audio only when the sample
+peak exceeds 0 dBFS and never raises quiet audio. **True peak** normalization
+can raise or lower the result to a target from −12 to 0 dBTP; its default is
+−1 dBTP. Integer WAV and FLAC exports can apply TPDF dither.
+
+Use **Include plug-in tails** to choose whether effects may decay beyond the
+selected end bar. It is enabled by default. When disabled, the export ends
+exactly at the bar line after the selected end bar.
+
+Bounce is exclusive and faster than real time. Heron stops playback, disables
+hardware/application monitoring and the metronome, and restores the playhead
+and real-time engine afterward without resuming playback. When tails are
+included, unknown or infinite tails end after two continuous seconds below
+−90 dBFS and are capped at 30 seconds. You can cancel from the operation
+progress dialog; a cancelled or failed bounce leaves any existing destination
+file unchanged.

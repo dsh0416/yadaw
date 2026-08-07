@@ -26,13 +26,32 @@ function target(): ResourceRef {
   }
 }
 
-function context(registry = new OperationRegistry()): IpcHandlerContext {
+function context(
+  registry = new OperationRegistry(),
+  activeExclusiveOfflineOperationId: string | null = null
+): IpcHandlerContext {
   return {
-    operations: { registry }
+    operations: { registry },
+    lifecycle: { activeExclusiveOfflineOperationId }
   } as unknown as IpcHandlerContext
 }
 
 describe("beginGuardedMutation", () => {
+  it("maps an exclusive offline bounce to resource-busy before registering a mutation", () => {
+    const registry = new OperationRegistry()
+    const host = target()
+    const result = beginGuardedMutation(context(registry, "bounce-1"), meta("op-0", host), host)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "resource-busy",
+        details: { type: "resource-busy", activeOperationId: "bounce-1" }
+      }
+    })
+    expect(registry.activeCount).toBe(0)
+  })
+
   it("returns busy when an in-flight operation has no stored result", () => {
     const registry = new OperationRegistry()
     const host = target()

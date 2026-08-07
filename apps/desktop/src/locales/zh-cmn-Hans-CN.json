@@ -92,6 +92,9 @@
     "chooseSwap": {
       "title": "选择录音交换目录"
     },
+    "bounceOutput": {
+      "title": "保存离线导出"
+    },
     "createProject": {
       "title": "创建 Heron 工程",
       "filter": "Heron 工程"
@@ -211,6 +214,8 @@
     "closingProject": "正在关闭工程",
     "finalizingRecording": "正在完成录音",
     "recoveringRecording": "正在恢复录音",
+    "bouncingOutput": "正在导出输出",
+    "tailTruncated": "尾音已在 30 秒后截断",
     "recordingDropoutsInput": "捕获期间丢弃了 {count} 个输入帧。",
     "recordingDropoutsCaptured": "丢弃了 {count} 个已捕获帧。",
     "state": {
@@ -238,6 +243,11 @@
       "preparingWaveforms": "正在准备波形",
       "synchronizingPluginState": "正在保存插件状态",
       "stoppingPlayback": "正在停止播放",
+      "preparingBounce": "正在准备离线导出",
+      "renderingOffline": "正在离线渲染",
+      "analyzingBounce": "正在分析峰值",
+      "encodingBounce": "正在编码音频",
+      "restoringAudio": "正在恢复实时音频",
       "closingProjectDatabase": "正在关闭工程数据库",
       "releasingProjectGraph": "正在释放工程图",
       "cleaningUp": "正在清理交换文件"
@@ -1235,6 +1245,41 @@
       "badge": "占位"
     }
   },
+  "bounce": {
+    "eyebrow": "离线导出",
+    "title": "导出 {output}",
+    "description": "以快于实时的速度渲染此输出。独占导出期间会停止播放。",
+    "sections": { "format": "格式", "channels": "声道", "normalization": "电平", "range": "范围" },
+    "fields": {
+      "format": "文件格式",
+      "sampleRate": "采样率",
+      "bitDepth": "编码",
+      "dither": "抖动",
+      "compression": "压缩等级",
+      "bitrateMode": "码率模式",
+      "bitrate": "码率",
+      "vbrQuality": "VBR 品质",
+      "channels": "声道模式",
+      "normalization": "归一化",
+      "truePeakTarget": "目标（dBTP）",
+      "startBar": "起始小节",
+      "endBar": "结束小节",
+      "includeTail": "包含插件尾音"
+    },
+    "sampleRate": { "project": "工程（{rate} kHz）" },
+    "options": { "off": "关闭" },
+    "channels": { "stereo": "立体声", "mono": "单声道" },
+    "normalization": { "off": "关闭", "overload": "仅过载保护", "truePeak": "真峰值目标" },
+    "monoHelp": "单声道将左右声道各以 −6 dB 安全合并。",
+    "rangeHelp": "小节从 1 开始且首尾均包含；结束点是所选结束小节之后的小节线，最多第 {maximum} 小节。",
+    "tailHelp": "在结束小节后继续渲染混响、延迟及其他效果器的衰减尾音。",
+    "actions": {
+      "cancel": "取消",
+      "close": "关闭导出弹框",
+      "export": "选择位置并导出",
+      "starting": "正在启动导出"
+    }
+  },
   "mixer": {
     "console": {
       "ariaLabel": "混音台",
@@ -1292,6 +1337,8 @@
       "monitor": "监听 {name}",
       "inputMonitoring": "输入监听",
       "inputMonitoringDisabled": "请先选择硬件或应用输入",
+      "bounce": "离线导出 {name}",
+      "bounceOutput": "离线导出输出",
       "mute": "静音 {name}",
       "solo": "独奏 {name}"
     },
