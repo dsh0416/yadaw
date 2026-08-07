@@ -41,15 +41,6 @@ use interfaces::{
 };
 use processor_lease::ProcessorCell;
 
-#[cfg(target_os = "windows")]
-unsafe extern "C" {
-    fn heron_vst3_guarded_attach(
-        view: *mut IPlugView,
-        parent: *mut c_void,
-        platform: *const std::ffi::c_char,
-    ) -> i32;
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostedParameter {
     pub id: u32,
