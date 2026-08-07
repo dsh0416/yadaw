@@ -728,6 +728,9 @@ pub fn render_bounce_output(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::NativeMixerChannel;
+    use heron_dsp_runtime::protocol::LiveMixerSystemRole;
+    use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
     fn empty_graph() -> NativeMixerGraph {
         NativeMixerGraph {
@@ -763,6 +766,43 @@ mod tests {
             scratch_path,
             encoded_path,
         }
+    }
+
+    fn channel(id: &str, kind: &str, hardware_output_channels: Vec<u32>) -> NativeMixerChannel {
+        NativeMixerChannel {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            color: "#000000".to_owned(),
+            kind: kind.to_owned(),
+            system_role: None,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output_index: None,
+            output_bus: None,
+            record_armed: false,
+            input_monitoring: false,
+            input_source: None,
+            input_channels: Vec::new(),
+            application_capture: None,
+            hardware_output_channels,
+            midi_input_port_id: None,
+            midi_input_channel: None,
+        }
+    }
+
+    fn unique_paths(label: &str) -> (PathBuf, PathBuf) {
+        let unique = format!(
+            "heron-bounce-{label}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
+        let directory = std::env::temp_dir();
+        (
+            directory.join(format!("{unique}.scratch")),
+            directory.join(format!("{unique}.encoded")),
+        )
     }
 
     #[test]
@@ -835,6 +875,190 @@ mod tests {
     }
 
     #[test]
+    fn graph_preparation_isolates_the_selected_output_and_disables_live_inputs() {
+        let mut selected = channel("selected", "output", vec![9, 10]);
+        selected.record_armed = true;
+        selected.input_monitoring = true;
+        let other = channel("other", "output", vec![3, 4]);
+        let mut metronome = channel("metronome", "aux", Vec::new());
+        metronome.system_role = Some(LiveMixerSystemRole::Metronome);
+        let graph = NativeMixerGraph {
+            latency_policy: NativeLatencyPolicy::LowLatency {
+                target_output_index: 0,
+                plugin_budget_samples: 128,
+            },
+            channels: vec![selected, other, metronome],
+            ..empty_graph()
+        };
+
+        let prepared = prepare_graph(graph.clone(), "selected").expect("prepare bounce graph");
+
+        assert!(matches!(
+            prepared.latency_policy,
+            NativeLatencyPolicy::Normal
+        ));
+        assert_eq!(prepared.channels[0].hardware_output_channels, vec![1, 2]);
+        assert!(!prepared.channels[0].record_armed);
+        assert!(!prepared.channels[0].input_monitoring);
+        assert!(prepared.channels[1].hardware_output_channels.is_empty());
+        assert!(prepared.channels[2].muted);
+        assert!(matches!(
+            prepare_graph(graph, "missing"),
+            Err(EngineError::InvalidConfiguration(message))
+                if message.contains("not an Output")
+        ));
+    }
+
+    #[test]
+    fn scratch_analysis_rejects_partial_frames_and_measures_valid_audio() {
+        let (scratch_path, encoded_path) = unique_paths("scratch-analysis");
+        let file = File::create(&scratch_path).expect("create scratch fixture");
+        let mut writer = BufWriter::new(file);
+        write_scratch_frames(
+            &mut writer,
+            &[[0.25, -0.5], [1.25, -1.5]],
+            NativeBounceChannelMode::Stereo,
+        )
+        .expect("write stereo scratch");
+        writer.flush().expect("flush scratch fixture");
+        let request = encoder_request(
+            scratch_path.clone(),
+            encoded_path,
+            NativeBounceFormat::WavFloat,
+        );
+        let (frames, sample_peak, true_peak) = analyze(&request, 2).expect("analyze scratch");
+        assert_eq!(frames, 2);
+        assert_eq!(sample_peak, 1.5);
+        assert!(true_peak >= sample_peak);
+
+        std::fs::write(&scratch_path, [0_u8; 3]).expect("write partial scratch frame");
+        let mut reader = BufReader::new(File::open(&scratch_path).expect("open partial scratch"));
+        let mut block = Vec::new();
+        assert!(matches!(
+            read_scratch_block(&mut reader, 1, &mut block),
+            Err(EngineError::State(message)) if message.contains("partial frame")
+        ));
+        std::fs::remove_file(scratch_path).expect("remove scratch fixture");
+    }
+
+    #[test]
+    fn format_helpers_cover_float_pcm_dither_and_mp3_presets() {
+        assert_eq!(
+            normalization_gain(NativeBounceNormalization::Off, 2.0, 2.0),
+            1.0
+        );
+        let float = wave_format(96_000, 2, NativeBounceFormat::WavFloat);
+        assert_eq!(float.tag, WAVE_TAG_FLOAT);
+        assert_eq!(float.channel_count, 2);
+        assert_eq!(float.sample_rate, 96_000);
+        assert_eq!(float.bits_per_sample, 32);
+        assert_eq!(
+            wave_format(
+                48_000,
+                1,
+                NativeBounceFormat::WavPcm {
+                    bits: 16,
+                    dither: NativeBounceDither::Off,
+                },
+            )
+            .channel_count,
+            1
+        );
+        let mut dither = Dither { state: 1 };
+        assert_eq!(dither.apply(0.25, 16, NativeBounceDither::Off), 0.25);
+        assert_ne!(dither.apply(0.25, 16, NativeBounceDither::Tpdf), 0.25);
+        assert!((0..=9).all(|value| quality(value) as u8 == value));
+        assert_eq!(bitrate(128) as u16, 128);
+        assert_eq!(bitrate(192) as u16, 192);
+        assert_eq!(bitrate(256) as u16, 256);
+        assert_eq!(bitrate(320) as u16, 320);
+    }
+
+    #[test]
+    fn complete_render_runs_the_bounded_two_stage_pipeline_without_tail() {
+        let (scratch_path, encoded_path) = unique_paths("complete-render");
+        let mut graph = empty_graph();
+        graph.project_end_tick = 3_840;
+        graph.channels = vec![
+            channel("master", "master", Vec::new()),
+            channel("output", "output", vec![1, 2]),
+        ];
+        graph.tempo_events = vec![TempoEvent {
+            tick: 0,
+            beats_per_minute: 120.0,
+        }];
+        graph.time_signature_events = vec![TimeSignatureEvent {
+            tick: 0,
+            numerator: 4,
+            denominator: 4,
+        }];
+        let request = NativeBounceRequest {
+            graph,
+            output_channel_id: "output".to_owned(),
+            start_frame: 0,
+            end_frame: 512,
+            target_sample_rate: 48_000,
+            channel_mode: NativeBounceChannelMode::Stereo,
+            include_tail: false,
+            format: NativeBounceFormat::WavFloat,
+            normalization: NativeBounceNormalization::Off,
+            scratch_path: scratch_path.clone(),
+            encoded_path: encoded_path.clone(),
+        };
+        let cancel = AtomicBool::new(false);
+        let mut phases = Vec::new();
+
+        let result = render_bounce_output(request, &cancel, |phase| phases.push(phase))
+            .expect("render deterministic silent output");
+
+        assert_eq!(result.rendered_frames, 512);
+        assert_eq!(result.sample_peak, 0.0);
+        assert_eq!(result.true_peak, 0.0);
+        assert_eq!(result.normalization_gain, 1.0);
+        assert!(!result.tail_truncated);
+        assert_eq!(
+            &std::fs::read(&encoded_path).expect("read rendered WAV")[..4],
+            b"RIFF"
+        );
+        assert!(matches!(
+            phases.first(),
+            Some(NativeBounceProgress::Preparing)
+        ));
+        assert!(
+            phases
+                .iter()
+                .any(|phase| matches!(phase, NativeBounceProgress::Analyzing))
+        );
+        assert!(
+            phases
+                .iter()
+                .any(|phase| matches!(phase, NativeBounceProgress::Encoding { .. }))
+        );
+        std::fs::remove_file(scratch_path).expect("remove rendered scratch");
+        std::fs::remove_file(encoded_path).expect("remove rendered WAV");
+    }
+
+    #[test]
+    fn complete_render_rejects_invalid_requests_before_creating_files() {
+        let (scratch_path, encoded_path) = unique_paths("invalid-render");
+        let request = encoder_request(
+            scratch_path.clone(),
+            encoded_path.clone(),
+            NativeBounceFormat::WavFloat,
+        );
+        let invalid_range = NativeBounceRequest {
+            start_frame: request.end_frame,
+            ..request
+        };
+        assert!(matches!(
+            render_bounce_output(invalid_range, &AtomicBool::new(false), |_| {}),
+            Err(EngineError::InvalidConfiguration(message)) if message.contains("invalid bounce")
+        ));
+        assert!(!scratch_path.exists());
+        assert!(!encoded_path.exists());
+    }
+
+    #[test]
     fn encoders_write_expected_container_signatures() {
         let unique = format!(
             "heron-bounce-encoder-{}-{:?}",
@@ -854,12 +1078,13 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let formats = [
             (
-                "wav",
+                "pcm.wav",
                 NativeBounceFormat::WavPcm {
                     bits: 24,
                     dither: NativeBounceDither::Tpdf,
                 },
             ),
+            ("float.wav", NativeBounceFormat::WavFloat),
             (
                 "flac",
                 NativeBounceFormat::Flac {
@@ -868,30 +1093,30 @@ mod tests {
                     dither: NativeBounceDither::Tpdf,
                 },
             ),
-            ("mp3", NativeBounceFormat::Mp3Cbr { kbps: 192 }),
+            ("cbr.mp3", NativeBounceFormat::Mp3Cbr { kbps: 192 }),
+            ("vbr.mp3", NativeBounceFormat::Mp3Vbr { quality: 0 }),
         ];
         for (extension, format) in formats {
             let encoded_path = directory.join(format!("{unique}.{extension}"));
             let request = encoder_request(scratch_path.clone(), encoded_path.clone(), format);
             let mut progress = |_| {};
             match format {
-                NativeBounceFormat::WavPcm { .. } => {
+                NativeBounceFormat::WavPcm { .. } | NativeBounceFormat::WavFloat => {
                     encode_wav(&request, 1, 1.0, 4_608, &mut progress, &cancel)
                 }
                 NativeBounceFormat::Flac { .. } => {
                     encode_flac(&request, 1, 1.0, 4_608, &mut progress, &cancel)
                 }
-                NativeBounceFormat::Mp3Cbr { .. } => {
+                NativeBounceFormat::Mp3Cbr { .. } | NativeBounceFormat::Mp3Vbr { .. } => {
                     encode_mp3(&request, 1, 1.0, 4_608, &mut progress, &cancel)
                 }
-                _ => unreachable!(),
             }
             .expect("encode deterministic fixture");
             let bytes = std::fs::read(&encoded_path).expect("read encoded fixture");
             match extension {
-                "wav" => assert_eq!(&bytes[..4], b"RIFF"),
+                "pcm.wav" | "float.wav" => assert_eq!(&bytes[..4], b"RIFF"),
                 "flac" => assert_eq!(&bytes[..4], b"fLaC"),
-                "mp3" => assert!(
+                "cbr.mp3" | "vbr.mp3" => assert!(
                     bytes
                         .windows(2)
                         .any(|frame| { frame[0] == 0xff && frame[1] & 0xe0 == 0xe0 })

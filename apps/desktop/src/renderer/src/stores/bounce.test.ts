@@ -92,4 +92,64 @@ describe("bounce store", () => {
     )
     expect(store.open).toBe(true)
   })
+
+  it("ignores non-Output channels and prevents closing while a start is pending", () => {
+    const store = useBounceStore()
+    store.openFor({ ...output, kind: "audio", hardwareOutputChannels: [] })
+    expect(store.open).toBe(false)
+
+    store.openFor(output)
+    store.starting = true
+    store.close()
+    expect(store.open).toBe(true)
+
+    store.starting = false
+    store.close()
+    expect(store.open).toBe(false)
+  })
+
+  it("clamps an explicit high sample rate when switching to MP3", () => {
+    const store = useBounceStore()
+    store.openFor(output)
+    store.sampleRate = 96_000
+
+    store.setFormat({ format: "mp3", bitrate: { mode: "vbr", quality: 2 } })
+
+    expect(store.sampleRate).toBe(48_000)
+  })
+
+  it("shows typed RPC failures and closes after a successful start", async () => {
+    const store = useBounceStore()
+    store.openFor(output)
+    store.sampleRate = 48_000
+    vi.mocked(window.heron.startBounceOutput).mockResolvedValueOnce({
+      ok: false,
+      requestId: "request",
+      error: {
+        code: "resource-unavailable",
+        category: "unavailable",
+        outcome: "not-committed",
+        retry: "safe",
+        correlationId: "correlation",
+        userMessageKey: "errors.unavailable",
+        details: { type: "resource-unavailable", component: "main", dispatched: true }
+      }
+    })
+
+    expect(await store.start()).toBe(false)
+    expect(store.error).not.toBe("")
+    expect(store.starting).toBe(false)
+    expect(store.open).toBe(true)
+
+    vi.mocked(window.heron.startBounceOutput).mockResolvedValueOnce({
+      ok: true,
+      requestId: "request",
+      operationId: "operation",
+      warnings: [],
+      value: { operationId: "operation", filePath: "mix.wav" }
+    })
+    expect(await store.start()).toBe(true)
+    expect(store.open).toBe(false)
+    expect(store.starting).toBe(false)
+  })
 })
