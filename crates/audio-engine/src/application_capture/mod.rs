@@ -431,6 +431,7 @@ pub(crate) fn application_capture_status_name(status: u32) -> &'static str {
         APPLICATION_CAPTURE_STATUS_AMBIGUOUS_TARGET => "ambiguous-target",
         APPLICATION_CAPTURE_STATUS_TARGET_EXITED => "target-exited",
         APPLICATION_CAPTURE_STATUS_UNSUPPORTED => "unsupported",
+        APPLICATION_CAPTURE_STATUS_ERROR => "error",
         APPLICATION_CAPTURE_STATUS_PERMISSION_DENIED => "permission-denied",
         _ => "error",
     }
@@ -542,6 +543,14 @@ mod tests {
             .store(7, Ordering::Relaxed);
         assert_eq!(registry.snapshot()[0].status, "permission-denied");
         assert_eq!(registry.snapshot()[0].overflow_frames, 7);
+    }
+
+    #[test]
+    fn error_status_has_a_stable_protocol_name() {
+        assert_eq!(
+            application_capture_status_name(APPLICATION_CAPTURE_STATUS_ERROR),
+            "error"
+        );
     }
 
     #[test]
