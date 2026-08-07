@@ -62,9 +62,36 @@ pnpm --filter @heron/desktop run test:vst3-runtime \
   "$again_id" \
   "$synth_id"
 pnpm --filter @heron/desktop run test:clap-runtime "$CLAP_PLUGIN_FIXTURE"
-HERON_EDITOR_SMOKE_DELAY_MS=0 HERON_EDITOR_SMOKE_NO_SANDBOX=1 \
-  xvfb-run --auto-servernum \
-  pnpm --filter @heron/desktop run test:vst3-editor \
-  "$VST3_SYNTH_FIXTURE" \
-  "$synth_id" \
-  instrument
+
+editor_smoke_log="$(mktemp "${RUNNER_TEMP:-/tmp}/heron-vst3-editor-smoke.XXXXXX.log")"
+trap 'rm -f "$editor_smoke_log"' EXIT
+
+run_editor_smoke() {
+  dbus-run-session -- \
+    xvfb-run --auto-servernum \
+      --server-args="-screen 0 1920x1080x24 -nolisten tcp -noreset" \
+      timeout --signal=TERM --kill-after=10s 120s \
+      env HERON_EDITOR_SMOKE_DELAY_MS=0 HERON_EDITOR_SMOKE_NO_SANDBOX=1 \
+      pnpm --filter @heron/desktop run test:vst3-editor \
+      "$VST3_SYNTH_FIXTURE" \
+      "$synth_id" \
+      instrument 2>&1 | tee "$editor_smoke_log"
+}
+
+if run_editor_smoke; then
+  exit 0
+else
+  first_smoke_status=$?
+fi
+
+# Electron occasionally aborts in cairo-xcb while tearing down its X11 screen.
+# Retry only that known infrastructure signature, using a fresh D-Bus session
+# and X server; all product failures remain single-attempt failures.
+if ! grep -Fq "cairo-xcb-screen.c" "$editor_smoke_log" || \
+  ! grep -Fq "_get_screen_index" "$editor_smoke_log"; then
+  exit "$first_smoke_status"
+fi
+
+echo "VST3 editor smoke hit the known Cairo/X11 teardown failure; retrying once" >&2
+: > "$editor_smoke_log"
+run_editor_smoke

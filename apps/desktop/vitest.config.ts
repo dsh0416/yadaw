@@ -4,6 +4,8 @@ import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vitest/config"
 import { appVersionDefine } from "./build/app-version.ts"
 
+const isConstrainedWindowsCi = process.platform === "win32" && process.env.CI === "true"
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -28,6 +30,11 @@ export default defineConfig({
     setupFiles: [resolve(import.meta.dirname, "src/renderer/src/test/setup.ts")],
     include: ["src/renderer/src/**/*.test.ts", "src/main/**/*.test.ts", "src/shared/**/*.test.ts"],
     restoreMocks: true,
+    // GitHub's Windows runners occasionally starve happy-dom workers while the
+    // filesystem-heavy main-process tests run in parallel. Bound concurrency
+    // there instead of retrying tests and masking deterministic failures.
+    maxWorkers: isConstrainedWindowsCi ? 2 : undefined,
+    testTimeout: isConstrainedWindowsCi ? 15_000 : undefined,
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

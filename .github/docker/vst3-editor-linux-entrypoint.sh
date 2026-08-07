@@ -130,30 +130,34 @@ for ((iteration = 1; iteration <= repeat_count; iteration += 1)); do
   if [[ "$use_gdb" == 1 ]]; then
     HERON_EDITOR_SMOKE_DELAY_MS=0 \
       RUST_BACKTRACE=full \
-      xvfb-run --auto-servernum \
-      gdb --quiet --batch --return-child-result \
-        -ex "set pagination off" \
-        -ex "set print thread-events off" \
-        -ex run \
-        -ex "thread apply all backtrace full" \
-        --args \
-        "$electron" \
-        --ozone-platform=x11 \
-        --disable-gpu \
-        --no-sandbox \
-        "$app_path" \
-        heron-editor-smoke-arguments: \
-        "$fixture" \
-        "$class_id" \
-        instrument
+      dbus-run-session -- \
+        xvfb-run --auto-servernum \
+          --server-args="-screen 0 1920x1080x24 -nolisten tcp -noreset" \
+          gdb --quiet --batch --return-child-result \
+            -ex "set pagination off" \
+            -ex "set print thread-events off" \
+            -ex run \
+            -ex "thread apply all backtrace full" \
+            --args \
+            "$electron" \
+            --ozone-platform=x11 \
+            --disable-gpu \
+            --no-sandbox \
+            "$app_path" \
+            heron-editor-smoke-arguments: \
+            "$fixture" \
+            "$class_id" \
+            instrument
   else
     HERON_EDITOR_SMOKE_DELAY_MS=0 \
       HERON_EDITOR_SMOKE_NO_SANDBOX=1 \
       RUST_BACKTRACE=full \
-      xvfb-run --auto-servernum \
-      node "$launcher_path" \
-      "$fixture" \
-      "$class_id" \
-      instrument
+      dbus-run-session -- \
+        xvfb-run --auto-servernum \
+          --server-args="-screen 0 1920x1080x24 -nolisten tcp -noreset" \
+          node "$launcher_path" \
+          "$fixture" \
+          "$class_id" \
+          instrument
   fi
 done

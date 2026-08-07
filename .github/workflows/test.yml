@@ -71,7 +71,7 @@ jobs:
           mise run ci:install:playwright
           # Steinberg's VSTGUI CMake integration enables its standalone library
           # even when only plug-in example targets are requested.
-          sudo apt-get install --yes --no-install-recommends libgtkmm-3.0-dev ninja-build xauth xvfb
+          sudo apt-get install --yes --no-install-recommends dbus-x11 libgtkmm-3.0-dev ninja-build xauth xvfb
 
       - name: Fetch pinned official CLAP examples
         if: runner.os == 'Linux'
