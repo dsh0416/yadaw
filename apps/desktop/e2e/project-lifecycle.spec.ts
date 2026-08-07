@@ -11,6 +11,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
   const application = await electron.launch({
     executablePath,
     args: [
+      ...(process.platform === "linux" ? ["--ozone-platform=x11"] : []),
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-gpu-sandbox",

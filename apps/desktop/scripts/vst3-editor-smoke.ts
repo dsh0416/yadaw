@@ -80,10 +80,21 @@ const pluginPath =
 const classId = classIdArgument ?? "41466D9BB0654576B641098F686371B3"
 const pluginKind = pluginKindArgument ?? "instrument"
 const observationDelayMs = Number.parseInt(process.env.HERON_EDITOR_SMOKE_DELAY_MS ?? "250", 10)
+const initialObservationDelayMs = Number.parseInt(
+  process.env.HERON_EDITOR_SMOKE_INITIAL_DELAY_MS ?? "0",
+  10
+)
 const requireInteraction = process.env.HERON_EDITOR_SMOKE_REQUIRE_INTERACTION === "1"
 const screenshotPath = process.env.HERON_EDITOR_SMOKE_SCREENSHOT
 if (!Number.isFinite(observationDelayMs) || observationDelayMs < 0 || observationDelayMs > 60_000) {
   throw new Error("HERON_EDITOR_SMOKE_DELAY_MS must be between 0 and 60000")
+}
+if (
+  !Number.isFinite(initialObservationDelayMs) ||
+  initialObservationDelayMs < 0 ||
+  initialObservationDelayMs > 60_000
+) {
+  throw new Error("HERON_EDITOR_SMOKE_INITIAL_DELAY_MS must be between 0 and 60000")
 }
 async function run(): Promise<void> {
   console.log("VST3 editor smoke: Electron ready")
@@ -268,6 +279,10 @@ async function run(): Promise<void> {
       throw new Error("native editor window did not open")
     }
     console.log("VST3 editor smoke: native editor attached")
+    if (initialObservationDelayMs > 0) {
+      console.log("VST3 editor smoke: observing initial native attachment")
+      await new Promise((resolveWait) => setTimeout(resolveWait, initialObservationDelayMs))
+    }
     const toolbar = client.editorToolbarState("editor-smoke")
     if (!toolbar?.canCompare || toolbar.compareSlot !== "a") {
       throw new Error("native editor toolbar state is unavailable")

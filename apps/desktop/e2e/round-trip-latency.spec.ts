@@ -9,6 +9,7 @@ test("measures mock round-trip latency through the desktop boundary", async () =
   const application = await electron.launch({
     executablePath,
     args: [
+      ...(process.platform === "linux" ? ["--ozone-platform=x11"] : []),
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-gpu-sandbox",
