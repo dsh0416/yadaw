@@ -34,24 +34,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Linux runs the full repository checks with coverage: every test
-        # suite executes exactly once with coverage enabled, and
-        # the combined coverage pass runs Cargo and Vitest once each. Windows and macOS
-        # only run the platform-dependent subset (Rust checks, napi-rs
-        # builds, unit and project-database tests); Oxfmt, Oxlint, Vue ESLint,
-        # design audits, TypeScript-only checks, and Storybook produce identical
-        # results on every platform and would otherwise dominate the slower
-        # runners.
+        # Linux runs the full repository checks with JavaScript and Rust coverage.
+        # Windows and macOS collect Rust coverage from Cargo and instrumented napi-rs
+        # calls while still running the desktop and project-database tests normally.
+        # Oxfmt, Oxlint, Vue ESLint, design audits, TypeScript-only checks, and
+        # Storybook produce identical results on every platform and would otherwise
+        # dominate the slower runners.
         include:
           - name: Linux x64
             os: ubuntu-24.04
             check-task: ci:check:coverage
+            codecov-rust-flag: rust-linux
           - name: Windows x64
             os: windows-latest
-            check-task: ci:check:native
+            check-task: ci:check:native-coverage
+            codecov-rust-flag: rust-windows
           - name: macOS
             os: macos-latest
-            check-task: ci:check:native
+            check-task: ci:check:native-coverage
+            codecov-rust-flag: rust-macos
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -135,11 +136,11 @@ jobs:
       - name: Run repository checks
         run: mise run ${{ matrix.check-task }}
 
-      # On Linux the checks above already produced both coverage reports:
-      # Vitest wrote lcov during the test pass and the combined coverage
-      # orchestrator merged Rust profiles from Cargo tests, instrumented napi
-      # calls, probes, and the official plug-in fixtures, keeping output in
-      # target-coverage/ so it stays out of the shared Cargo target cache.
+      # Linux produces JavaScript LCOV in addition to the per-platform Rust report.
+      # The Rust coverage orchestrators merge profiles from Cargo tests and
+      # instrumented napi calls, keeping output in target-coverage/ so it stays out
+      # of the shared Cargo target cache. Linux additionally exercises probes and
+      # the official plug-in fixtures.
       - name: Upload JavaScript coverage to Codecov
         if: runner.os == 'Linux'
         uses: codecov/codecov-action@v7
@@ -154,12 +155,29 @@ jobs:
           disable_search: true
 
       - name: Upload Rust coverage to Codecov
-        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/rust/lcov.info
-          flags: rust
-          name: rust
+          flags: ${{ matrix.codecov-rust-flag }}
+          name: ${{ matrix.codecov-rust-flag }}
           fail_ci_if_error: true
           disable_search: true
+
+  codecov-finalize:
+    name: Finalize Codecov coverage
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Publish merged Codecov statuses and comment
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          run_command: send-notifications
+          fail_ci_if_error: true
