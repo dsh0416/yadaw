@@ -1,4 +1,5 @@
 import type { ApplicationBootstrapSnapshot, ProjectCloseResult } from "./bootstrap"
+import type { BounceOutputRequest, BounceStartResult } from "./bounce"
 import type {
   ApplicationCommandId,
   ApplicationWindowCommandId,
@@ -158,7 +159,8 @@ export const IPC_CHANNELS = {
   operationCancel: "operation:cancel",
   operationEvent: "operation:event",
   operationStatus: "operation:status",
-  operationAcknowledge: "operation:acknowledge"
+  operationAcknowledge: "operation:acknowledge",
+  bounceOutputStart: "bounce-output:start"
 } as const
 
 export interface HeronSplashApi {
@@ -207,6 +209,10 @@ export interface HeronDesktopApi {
   ): Promise<RpcResult<void>>
   mixerSnapshot(meta: RpcRequestMeta): Promise<RpcResult<MixerRuntimeSnapshot>>
   clearMixerMeterClips(meta: RpcRequestMeta): Promise<RpcResult<MixerRuntimeSnapshot>>
+  startBounceOutput(
+    meta: RpcRequestMeta,
+    request: BounceOutputRequest
+  ): Promise<RpcResult<BounceStartResult | null>>
   transportCommand(
     meta: RpcRequestMeta,
     command: TransportCommand

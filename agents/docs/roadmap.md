@@ -82,7 +82,7 @@ Finish and hand off a mix.
 
 - [ ] Channel automation (fader / pan / mute)
 - [ ] Plug-in parameter automation
-- [ ] Offline bounce / export of the full mix
+- [x] Offline bounce / export of an Output (full-mix delivery path)
 - [ ] Stem export
 - [ ] Mixer groups (or equivalent grouping workflow)
 - [x] VST3+ARA 2 hosting (ordinary insert workflow, non-destructive playback,

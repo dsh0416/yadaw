@@ -39,6 +39,14 @@ function validationError(meta: RpcRequestMeta): RpcError {
   }
 }
 
+export function exclusiveOfflineOperationFailure(
+  context: IpcHandlerContext,
+  meta: RpcRequestMeta
+): RpcResult<never> | null {
+  const operationId = context.lifecycle.activeExclusiveOfflineOperationId
+  return operationId ? rpcFailure(meta, busyError(meta, operationId)) : null
+}
+
 /** Returns a replay/busy/validation result, or null when the mutation has been started. */
 export function beginGuardedMutation(
   context: IpcHandlerContext,
@@ -46,6 +54,8 @@ export function beginGuardedMutation(
   target: ResourceRef
 ): RpcResult<unknown> | null {
   if (!meta.mutation) return rpcFailure(meta, validationError(meta))
+  const exclusive = exclusiveOfflineOperationFailure(context, meta)
+  if (exclusive) return exclusive
   const existing = context.operations.registry.status(meta.mutation.operationId)
   if (existing.ok) {
     return existing.value.result

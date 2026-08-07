@@ -23,6 +23,7 @@ pub(in crate::runtime) async fn audio_plugin_actor(
         engine_sender,
         audio_engine,
         session_epoch,
+        bounce_jobs,
     } = deps;
     let mut graph_revision = 0_u64;
     let mut graph_snapshot: Option<LiveMixerGraph> = None;
@@ -148,6 +149,31 @@ pub(in crate::runtime) async fn audio_plugin_actor(
                     )
                     .await;
                     continue;
+                }
+                ControlCommand::StartBounceOutput { request } => {
+                    let native = (|| {
+                        let processors = processors
+                            .lock()
+                            .map_err(|_| "VST3 processor registry is poisoned".to_owned())?
+                            .clone();
+                        live_graph(request.graph_revision, &request.graph, Some(&processors))
+                    })();
+                    match native.and_then(|graph| bounce_jobs.start(*request, graph)) {
+                        Ok(status) => ControlResult::BounceOutput { status },
+                        Err(message) => control_error! { message },
+                    }
+                }
+                ControlCommand::BounceOutputStatus { operation_id } => {
+                    match bounce_jobs.status(&operation_id) {
+                        Ok(status) => ControlResult::BounceOutput { status },
+                        Err(message) => control_error! { message },
+                    }
+                }
+                ControlCommand::CancelBounceOutput { operation_id } => {
+                    match bounce_jobs.cancel(&operation_id) {
+                        Ok(status) => ControlResult::BounceOutput { status },
+                        Err(message) => control_error! { message },
+                    }
                 }
                 ControlCommand::PrepareGraph { meta, request } => {
                     let transaction_request = GraphTransactionRequest {

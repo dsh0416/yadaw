@@ -11,6 +11,7 @@ import type {
 } from "@heron/contracts"
 import type { BeginOperationResult } from "../kernel"
 import type { IpcHandlerContext } from "./context"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"
 import { validateWaveformRequest } from "./support"
@@ -125,6 +126,8 @@ function begin(
   target: ResourceRef,
   context: IpcHandlerContext
 ): BeginOperationResult | RpcResult<never> {
+  const exclusive = exclusiveOfflineOperationFailure(context, meta)
+  if (exclusive) return exclusive
   const mutation = meta.mutation!
   const result = context.operations.registry.begin({
     operationId: mutation.operationId,

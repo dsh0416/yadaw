@@ -6,6 +6,7 @@ import type {
   RpcRequestMeta
 } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 import {
   validationFailure,
@@ -95,6 +96,8 @@ export function registerMixerHandlers(context: IpcHandlerContext): void {
         }
       })
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const begun = context.operations.registry.begin({
       operationId: meta.mutation.operationId,
       idempotencyKey: meta.mutation.idempotencyKey,
@@ -195,6 +198,8 @@ export function registerMixerHandlers(context: IpcHandlerContext): void {
         details: { type: "validation-failed", field: "command" }
       })
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const command = value as ProjectCommand
     lifecycle.assertMixerCommandAllowed(command)
     return projectCommands.execute(meta, command)
@@ -205,6 +210,8 @@ export function registerMixerHandlers(context: IpcHandlerContext): void {
     if (!workspace) return validationFailure(meta, "target")
     const invalid = validateMutationTarget(meta, workspace.projectGraph, workspace.revision)
     if (invalid) return invalid
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     if (!value || typeof value !== "object") throw new TypeError("Mixer preview must be an object")
     lifecycle.assertMixerPreviewAllowed()
     return mixerRuntime.preview(value as MixerParameterPreview).then(() => undefined)

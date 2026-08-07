@@ -9,6 +9,7 @@ import type {
 } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 
 function sameRef(left: ResourceRef | undefined | null, right: ResourceRef | undefined | null) {
@@ -88,6 +89,8 @@ function beginMutation(
   target: ResourceRef
 ): RpcResult<never> | RpcResult<unknown> | null {
   if (!meta.mutation) return rpcFailure(meta, error(meta, "validation"))
+  const exclusive = exclusiveOfflineOperationFailure(context, meta)
+  if (exclusive) return exclusive
   const existing = context.operations.registry.status(meta.mutation.operationId)
   if (existing.ok) {
     return existing.value.result
@@ -259,6 +262,8 @@ export function registerPluginRpcHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation || !command || !target || target.kind !== "plugin-instance") {
       return rpcFailure(meta, error(meta, "validation"))
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     await reconcileAudioHost()
     const resource = await state.pluginInstanceSnapshot(target.id, () =>
       plugins.closeEditor(target.id)

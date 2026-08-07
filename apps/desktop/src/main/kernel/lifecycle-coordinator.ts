@@ -44,6 +44,7 @@ function realtimeOnly(command: ProjectCommand): boolean {
 
 export class LifecycleCoordinator {
   private projectRollback: ProjectLifecycleState | null = null
+  private exclusiveOfflineOperationId: string | null = null
   private readonly state: ApplicationStateStore
 
   constructor(
@@ -113,7 +114,26 @@ export class LifecycleCoordinator {
     return this.recordingState.status !== "idle"
   }
 
+  get activeExclusiveOfflineOperationId(): string | null {
+    return this.exclusiveOfflineOperationId
+  }
+
+  beginExclusiveOfflineOperation(operationId: string): void {
+    if (this.exclusiveOfflineOperationId && this.exclusiveOfflineOperationId !== operationId) {
+      throw new Error("Another exclusive offline operation is active")
+    }
+    if (this.recordingBusy) throw new Error("Stop recording before starting an offline bounce")
+    this.exclusiveOfflineOperationId = operationId
+  }
+
+  endExclusiveOfflineOperation(operationId: string): void {
+    if (this.exclusiveOfflineOperationId === operationId) this.exclusiveOfflineOperationId = null
+  }
+
   beginProject(transition: ProjectTransition): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("The project is busy with an offline bounce")
+    }
     if (this.recordingBusy && (transition === "saving" || transition === "closing")) {
       throw new Error("Stop recording before saving or closing the project")
     }
@@ -183,6 +203,9 @@ export class LifecycleCoordinator {
   }
 
   beginAudio(transition: AudioTransition): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Audio configuration is locked by an offline bounce")
+    }
     if (this.recordingBusy) throw new Error("Stop recording before changing the audio engine")
     if (this.projectState.status === "saving" || this.projectState.status === "closing") {
       throw new Error(
@@ -239,6 +262,9 @@ export class LifecycleCoordinator {
   }
 
   beginRecordingStart(): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Recording is unavailable during an offline bounce")
+    }
     if (this.recordingState.status !== "idle") {
       throw new Error(`Cannot start recording while it is ${this.recordingState.status}`)
     }
@@ -279,6 +305,9 @@ export class LifecycleCoordinator {
   }
 
   beginRecordingRecovery(recordingId: string): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Recording recovery is unavailable during an offline bounce")
+    }
     if (this.recordingState.status !== "idle") {
       throw new Error(`Cannot recover a recording while it is ${this.recordingState.status}`)
     }
@@ -294,6 +323,9 @@ export class LifecycleCoordinator {
   }
 
   assertTransportAllowed(_command: TransportCommand): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Transport is owned by the offline bounce workflow")
+    }
     if (this.recordingBusy && _command.type !== "set-loop") {
       throw new Error("Transport commands are owned by the recording workflow while recording")
     }
@@ -303,6 +335,9 @@ export class LifecycleCoordinator {
   }
 
   assertMixerCommandAllowed(command: ProjectCommand): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Mixer commands are unavailable during an offline bounce")
+    }
     if (this.projectState.status !== "open") {
       throw new Error(
         `Mixer commands are unavailable while the project is ${this.projectState.status}`
@@ -314,6 +349,9 @@ export class LifecycleCoordinator {
   }
 
   assertMixerPreviewAllowed(): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Mixer preview is unavailable during an offline bounce")
+    }
     if (this.projectState.status !== "open") {
       throw new Error(
         `Mixer preview is unavailable while the project is ${this.projectState.status}`
@@ -322,6 +360,9 @@ export class LifecycleCoordinator {
   }
 
   assertMixerLoadAllowed(): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("The mixer graph cannot reload during an offline bounce")
+    }
     if (this.recordingBusy) throw new Error("The mixer graph cannot reload while recording")
     if (
       this.projectState.status !== "open" &&
@@ -343,6 +384,9 @@ export class LifecycleCoordinator {
   }
 
   assertProjectWriteAllowed(): void {
+    if (this.exclusiveOfflineOperationId) {
+      throw new Error("Project data cannot change during an offline bounce")
+    }
     if (this.recordingBusy) throw new Error("Project data cannot change while recording")
     if (this.projectState.status !== "open") {
       throw new Error(`Project data cannot change while the project is ${this.projectState.status}`)

@@ -59,6 +59,8 @@ import { AudioHostEventDispatcher } from "./audio-host-event-dispatcher"
 import type { AudioHostEditorWindows } from "./audio-host-editor-windows"
 import type {
   AudioHostGraph,
+  AudioHostBounceRequest,
+  AudioHostBounceStatus,
   AudioHostMidiRecordingConfig,
   AudioHostMidiRecordingResult,
   AudioHostRecordingConfig,
@@ -70,6 +72,8 @@ import type {
 } from "./wire"
 export type {
   AudioHostGraph,
+  AudioHostBounceRequest,
+  AudioHostBounceStatus,
   AudioHostMidiRecordingConfig,
   AudioHostMidiRecordingResult,
   AudioHostRecordingConfig,
@@ -724,6 +728,66 @@ export class AudioHostService {
     this.stopping = true
     this.stopUiDrain()
     await this.shutdownCurrentClient()
+  }
+
+  async startBounceOutput(
+    request: Omit<AudioHostBounceRequest, "graph" | "graph_revision">
+  ): Promise<AudioHostBounceStatus> {
+    const graph = this.lastGraph
+    if (!graph) throw new Error("project audio graph is unavailable")
+    const response = await this.request({
+      type: "start-bounce-output",
+      request: {
+        ...request,
+        graph_revision: graph.revision,
+        graph: structuredClone(graph.runtime)
+      }
+    })
+    if (response.result.type !== "bounce-output" || !response.result.status) {
+      throw new Error(response.result.error?.userMessageKey ?? "audio host rejected bounce")
+    }
+    return response.result.status
+  }
+
+  refreshDesiredProjectGraph(project: ProjectGraphSnapshot): void {
+    if (!this.lastGraph) throw new Error("project audio graph is unavailable")
+    const currentPluginIds = this.lastGraph.project.plugins.map((plugin) => plugin.id)
+    const nextPluginIds = project.plugins.map((plugin) => plugin.id)
+    if (JSON.stringify(currentPluginIds) !== JSON.stringify(nextPluginIds)) {
+      throw new Error("project plug-in topology changed while preparing the offline bounce")
+    }
+    this.lastGraph = {
+      ...this.lastGraph,
+      project: structuredClone(project)
+    }
+  }
+
+  async bounceOutputStatus(operationId: string): Promise<AudioHostBounceStatus> {
+    const response = await this.request({ type: "bounce-output-status", operation_id: operationId })
+    if (response.result.type !== "bounce-output" || !response.result.status) {
+      throw new Error(response.result.error?.userMessageKey ?? "bounce status is unavailable")
+    }
+    return response.result.status
+  }
+
+  async cancelBounceOutput(operationId: string): Promise<void> {
+    const response = await this.request({ type: "cancel-bounce-output", operation_id: operationId })
+    if (response.result.type !== "bounce-output") {
+      throw new Error(response.result.error?.userMessageKey ?? "bounce cancellation failed")
+    }
+  }
+
+  async prepareOfflineBounce(): Promise<void> {
+    await this.restartAfterOfflineBounce(false)
+  }
+
+  async restartAfterOfflineBounce(restoreAudioEngine: boolean): Promise<void> {
+    const preferences = this.audioTransport.audioPreferences()
+    await this.shutdownCurrentClient()
+    this.stopping = false
+    this.start(false)
+    await this.restoreGraph(true)
+    if (preferences && restoreAudioEngine) await this.startAudioEngine(preferences)
   }
 
   private scheduleUiDrain(): void {

@@ -5,6 +5,7 @@ import type { IpcHandlerContext } from "./context"
 import { t } from "../settings"
 import { isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project"
 import { registerRpcHandler } from "./rpc"
+import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import {
   validationFailure as resourceValidationFailure,
   validateMutationTarget,
@@ -67,6 +68,8 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     } catch {
       return validationFailure(meta, "request")
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     let path = request.path ?? process.env.HERON_TEST_PROJECT_PATH
     if (!path) {
       const result = await dialog.showSaveDialog({
@@ -118,6 +121,8 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       if (recoverValue !== undefined && typeof recoverValue !== "boolean") {
         return validationFailure(meta, "recover")
       }
+      const exclusive = exclusiveOfflineOperationFailure(context, meta)
+      if (exclusive) return exclusive
       return projectLifecycle.open(meta, value, recoverValue === true)
     }
   )
@@ -137,6 +142,8 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     ) {
       return validationFailure(meta, "target")
     }
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const begun = operations.registry.begin({
       operationId: meta.mutation.operationId,
       idempotencyKey: meta.mutation.idempotencyKey,
@@ -234,6 +241,8 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
   })
 
   registerRpcHandler(IPC_CHANNELS.projectClose, async ({ meta }, value: unknown) => {
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     const current = projects.current
     if (!current) {
       return projectLifecycle.close(meta, "discard")
@@ -273,6 +282,8 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     if (!workspace) return resourceValidationFailure(meta, "target")
     const invalid = validateMutationTarget(meta, workspace.projectGraph, workspace.revision)
     if (invalid) return invalid
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
     lifecycle.assertProjectWriteAllowed()
     const previous = projects.current
     if (!previous) throw new Error("No project is open")

@@ -22,6 +22,7 @@ const supportsMonitoring = computed(
 
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
+  bounceOutput: []
 }>()
 
 const { t } = useI18n()
@@ -30,6 +31,15 @@ const { t } = useI18n()
 <template>
   <div :class="['channel-actions', { 'has-input': supportsRecording }]">
     <div class="input-actions">
+      <button
+        v-if="channel.kind === 'output'"
+        class="bounce"
+        :aria-label="t('mixer.channelControls.bounce', { name: channel.name })"
+        :title="t('mixer.channelControls.bounceOutput')"
+        @click.stop="emit('bounceOutput')"
+      >
+        Bnc
+      </button>
       <template v-if="supportsRecording">
         <button
           :class="['record', { active: channel.recordArmed }]"
@@ -124,6 +134,16 @@ const { t } = useI18n()
   height: 19px;
   border-radius: 0;
   font-size: var(--ui-type-size-control);
+}
+.input-actions .bounce {
+  width: 34px;
+  border-radius: 3px;
+  color: var(--mixer-bounce);
+}
+.input-actions .bounce:hover {
+  border-color: color-mix(in srgb, var(--mixer-bounce) 72%, white);
+  color: var(--ui-domain-color-221c08);
+  background: var(--mixer-bounce);
 }
 .input-actions button:first-child {
   border-radius: 3px 0 0 3px;
