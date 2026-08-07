@@ -710,6 +710,8 @@ mod tests {
         LiveTimeSignatureEvent, MidiEventBatch, MidiNoteBatch, PluginAudioMode, SharedBlobRef,
     };
 
+    type InvalidGraphCase = (&'static str, fn(&mut LiveMixerGraph));
+
     fn logical_target() -> engine::application_capture::ApplicationCaptureLogicalTarget {
         engine::application_capture::ApplicationCaptureLogicalTarget {
             platform: "macos".to_owned(),
@@ -936,7 +938,7 @@ mod tests {
 
     #[test]
     fn live_graph_rejects_unmaterialized_and_invalid_references() {
-        let cases: [(&str, fn(&mut LiveMixerGraph)); 10] = [
+        let cases: [InvalidGraphCase; 10] = [
             ("missing output", |graph: &mut LiveMixerGraph| {
                 graph.channels[0].output_channel_id = Some("missing".to_owned());
             }),

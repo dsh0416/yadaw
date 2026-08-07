@@ -472,7 +472,7 @@ describe("native plug-in editor dimensions", () => {
       expect(client.unregisterEditorHost).toHaveBeenCalledWith("plugin-1")
       expect(toolbarWindow.destroy).toHaveBeenCalled()
       expect(editorWindow.destroy).toHaveBeenCalled()
-      expect(windows.close("plugin-1")).resolves.toBe(false)
+      await expect(windows.close("plugin-1")).resolves.toBe(false)
     } finally {
       platform.mockRestore()
       vi.useRealTimers()
