@@ -13,7 +13,6 @@ ara2-bridge-host.workspace = true
 ara2-bridge-sys.workspace = true
 bwavfile.workspace = true
 clap-sys.workspace = true
-midir.workspace = true
 sha2.workspace = true
 tokio.workspace = true
 heron-dsp-runtime.workspace = true

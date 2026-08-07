@@ -1654,7 +1654,6 @@ dependencies = [
  "heron-clap-host",
  "heron-dsp-runtime",
  "heron-vst3-host",
- "midir",
  "sha2",
  "tokio",
 ]
@@ -1728,7 +1727,6 @@ version = "0.4.2"
 dependencies = [
  "heron-plugin-ui",
  "truce",
- "truce-gui-types",
  "truce-iced",
  "truce-test",
  "truce-vst3",
@@ -1748,7 +1746,6 @@ version = "0.4.2"
 dependencies = [
  "heron-plugin-ui",
  "truce",
- "truce-gui-types",
  "truce-iced",
  "truce-test",
  "truce-vst3",
@@ -1759,10 +1756,8 @@ name = "heron-plugin-ui"
 version = "0.4.2"
 dependencies = [
  "heron-iced-ui",
- "iced_core",
  "iced_widget",
  "truce",
- "truce-gui-types",
  "truce-iced",
 ]
 
@@ -1772,7 +1767,6 @@ version = "0.4.2"
 dependencies = [
  "heron-plugin-ui",
  "truce",
- "truce-gui-types",
  "truce-iced",
  "truce-test",
  "truce-vst3",

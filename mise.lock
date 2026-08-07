@@ -4,6 +4,10 @@
 version = "0.8.7"
 backend = "cargo:cargo-llvm-cov"
 
+[[tools."cargo:cargo-shear"]]
+version = "1.13.3"
+backend = "cargo:cargo-shear"
+
 [[tools."cargo:cargo-truce"]]
 version = "6.1.3"
 backend = "cargo:cargo-truce"
