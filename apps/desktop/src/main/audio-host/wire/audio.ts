@@ -10,6 +10,7 @@ export interface AudioHostDevice {
 
 export interface AudioHostApplicationCaptureLogicalTarget {
   platform: string
+  bundle_identifier: string | null
   executable_path: string
   executable_name: string
   include_process_tree: boolean

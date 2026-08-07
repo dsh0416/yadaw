@@ -29,15 +29,34 @@ avoid XRUNs. Start larger, then reduce it after the signal is stable.
 4. Turn on **Input monitoring** if you need to hear the input through Heron.
 
 Software monitoring must be enabled in recording settings, and the track must
-have a hardware input, before input monitoring becomes available.
+have a hardware or application input, before input monitoring becomes available.
+
+### Record an application's audio
+
+In the channel's **Input** menu, open **Applications** and select an application
+that is currently producing audio. Heron captures the selected application and
+its helper processes as one stereo source. This is supported by WASAPI Process
+Loopback on Windows and by Core Audio Process Tap on macOS 14.2 or later.
+
+The first macOS capture starts the system permission flow. Allow Heron under
+**System Settings → Privacy & Security → System Audio Recording**, then restart
+Heron. If access is denied or later revoked, the channel remains routed but is
+silent and shows a permission message.
+
+An application target is not rebound automatically after the application exits.
+Restart the target, then select it again or disable and re-enable monitoring or
+recording. A selected target that is temporarily unavailable remains visible in
+the input menu so the project does not silently switch to another application.
 
 Use **Low Latency Mode** to prioritize a live monitored main path while recording.
 See [Low Latency Mode](low-latency-mode.md) for target Output selection, the
 plug-in budget, and the alignment trade-offs involved.
 
 ::: warning Feedback
-Do not monitor an open microphone through nearby speakers. Use headphones or
-turn monitoring off to prevent feedback.
+Do not monitor an open microphone through nearby speakers. When monitoring an
+application, Heron also excludes its own process tree to prevent capture
+feedback. Use headphones or turn monitoring off if another route feeds the
+captured application back into itself.
 :::
 
 ## Prepare an instrument track

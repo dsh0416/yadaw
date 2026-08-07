@@ -4,6 +4,7 @@ import type {
   AudioBackendDescriptor,
   AudioDeviceList,
   ApplicationCaptureSnapshot,
+  ApplicationCaptureLogicalTarget,
   ApplicationCaptureTargetDescriptor,
   AudioPreferences,
   AudioRuntimeSnapshot,
@@ -30,10 +31,34 @@ function normalizeApplicationCaptureStatus(value: string): ApplicationCaptureSna
     value === "target-missing" ||
     value === "ambiguous-target" ||
     value === "target-exited" ||
+    value === "permission-denied" ||
     value === "unsupported" ||
     value === "error"
     ? value
     : "inactive"
+}
+
+function applicationCaptureLogicalTarget(
+  target: AudioHostApplicationCaptureTarget["logical_target"]
+): ApplicationCaptureLogicalTarget {
+  const common = {
+    executablePath: target.executable_path,
+    executableName: target.executable_name,
+    includeProcessTree: target.include_process_tree
+  }
+  if (target.platform === "windows") {
+    return { platform: "windows", ...common }
+  }
+  if (target.platform === "macos") {
+    return {
+      platform: "macos",
+      bundleIdentifier: target.bundle_identifier,
+      ...common
+    }
+  }
+  throw new Error(
+    `audio host returned an unsupported application capture platform: ${target.platform}`
+  )
 }
 
 export class AudioHostTransportClient {
@@ -124,12 +149,7 @@ export class AudioHostTransportClient {
       processId: target.process_id,
       displayName: target.display_name,
       executablePath: target.executable_path,
-      logicalTarget: {
-        platform: "windows",
-        executablePath: target.logical_target.executable_path,
-        executableName: target.logical_target.executable_name,
-        includeProcessTree: target.logical_target.include_process_tree
-      },
+      logicalTarget: applicationCaptureLogicalTarget(target.logical_target),
       channelCount: target.channel_count,
       status: normalizeApplicationCaptureStatus(target.status)
     }))
@@ -145,12 +165,7 @@ export class AudioHostTransportClient {
       processId: capture.process_id,
       displayName: capture.display_name,
       executablePath: capture.executable_path,
-      logicalTarget: {
-        platform: "windows",
-        executablePath: capture.logical_target.executable_path,
-        executableName: capture.logical_target.executable_name,
-        includeProcessTree: capture.logical_target.include_process_tree
-      },
+      logicalTarget: applicationCaptureLogicalTarget(capture.logical_target),
       channelCount: capture.channel_count,
       status: normalizeApplicationCaptureStatus(capture.status),
       dropoutFrames: capture.dropout_frames,

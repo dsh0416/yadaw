@@ -195,14 +195,7 @@ impl NativeMixerRuntime {
             let Some(capture) = capture else { continue };
             let start = channel_index * frame_count;
             for frame in 0..frame_count {
-                self.channel_source_block[start + frame] =
-                    capture.pop_frame().unwrap_or_else(|| {
-                        capture
-                            .counters
-                            .underflow_frames
-                            .fetch_add(1, Ordering::Relaxed);
-                        [0.0, 0.0]
-                    });
+                self.channel_source_block[start + frame] = capture.pop_frame();
             }
         }
 

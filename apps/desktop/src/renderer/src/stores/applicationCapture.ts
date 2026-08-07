@@ -1,11 +1,34 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type {
+  ApplicationCaptureLogicalTarget,
   ApplicationCaptureSnapshot,
   ApplicationCaptureTargetDescriptor
 } from "@heron/contracts"
 import { readMeta } from "../rpc"
 import { useAudioRuntimeStore } from "./audioRuntime"
+
+function normalizedExecutablePath(path: string): string {
+  return path.trim().replaceAll("\\", "/").toLocaleLowerCase()
+}
+
+export function applicationCaptureTargetsMatch(
+  requested: ApplicationCaptureLogicalTarget,
+  candidate: ApplicationCaptureLogicalTarget
+): boolean {
+  if (requested.platform !== candidate.platform) return false
+  if (requested.platform === "macos" && candidate.platform === "macos") {
+    const requestedBundle = requested.bundleIdentifier?.trim()
+    const candidateBundle = candidate.bundleIdentifier?.trim()
+    if (requestedBundle && candidateBundle) {
+      return requestedBundle.toLocaleLowerCase() === candidateBundle.toLocaleLowerCase()
+    }
+  }
+  return (
+    normalizedExecutablePath(requested.executablePath) ===
+    normalizedExecutablePath(candidate.executablePath)
+  )
+}
 
 export const useApplicationCaptureStore = defineStore("application-capture", () => {
   const audioRuntime = useAudioRuntimeStore()
@@ -17,6 +40,22 @@ export const useApplicationCaptureStore = defineStore("application-capture", () 
   let pollingConsumers = 0
 
   const capturing = computed(() => snapshots.value.filter((item) => item.status === "capturing"))
+
+  function targetFor(
+    logicalTarget: ApplicationCaptureLogicalTarget
+  ): ApplicationCaptureTargetDescriptor | undefined {
+    return targets.value.find((candidate) =>
+      applicationCaptureTargetsMatch(logicalTarget, candidate.logicalTarget)
+    )
+  }
+
+  function snapshotFor(
+    logicalTarget: ApplicationCaptureLogicalTarget
+  ): ApplicationCaptureSnapshot | undefined {
+    return snapshots.value.find((candidate) =>
+      applicationCaptureTargetsMatch(logicalTarget, candidate.logicalTarget)
+    )
+  }
 
   async function refresh(): Promise<void> {
     const host = audioRuntime.audioHostRef
@@ -54,7 +93,18 @@ export const useApplicationCaptureStore = defineStore("application-capture", () 
     timer = null
   }
 
-  return { targets, snapshots, capturing, loading, error, refresh, startPolling, stopPolling }
+  return {
+    targets,
+    snapshots,
+    capturing,
+    loading,
+    error,
+    targetFor,
+    snapshotFor,
+    refresh,
+    startPolling,
+    stopPolling
+  }
 })
 
 if (import.meta.hot) {

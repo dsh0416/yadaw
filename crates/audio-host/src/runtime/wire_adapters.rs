@@ -52,6 +52,7 @@ fn application_target(
         executable_path: value.executable_path,
         logical_target: ApplicationCaptureLogicalTarget {
             platform: value.logical_target.platform,
+            bundle_identifier: value.logical_target.bundle_identifier,
             executable_path: value.logical_target.executable_path,
             executable_name: value.logical_target.executable_name,
             include_process_tree: value.logical_target.include_process_tree,
@@ -71,6 +72,7 @@ fn application_snapshot(
         executable_path: value.executable_path,
         logical_target: ApplicationCaptureLogicalTarget {
             platform: value.logical_target.platform,
+            bundle_identifier: value.logical_target.bundle_identifier,
             executable_path: value.logical_target.executable_path,
             executable_name: value.logical_target.executable_name,
             include_process_tree: value.logical_target.include_process_tree,
@@ -143,6 +145,7 @@ pub(super) fn live_graph(
                 application_capture: channel.application_capture.as_ref().map(|target| {
                     engine::NativeApplicationCaptureTarget {
                         platform: target.platform.clone(),
+                        bundle_identifier: target.bundle_identifier.clone(),
                         executable_path: target.executable_path.clone(),
                         executable_name: target.executable_name.clone(),
                         include_process_tree: target.include_process_tree,

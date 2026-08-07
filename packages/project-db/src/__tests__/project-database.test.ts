@@ -520,6 +520,35 @@ describe("ProjectDatabase", () => {
     ).toMatchObject({ inputSource: "hardware", applicationCapture: null })
   })
 
+  it("round-trips a macOS application capture bundle identifier without a schema migration", async () => {
+    const { database } = await createDatabase()
+    const target = {
+      platform: "macos" as const,
+      bundleIdentifier: "com.example.player",
+      executablePath: "/Applications/Player.app/Contents/MacOS/Player",
+      executableName: "Player",
+      includeProcessTree: true
+    }
+
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: {
+          inputSource: "application",
+          inputFormat: "stereo",
+          inputChannels: [1, 2],
+          applicationCapture: target
+        }
+      },
+      "output-1-2"
+    )
+
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({ inputSource: "application", applicationCapture: target })
+  })
+
   it.skip("does not backfill pre-baseline input monitoring state", async () => {
     const resource = await createDatabase()
     await resource.database.close()

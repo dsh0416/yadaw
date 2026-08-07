@@ -212,6 +212,8 @@ jobs:
           ${{ matrix.builder-arch != 'universal' ||
               !startsWith(github.ref, 'refs/tags/v') ||
               !inputs.sign_macos }}
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.builder-arch == 'universal' && '14.2' || '' }}
         run: mise run ${{ matrix.mise-task }}
 
       - name: Build, sign, and package macOS application
@@ -220,13 +222,14 @@ jobs:
               startsWith(github.ref, 'refs/tags/v') &&
               inputs.sign_macos }}
         env:
+          MACOSX_DEPLOYMENT_TARGET: "14.2"
           HERON_SIGN_MACOS: "true"
           CSC_LINK: ${{ steps.macos_release_credentials.outputs.mac_csc_path }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
           APPLE_API_KEY: ${{ steps.macos_release_credentials.outputs.apple_api_key_path }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: mise run ${{ matrix.mise-task }}
+        run: mise run ci:package:macos-universal-release
 
       - name: Remove macOS release credentials
         if: >-

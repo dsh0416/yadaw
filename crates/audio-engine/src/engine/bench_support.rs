@@ -16,6 +16,25 @@ use super::{
     TRANSPORT_PLAYING, TransportShared, decode_clip_audio, spawn_streaming_clip,
 };
 
+pub struct ApplicationCaptureHarness {
+    capture: crate::application_capture::PreparedApplicationCapture,
+    producer: HeapProd<[f32; 2]>,
+}
+
+impl ApplicationCaptureHarness {
+    pub fn new(sample_rate: u32) -> Self {
+        let (capture, producer) =
+            crate::application_capture::PreparedApplicationCapture::for_test(sample_rate)
+                .expect("application capture harness must be valid");
+        Self { capture, producer }
+    }
+
+    pub fn push_and_render(&mut self, frame: StereoFrame) -> StereoFrame {
+        let _ = self.producer.try_push(frame);
+        self.capture.pop_frame()
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct RenderScenario {
     pub sample_rate: u32,

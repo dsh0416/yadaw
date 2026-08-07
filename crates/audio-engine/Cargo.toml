@@ -36,6 +36,15 @@ windows-core = "0.61.2"
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 cpal = { workspace = true, features = ["custom"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+libc.workspace = true
+objc2.workspace = true
+objc2-app-kit = { workspace = true, default-features = false, features = ["std", "libc", "NSRunningApplication"] }
+objc2-core-audio = { workspace = true, default-features = false, features = ["std", "AudioHardware", "objc2", "objc2-core-audio-types", "objc2-foundation"] }
+objc2-core-audio-types = { workspace = true, default-features = false, features = ["CoreAudioBaseTypes"] }
+objc2-core-foundation = { workspace = true, default-features = false, features = ["std", "CFArray", "CFDictionary", "CFNumber", "CFString"] }
+objc2-foundation = { workspace = true, default-features = false, features = ["std", "NSArray", "NSString", "NSURL", "NSUUID", "NSValue"] }
+
 [features]
 default = []
 bench-internals = []

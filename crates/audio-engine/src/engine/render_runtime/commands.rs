@@ -5,6 +5,12 @@ use super::{
 };
 
 impl NativeMixerRuntime {
+    pub(in crate::runtime) fn activate_application_captures(&self) {
+        for capture in self.application_captures.iter().flatten() {
+            capture.activate();
+        }
+    }
+
     pub(in crate::runtime) fn retire_plugin_processors(&mut self) {
         for plugin in self.plugins_by_channel.iter_mut().flatten() {
             if let Some(processor) = plugin.processor.as_mut() {
@@ -65,6 +71,7 @@ impl NativeMixerRuntime {
                         true,
                     );
                 }
+                runtime.activate_application_captures();
                 return Some(runtime);
             }
             EngineCommand::Preview(preview) => {

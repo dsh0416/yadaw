@@ -124,25 +124,28 @@ pub(super) fn build_mixer_runtime(
     let application_captures = native
         .channels
         .iter()
-        .map(|channel| {
+        .map(|channel| -> Result<Option<_>> {
             if channel.input_source.as_deref() != Some("application")
                 || (!channel.input_monitoring && !channel.record_armed)
             {
-                return None;
+                return Ok(None);
             }
-            let target = channel.application_capture.as_ref()?;
+            let Some(target) = channel.application_capture.as_ref() else {
+                return Ok(None);
+            };
             let logical = ApplicationCaptureLogicalTarget {
                 platform: target.platform.clone(),
+                bundle_identifier: target.bundle_identifier.clone(),
                 executable_path: target.executable_path.clone(),
                 executable_name: target.executable_name.clone(),
                 include_process_tree: target.include_process_tree,
             };
-            crate::application_capture::global_manager()
+            let capture = crate::application_capture::global_manager()
                 .prepare_capture(&logical, native.sample_rate)
-                .ok()
-                .inspect(|capture| capture.activate())
+                .map_err(|error| invalid_config(error.to_string()))?;
+            Ok(Some(capture))
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
     let RoutingBuild {
         channel_input_widths,
         live_midi_routes,

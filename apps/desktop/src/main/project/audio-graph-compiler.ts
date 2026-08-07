@@ -67,6 +67,10 @@ export class AudioGraphCompiler {
           ? {
               application_capture: {
                 platform: channel.applicationCapture.platform,
+                bundle_identifier:
+                  channel.applicationCapture.platform === "macos"
+                    ? channel.applicationCapture.bundleIdentifier
+                    : null,
                 executable_path: channel.applicationCapture.executablePath,
                 executable_name: channel.applicationCapture.executableName,
                 include_process_tree: channel.applicationCapture.includeProcessTree

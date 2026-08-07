@@ -44,12 +44,24 @@ export interface MixerChannelState {
   hardwareOutputChannels: number[]
 }
 
-export interface ApplicationCaptureTarget {
-  platform: "windows"
+interface ApplicationCaptureTargetBase {
   executablePath: string
   executableName: string
   includeProcessTree: boolean
 }
+
+export interface WindowsApplicationCaptureTarget extends ApplicationCaptureTargetBase {
+  platform: "windows"
+}
+
+export interface MacOsApplicationCaptureTarget extends ApplicationCaptureTargetBase {
+  platform: "macos"
+  bundleIdentifier: string | null
+}
+
+export type ApplicationCaptureTarget =
+  | WindowsApplicationCaptureTarget
+  | MacOsApplicationCaptureTarget
 
 export interface MixerBusState {
   channel: number

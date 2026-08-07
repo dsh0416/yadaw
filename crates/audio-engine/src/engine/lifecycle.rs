@@ -144,6 +144,7 @@ impl AudioEngine {
         ));
         let initial_mixer = take_pending_mixer(self, session_sample_rate)?;
         if let Some(runtime) = initial_mixer.as_ref() {
+            runtime.activate_application_captures();
             metrics
                 .published_graph_generation
                 .store(runtime.generation, Ordering::Release);

@@ -322,6 +322,30 @@ describe("AudioGraphCompiler", () => {
     ).toBe(false)
   })
 
+  it("preserves a macOS application capture bundle identifier in the native graph", () => {
+    const graph = snapshot()
+    const audio = graph.channels.find((channel) => channel.id === "audio-1")!
+    audio.inputSource = "application"
+    audio.applicationCapture = {
+      platform: "macos",
+      bundleIdentifier: "com.example.player",
+      executablePath: "/Applications/Player.app/Contents/MacOS/Player",
+      executableName: "Player",
+      includeProcessTree: true
+    }
+
+    expect(
+      compiler.compile(graph, assetPaths, true).channels.find((channel) => channel.id === "audio-1")
+        ?.application_capture
+    ).toEqual({
+      platform: "macos",
+      bundle_identifier: "com.example.player",
+      executable_path: "/Applications/Player.app/Contents/MacOS/Player",
+      executable_name: "Player",
+      include_process_tree: true
+    })
+  })
+
   it("throws when a clip references a missing track", () => {
     const graph = snapshot()
     graph.audioClips[0]!.trackId = "track:missing"

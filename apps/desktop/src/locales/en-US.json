@@ -1120,6 +1120,15 @@
       "mono": "mono",
       "stereo": "stereo",
       "targetMissing": "target missing",
+      "status": {
+        "permissionDenied": "Allow Heron in System Settings → Privacy & Security → System Audio Recording, then restart Heron.",
+        "targetExited": "The selected application has exited. Select it again after it restarts.",
+        "targetMissing": "The selected application is unavailable.",
+        "ambiguousTarget": "More than one application matches this saved target. Select it again.",
+        "noStream": "The selected application is not currently producing audio.",
+        "unsupported": "Application audio capture is not supported on this system.",
+        "error": "Application audio capture encountered an error. Select the application again to retry."
+      },
       "inPrefix": "IN",
       "busPrefix": "BUS"
     },

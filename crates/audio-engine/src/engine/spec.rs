@@ -71,6 +71,7 @@ pub struct NativeMixerChannel {
 #[derive(Clone)]
 pub struct NativeApplicationCaptureTarget {
     pub platform: String,
+    pub bundle_identifier: Option<String>,
     pub executable_path: String,
     pub executable_name: String,
     pub include_process_tree: bool,

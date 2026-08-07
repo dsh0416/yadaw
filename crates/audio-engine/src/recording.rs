@@ -246,7 +246,7 @@ pub(crate) fn recording_tap_for_test(
     recording_state: u32,
     channels: u32,
 ) -> (RecordingTap, HeapCons<InputFrame>) {
-    let (producer, consumer) = HeapRb::<InputFrame>::new(16).split();
+    let (producer, consumer) = HeapRb::<InputFrame>::new(2_048).split();
     (
         RecordingTap {
             producer,

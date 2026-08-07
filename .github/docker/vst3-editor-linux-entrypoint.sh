@@ -113,6 +113,7 @@ if [[ ! -x "$electron" ]]; then
   exit 1
 fi
 app_path="$work_root/apps/desktop/scripts/vst3-editor-smoke-app"
+launcher_path="$work_root/apps/desktop/scripts/vst3-editor-smoke-launch.ts"
 repeat_count="${HERON_DOCKER_REPEAT:-1}"
 if ! [[ "$repeat_count" =~ ^[1-9][0-9]*$ ]]; then
   echo "HERON_DOCKER_REPEAT must be a positive integer" >&2
@@ -137,6 +138,8 @@ for ((iteration = 1; iteration <= repeat_count; iteration += 1)); do
         -ex "thread apply all backtrace full" \
         --args \
         "$electron" \
+        --ozone-platform=x11 \
+        --disable-gpu \
         --no-sandbox \
         "$app_path" \
         heron-editor-smoke-arguments: \
@@ -145,12 +148,10 @@ for ((iteration = 1; iteration <= repeat_count; iteration += 1)); do
         instrument
   else
     HERON_EDITOR_SMOKE_DELAY_MS=0 \
+      HERON_EDITOR_SMOKE_NO_SANDBOX=1 \
       RUST_BACKTRACE=full \
       xvfb-run --auto-servernum \
-      "$electron" \
-      --no-sandbox \
-      "$app_path" \
-      heron-editor-smoke-arguments: \
+      node "$launcher_path" \
       "$fixture" \
       "$class_id" \
       instrument
