@@ -17,6 +17,11 @@ import { useProjectStore } from "../stores/project"
 import { useMixerStore } from "../stores/mixer"
 import { usePianoRollStore } from "../stores/pianoRoll"
 import { useTransportStore } from "../stores/transport"
+import { useAudioBenchmarkStore } from "../stores/audioBenchmark"
+import { useCompiledEffectGraphStore } from "../stores/compiledEffectGraph"
+import { useStudioWorkflowStore } from "../stores/studioWorkflow"
+import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
+import { useApplicationWindowStore } from "../stores/applicationWindow"
 import { rpcEvent } from "../test/ipc"
 
 const session: ProjectSession = {
@@ -498,5 +503,86 @@ describe("useApplicationCommands", () => {
     expect(window.heron.closeProject).not.toHaveBeenCalled()
     expect(window.heron.prepareOpenProject).not.toHaveBeenCalled()
     expect(projectStore.session?.path).toBe(session.path)
+  })
+
+  it("dispatches project, edit, transport, view, recording, and help commands", async () => {
+    const { pinia, router } = createHarness()
+    const projectStore = useProjectStore(pinia)
+    const mixerStore = useMixerStore(pinia)
+    const pianoRollStore = usePianoRollStore(pinia)
+    const transportStore = useTransportStore(pinia)
+    const workflowStore = useStudioWorkflowStore(pinia)
+    const workspaceStore = useStudioWorkspaceStore(pinia)
+    const applicationWindowStore = useApplicationWindowStore(pinia)
+    const projectWorkspace = workspace(session)
+    const create = vi.spyOn(projectStore, "create").mockResolvedValue(projectWorkspace)
+    const open = vi.spyOn(projectStore, "open").mockResolvedValue(projectWorkspace)
+    const save = vi.spyOn(workflowStore, "saveProject").mockResolvedValue(true)
+    const close = vi.spyOn(workflowStore, "closeProject").mockResolvedValue(true)
+    const undo = vi.spyOn(mixerStore, "undo").mockResolvedValue(undefined)
+    const redo = vi.spyOn(mixerStore, "redo").mockResolvedValue(undefined)
+    const edit = vi.spyOn(pianoRollStore, "executeEditCommand")
+    const toggle = vi.spyOn(transportStore, "toggle").mockResolvedValue(undefined)
+    const goToStart = vi.spyOn(transportStore, "goToStart").mockResolvedValue(undefined)
+    const selectAndReveal = vi.spyOn(transportStore, "selectAndRevealClip")
+    const toggleRecording = vi
+      .spyOn(workflowStore, "toggleRecording")
+      .mockResolvedValue({ id: "recorded-clip" } as never)
+    const toggleMixerDock = vi.spyOn(workspaceStore, "toggleMixerDock")
+    const openBenchmark = vi.spyOn(useAudioBenchmarkStore(pinia), "open")
+    const openGraph = vi.spyOn(useCompiledEffectGraphStore(pinia), "open")
+    const executeWindowCommand = vi
+      .spyOn(applicationWindowStore, "execute")
+      .mockResolvedValue(undefined)
+
+    nativeCommandListener?.(rpcEvent("project.new"))
+    await flushPromises()
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: expect.any(String) }))
+
+    await router.push({ name: "welcome" })
+    nativeCommandListener?.(rpcEvent("project.open"))
+    await flushPromises()
+    expect(open).toHaveBeenCalled()
+
+    projectStore.applyWorkspace(projectWorkspace)
+    mixerStore.hydrate(projectWorkspace.graph)
+    nativeCommandListener?.(rpcEvent("project.save"))
+    nativeCommandListener?.(rpcEvent("edit.undo"))
+    nativeCommandListener?.(rpcEvent("edit.redo"))
+    await flushPromises()
+    expect(save).toHaveBeenCalled()
+    expect(undo).toHaveBeenCalled()
+    expect(redo).toHaveBeenCalled()
+
+    edit.mockReturnValueOnce(true).mockReturnValueOnce(false)
+    nativeCommandListener?.(rpcEvent("edit.copy"))
+    nativeCommandListener?.(rpcEvent("edit.paste"))
+    await flushPromises()
+    expect(edit).toHaveBeenNthCalledWith(1, "copy")
+    expect(edit).toHaveBeenNthCalledWith(2, "paste")
+    expect(executeWindowCommand).toHaveBeenCalledWith("edit.paste")
+
+    await router.push({ name: "studio" })
+    nativeCommandListener?.(rpcEvent("view.toggle-mixer-dock"))
+    nativeCommandListener?.(rpcEvent("transport.toggle-playback"))
+    nativeCommandListener?.(rpcEvent("transport.go-to-start"))
+    nativeCommandListener?.(rpcEvent("recording.toggle"))
+    nativeCommandListener?.(rpcEvent("view.toggle-full-screen"))
+    nativeCommandListener?.(rpcEvent("help.audio-benchmark"))
+    nativeCommandListener?.(rpcEvent("help.effect-chain-graph"))
+    await flushPromises()
+    expect(toggleMixerDock).toHaveBeenCalled()
+    expect(toggle).toHaveBeenCalled()
+    expect(goToStart).toHaveBeenCalled()
+    expect(toggleRecording).toHaveBeenCalled()
+    expect(selectAndReveal).toHaveBeenCalledWith("recorded-clip")
+    expect(executeWindowCommand).toHaveBeenCalledWith("view.toggle-full-screen")
+    expect(openBenchmark).toHaveBeenCalled()
+    expect(openGraph).toHaveBeenCalled()
+
+    nativeCommandListener?.(rpcEvent("project.close"))
+    await flushPromises()
+    expect(close).toHaveBeenCalled()
+    expect(router.currentRoute.value.name).toBe("welcome")
   })
 })

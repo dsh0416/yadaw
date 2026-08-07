@@ -703,6 +703,12 @@ pub(super) fn engine_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use heron_dsp_runtime::protocol::{
+        ApplicationCaptureTarget, BinaryPayload, LiveLatencyPolicy, LiveMidiClip, LiveMidiEvent,
+        LiveMidiNote, LiveMixerChannel, LiveMixerClip, LiveMixerGraph, LiveMixerSend,
+        LiveMixerSendTap, LivePluginAuxInputBus, LivePluginInstance, LiveTempoEvent,
+        LiveTimeSignatureEvent, MidiEventBatch, MidiNoteBatch, PluginAudioMode, SharedBlobRef,
+    };
 
     fn logical_target() -> engine::application_capture::ApplicationCaptureLogicalTarget {
         engine::application_capture::ApplicationCaptureLogicalTarget {
@@ -757,5 +763,237 @@ mod tests {
         assert_eq!(converted.dropout_frames, 3);
         assert_eq!(converted.overflow_frames, 5);
         assert_eq!(converted.underflow_frames, 7);
+    }
+
+    fn shared_blob() -> SharedBlobRef {
+        SharedBlobRef {
+            session_epoch: 1,
+            region_id: 2,
+            region_generation: 3,
+            slot: 4,
+            allocation_generation: 5,
+            offset: 6,
+            length: 7,
+            lease_id: 8,
+        }
+    }
+
+    fn graph_with_every_wire_value() -> LiveMixerGraph {
+        let events = [
+            (0, Some(0), "control-change", vec![7, 100]),
+            (1, Some(1), "pitch-bend", 8_192_u16.to_le_bytes().to_vec()),
+            (2, Some(2), "program-change", vec![10]),
+            (3, Some(3), "channel-pressure", vec![11]),
+            (4, Some(4), "poly-pressure", vec![60, 12]),
+            (5, None, "sysex", vec![0xf0, 0x7d, 0xf7]),
+        ]
+        .into_iter()
+        .map(|(tick, channel, kind, bytes)| LiveMidiEvent {
+            tick,
+            channel,
+            kind: kind.to_owned(),
+            data: BinaryPayload::inline(bytes),
+        })
+        .collect();
+
+        LiveMixerGraph {
+            sample_rate: 48_000,
+            project_end_tick: 7_680,
+            latency_policy: LiveLatencyPolicy::LowLatency {
+                target_output_channel_id: "master".to_owned(),
+                plugin_budget_samples: 64,
+            },
+            channels: vec![
+                LiveMixerChannel {
+                    id: "track".to_owned(),
+                    name: "Track".to_owned(),
+                    color: "blue".to_owned(),
+                    kind: "audio".to_owned(),
+                    system_role: None,
+                    gain_db: -3.0,
+                    pan: 0.25,
+                    muted: false,
+                    soloed: true,
+                    output_channel_id: Some("master".to_owned()),
+                    output_bus: Some(0),
+                    record_armed: true,
+                    input_monitoring: true,
+                    midi_input_port_id: Some("port".to_owned()),
+                    midi_input_port_name: Some("Keyboard".to_owned()),
+                    midi_input_channel: Some(2),
+                    input_source: Some("application".to_owned()),
+                    input_channels: vec![1, 2],
+                    application_capture: Some(ApplicationCaptureTarget {
+                        platform: "linux".to_owned(),
+                        bundle_identifier: None,
+                        executable_path: "/usr/bin/player".to_owned(),
+                        executable_name: "player".to_owned(),
+                        include_process_tree: true,
+                    }),
+                    hardware_output_channels: Vec::new(),
+                },
+                LiveMixerChannel {
+                    id: "master".to_owned(),
+                    name: "Master".to_owned(),
+                    color: "red".to_owned(),
+                    kind: "master".to_owned(),
+                    system_role: None,
+                    gain_db: 0.0,
+                    pan: 0.0,
+                    muted: false,
+                    soloed: false,
+                    output_channel_id: None,
+                    output_bus: None,
+                    record_armed: false,
+                    input_monitoring: false,
+                    midi_input_port_id: None,
+                    midi_input_port_name: None,
+                    midi_input_channel: None,
+                    input_source: None,
+                    input_channels: Vec::new(),
+                    application_capture: None,
+                    hardware_output_channels: vec![1, 2],
+                },
+            ],
+            sends: vec![LiveMixerSend {
+                id: "send".to_owned(),
+                source_channel_id: "track".to_owned(),
+                target_channel_id: Some("master".to_owned()),
+                target_bus: Some(1),
+                enabled: true,
+                tap: LiveMixerSendTap::PostPan,
+                level_db: -6.0,
+            }],
+            clips: vec![LiveMixerClip {
+                id: "clip".to_owned(),
+                channel_id: "track".to_owned(),
+                start_frame: 10,
+                source_offset_frames: 20,
+                length_frames: 30,
+                fade_in_frames: 4,
+                fade_out_frames: 5,
+                path: "audio.wav".to_owned(),
+            }],
+            plugins: vec![LivePluginInstance {
+                instance_id: "effect".to_owned(),
+                channel_id: "track".to_owned(),
+                role: "effect".to_owned(),
+                slot_order: 1,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: vec![LivePluginAuxInputBus {
+                    input_port_key: "vst3:audio:input:7".to_owned(),
+                    name: "Sidechain".to_owned(),
+                    channels: 2,
+                    source_channel_id: Some("master".to_owned()),
+                }],
+                latency_samples: 32,
+                tail_samples: Some(128),
+            }],
+            midi_clips: vec![LiveMidiClip {
+                id: "midi".to_owned(),
+                channel_id: "track".to_owned(),
+                start_tick: 10,
+                source_offset_ticks: 20,
+                length_ticks: 30,
+                notes: MidiNoteBatch::Inline {
+                    notes: vec![LiveMidiNote {
+                        start_tick: 1,
+                        duration_ticks: 2,
+                        channel: 3,
+                        key: 60,
+                        velocity: 100,
+                        release_velocity: 64,
+                    }],
+                },
+                events: MidiEventBatch::Inline { events },
+            }],
+            tempo_events: vec![LiveTempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![LiveTimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        }
+    }
+
+    #[test]
+    fn live_graph_materializes_every_supported_wire_value() {
+        let converted = live_graph(9, &graph_with_every_wire_value(), None)
+            .expect("representative graph should convert");
+
+        assert_eq!(converted.generation, 9);
+        assert_eq!(converted.channels[0].output_index, Some(1));
+        assert_eq!(converted.sends[0].source_index, 0);
+        assert_eq!(converted.clips[0].channel_index, 0);
+        assert_eq!(converted.plugins[0].aux_input_buses[0].input_port_token, 7);
+        assert_eq!(converted.midi_clips[0].events.len(), 6);
+        assert_eq!(converted.tempo_events[0].beats_per_minute, 120.0);
+    }
+
+    #[test]
+    fn live_graph_rejects_unmaterialized_and_invalid_references() {
+        let cases: [(&str, fn(&mut LiveMixerGraph)); 10] = [
+            ("missing output", |graph: &mut LiveMixerGraph| {
+                graph.channels[0].output_channel_id = Some("missing".to_owned());
+            }),
+            (
+                "missing application target",
+                |graph: &mut LiveMixerGraph| {
+                    graph.channels[0].application_capture = None;
+                },
+            ),
+            ("invalid application width", |graph: &mut LiveMixerGraph| {
+                graph.channels[0].input_channels = vec![1, 2, 3];
+            }),
+            ("invalid aux token", |graph: &mut LiveMixerGraph| {
+                graph.plugins[0].aux_input_buses[0].input_port_key = "invalid".to_owned();
+            }),
+            ("shared notes", |graph: &mut LiveMixerGraph| {
+                graph.midi_clips[0].notes = MidiNoteBatch::Shared {
+                    reference: shared_blob(),
+                };
+            }),
+            ("shared events", |graph: &mut LiveMixerGraph| {
+                graph.midi_clips[0].events = MidiEventBatch::Shared {
+                    reference: shared_blob(),
+                };
+            }),
+            ("invalid channel", |graph: &mut LiveMixerGraph| {
+                let MidiEventBatch::Inline { events } = &mut graph.midi_clips[0].events else {
+                    unreachable!();
+                };
+                events[0].channel = Some(16);
+            }),
+            ("missing channel", |graph: &mut LiveMixerGraph| {
+                let MidiEventBatch::Inline { events } = &mut graph.midi_clips[0].events else {
+                    unreachable!();
+                };
+                events[0].channel = None;
+            }),
+            ("shared payload", |graph: &mut LiveMixerGraph| {
+                let MidiEventBatch::Inline { events } = &mut graph.midi_clips[0].events else {
+                    unreachable!();
+                };
+                events[0].data = BinaryPayload::Shared {
+                    reference: shared_blob(),
+                };
+            }),
+            ("invalid event", |graph: &mut LiveMixerGraph| {
+                let MidiEventBatch::Inline { events } = &mut graph.midi_clips[0].events else {
+                    unreachable!();
+                };
+                events[0].data = BinaryPayload::inline(vec![128, 0]);
+            }),
+        ];
+
+        for (label, mutate) in cases {
+            let mut graph = graph_with_every_wire_value();
+            mutate(&mut graph);
+            assert!(live_graph(1, &graph, None).is_err(), "{label}");
+        }
     }
 }

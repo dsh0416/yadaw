@@ -1822,4 +1822,168 @@ mod tests {
 
         storage.disconnect_bus(99);
     }
+
+    #[test]
+    fn silence_masks_cover_empty_regular_and_wide_buses() {
+        assert_eq!(silence_flags(0), 0);
+        assert_eq!(silence_flags(1), 0b1);
+        assert_eq!(silence_flags(8), 0xff);
+        assert_eq!(silence_flags(63), i64::MAX as u64);
+        assert_eq!(silence_flags(64), u64::MAX);
+        assert_eq!(silence_flags(128), u64::MAX);
+    }
+
+    #[test]
+    fn main_bus_connections_swap_caller_buffers_for_owned_scratch() {
+        let mut input = build_audio_bus_storage(&[2], true);
+        let mut left = vec![0.25_f32; 8];
+        let mut right = vec![0.5_f32; 8];
+        let mut pointers = [left.as_mut_ptr(), right.as_mut_ptr()];
+
+        input.connect_main(&mut pointers);
+        assert_eq!(input.channel_pointers[0], pointers);
+        assert_eq!(input.descriptors[0].silenceFlags, 0);
+        input.disconnect_main();
+        assert_ne!(input.channel_pointers[0], pointers);
+        assert_eq!(input.descriptors[0].silenceFlags, 0b11);
+
+        let mut output = build_audio_bus_storage(&[1], false);
+        let mut channel = vec![0.75_f32; 8];
+        output.connect_main(&mut [channel.as_mut_ptr()]);
+        output.disconnect_main();
+        assert_eq!(output.descriptors[0].silenceFlags, 0);
+    }
+
+    #[test]
+    fn main_bus_validation_distinguishes_effect_and_instrument_inputs() {
+        let mono_input = build_audio_bus_storage(&[1], true);
+        let stereo_input = build_audio_bus_storage(&[2], true);
+        let mono_output = build_audio_bus_storage(&[1], false);
+        let stereo_output = build_audio_bus_storage(&[2], false);
+        let no_input = AudioBusStorage::empty(true);
+        let no_output = AudioBusStorage::empty(false);
+
+        assert!(
+            validate_main_bus_layout(
+                &mono_input,
+                &mono_output,
+                PluginKind::Effect,
+                AudioLayout::Mono,
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_main_bus_layout(
+                &mono_input,
+                &stereo_output,
+                PluginKind::Effect,
+                AudioLayout::MonoToStereo,
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_main_bus_layout(
+                &stereo_input,
+                &stereo_output,
+                PluginKind::Effect,
+                AudioLayout::Stereo,
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_main_bus_layout(
+                &no_input,
+                &stereo_output,
+                PluginKind::Instrument,
+                AudioLayout::Stereo,
+            )
+            .is_ok()
+        );
+        assert!(matches!(
+            validate_main_bus_layout(
+                &mono_input,
+                &stereo_output,
+                PluginKind::Effect,
+                AudioLayout::Stereo,
+            ),
+            Err(HostError::Operation {
+                operation: "main audio input layout",
+                ..
+            })
+        ));
+        assert!(matches!(
+            validate_main_bus_layout(
+                &mono_input,
+                &no_output,
+                PluginKind::Effect,
+                AudioLayout::Mono,
+            ),
+            Err(HostError::Operation {
+                operation: "main audio output layout",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn full_process_context_maps_transport_and_timeline_fields() {
+        let requirements = legacy_process_context_requirements();
+        let expected_state = supported_process_context_state(requirements);
+        let mut value = unsafe {
+            // SAFETY: ProcessContext is an SDK POD and zero is a valid empty context.
+            std::mem::MaybeUninit::<ProcessContext>::zeroed().assume_init()
+        };
+        let context = HostProcessContext {
+            project_time_samples: 11,
+            continuous_time_samples: 12,
+            project_time_quarters: 3.5,
+            bar_position_quarters: 2.0,
+            tempo: 99.0,
+            time_signature_numerator: 5,
+            time_signature_denominator: 4,
+            playing: true,
+            recording: true,
+        };
+        update_process_context(&mut value, requirements, 44_100.0, &context);
+
+        assert_eq!(value.state & expected_state, expected_state);
+        assert_ne!(
+            value.state & as_uint32(Vst::ProcessContext_StatesAndFlags_kPlaying),
+            0
+        );
+        assert_ne!(
+            value.state & as_uint32(Vst::ProcessContext_StatesAndFlags_kRecording),
+            0
+        );
+        assert_eq!(value.projectTimeSamples, 11);
+        assert_eq!(value.continousTimeSamples, 12);
+        assert_eq!(value.projectTimeMusic, 3.5);
+        assert_eq!(value.barPositionMusic, 2.0);
+        assert_eq!(value.timeSigNumerator, 5);
+        assert_eq!(value.timeSigDenominator, 4);
+
+        let stopped = HostProcessContext {
+            playing: false,
+            recording: false,
+            ..context
+        };
+        update_process_context(&mut value, requirements, 44_100.0, &stopped);
+        assert_eq!(
+            value.state & as_uint32(Vst::ProcessContext_StatesAndFlags_kPlaying),
+            0
+        );
+        assert_eq!(
+            value.state & as_uint32(Vst::ProcessContext_StatesAndFlags_kRecording),
+            0
+        );
+    }
+
+    #[test]
+    fn empty_bus_storage_has_a_null_sdk_channel_array() {
+        let storage = build_audio_bus_storage(&[0], true);
+        assert_eq!(storage.descriptors[0].numChannels, 0);
+        assert!(storage.channel_pointers[0].is_empty());
+        // SAFETY: the storage builder initializes the sample32 union member.
+        assert!(unsafe { storage.descriptors[0].__bindgen_anon_1.channelBuffers32 }.is_null());
+    }
 }
