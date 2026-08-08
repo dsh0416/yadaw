@@ -70,6 +70,15 @@ function mountPage() {
       },
       midiApplying: false,
       midiError: "",
+      pluginCatalog: {
+        scannerVersion: 7,
+        scanning: false,
+        scannedAt: 1,
+        plugins: []
+      },
+      pluginScanProgress: null,
+      pluginsLoading: false,
+      pluginError: "",
       backLabel: "Back to studio"
     },
     global: {
@@ -85,6 +94,11 @@ function mountPage() {
         },
         RecordingSettings: true,
         MidiInputSettings: true,
+        PluginSettings: {
+          emits: ["rescan"],
+          template:
+            '<section><h2>Audio plug-ins</h2><button aria-label="Rescan audio plug-ins" @click="$emit(\'rescan\')">Rescan</button></section>'
+        },
         DisplaySettings: true,
         MixerDisplaySettings: true,
         ShortcutSettings: true
@@ -119,5 +133,19 @@ describe("SystemSettingsPage", () => {
     expect(wrapper.get("h2").text()).toBe("Runtime scheduling")
     await wrapper.get('button[aria-label="Back to studio"]').trigger("click")
     expect(wrapper.emitted("close")).toHaveLength(1)
+  })
+
+  it("opens plugin discovery and requests a rescan", async () => {
+    const wrapper = mountPage()
+    const pluginsCategory = wrapper
+      .get('nav[aria-label="System settings categories"]')
+      .findAll("button")
+      .find((button) => button.text().includes("Plugins"))
+
+    await pluginsCategory!.trigger("click")
+    expect(wrapper.get("h2").text()).toBe("Audio plug-ins")
+    await wrapper.get('button[aria-label="Rescan audio plug-ins"]').trigger("click")
+
+    expect(wrapper.emitted("rescanPlugins")).toHaveLength(1)
   })
 })

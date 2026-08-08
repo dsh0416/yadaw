@@ -8,7 +8,9 @@ import type { HeronDesktopApi } from "@heron/contracts"
 import App from "./App.vue"
 import { useAboutStore } from "./stores/about"
 import { useLifecycleStore } from "./stores/lifecycle"
-import { rpcEvent } from "./test/ipc"
+import { usePluginStore } from "./stores/plugins"
+import { useProjectStore } from "./stores/project"
+import { rpcEvent, TEST_DESKTOP_REF } from "./test/ipc"
 
 describe("App", () => {
   let nativeCommandListener: Parameters<typeof window.heron.subscribeApplicationCommands>[0] | null
@@ -56,6 +58,27 @@ describe("App", () => {
     await nextTick()
 
     expect(useAboutStore(pinia).isOpen).toBe(true)
+    wrapper.unmount()
+  })
+
+  it("loads the scanned plugin catalog when the desktop session becomes available", async () => {
+    const pinia = createPinia()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/", name: "welcome", component: { template: "<div />" } }]
+    })
+    await router.push("/")
+    await router.isReady()
+    const pluginStore = usePluginStore(pinia)
+    const load = vi.spyOn(pluginStore, "load").mockResolvedValue()
+
+    const wrapper = shallowMount(App, {
+      global: { plugins: [pinia, router, createHead()] }
+    })
+    useProjectStore(pinia).applyDesktopSession(TEST_DESKTOP_REF)
+    await nextTick()
+
+    expect(load).toHaveBeenCalledOnce()
     wrapper.unmount()
   })
 })

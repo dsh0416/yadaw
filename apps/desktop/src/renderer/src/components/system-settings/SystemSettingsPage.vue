@@ -8,6 +8,7 @@ import type {
   AudioRuntimeSnapshot,
   MidiInputSnapshot,
   MidiSyncPreferences,
+  PluginCatalogSnapshot,
   ResolvedAudioHostRuntimePreferences
 } from "@heron/contracts"
 import SettingsContainer from "../settings/SettingsContainer.vue"
@@ -18,6 +19,7 @@ import DisplaySettings from "./DisplaySettings.vue"
 import MidiSettings from "./MidiSettings.vue"
 import MixerDisplaySettings from "./MixerDisplaySettings.vue"
 import MidiInputSettings from "./MidiInputSettings.vue"
+import PluginSettings from "./PluginSettings.vue"
 import RecordingSettings from "./RecordingSettings.vue"
 import ShortcutSettings from "./ShortcutSettings.vue"
 
@@ -27,6 +29,7 @@ type SystemSettingsPageId =
   | "recording"
   | "midi-general"
   | "midi-input"
+  | "audio-plugins"
   | "display-general"
   | "display-mixer"
   | "shortcuts"
@@ -46,6 +49,10 @@ const props = defineProps<{
   midiSnapshot: MidiInputSnapshot
   midiApplying: boolean
   midiError: string
+  pluginCatalog: PluginCatalogSnapshot
+  pluginScanProgress: { completed: number; total: number; path: string } | null
+  pluginsLoading: boolean
+  pluginError: string
   backLabel: string
 }>()
 
@@ -54,6 +61,7 @@ const emit = defineEmits<{
   applyAudio: [preferences: AudioPreferences]
   configureRuntime: [preferences: AudioHostRuntimePreferences]
   configureMidi: [preferences: MidiSyncPreferences]
+  rescanPlugins: []
 }>()
 
 const categories = computed<readonly SettingsCategory[]>(() => [
@@ -116,8 +124,14 @@ const categories = computed<readonly SettingsCategory[]>(() => [
     label: t("settings.system.categories.plugins.label"),
     description: t("settings.system.categories.plugins.description"),
     icon: Plug,
-    badge: t("common.soon"),
-    pages: []
+    pages: [
+      {
+        id: "audio-plugins",
+        label: t("settings.system.pages.audioPlugins.label"),
+        description: t("settings.system.pages.audioPlugins.description"),
+        icon: Plug
+      }
+    ]
   },
   {
     id: "display",
@@ -237,6 +251,14 @@ function applyAudio(): void {
       :applying="midiApplying"
       :error="midiError"
       @apply="emit('configureMidi', $event)"
+    />
+    <PluginSettings
+      v-else-if="activePage === 'audio-plugins'"
+      :catalog="pluginCatalog"
+      :scan-progress="pluginScanProgress"
+      :loading="pluginsLoading"
+      :error="pluginError"
+      @rescan="emit('rescanPlugins')"
     />
     <DisplaySettings v-else-if="activePage === 'display-general'" />
     <MixerDisplaySettings v-else-if="activePage === 'display-mixer'" />

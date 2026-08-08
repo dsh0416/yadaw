@@ -399,6 +399,10 @@
           "label": "常规",
           "description": "中央 C 与音名标注"
         },
+        "audioPlugins": {
+          "label": "音频插件",
+          "description": "发现与兼容性"
+        },
         "displayGeneral": {
           "label": "常规",
           "description": "浅色、深色与跟随系统"
@@ -415,6 +419,28 @@
       "actions": {
         "startingEngine": "正在启动引擎…",
         "applyAudio": "应用音频"
+      },
+      "plugins": {
+        "category": "插件",
+        "page": "音频插件",
+        "title": "音频插件",
+        "description": "查看 Heron 已发现的插件，并在安装或移除插件后重建目录。",
+        "catalog": {
+          "title": "目录状态",
+          "description": "Heron 会在启动时扫描，并复用未变化插件的指纹以加快启动。",
+          "effects": "兼容效果器",
+          "instruments": "兼容乐器",
+          "unavailable": "不可用",
+          "lastScan": "上次扫描",
+          "neverScanned": "尚未扫描"
+        },
+        "discovery": {
+          "title": "插件发现",
+          "description": "强制重新扫描全部 VST3 与 CLAP 位置，包括已隔离的插件。",
+          "rescan": "重新扫描音频插件",
+          "scanning": "正在扫描音频插件…",
+          "progress": "{completed}/{total} 个插件包"
+        }
       }
     },
     "shortcuts": {
@@ -1415,7 +1441,7 @@
       "remove": "移除 {name}",
       "addEffectTitle": "添加音频效果",
       "searchEffects": "搜索 VST3 音频效果",
-      "noEffects": "未找到兼容的 VST3 效果。请从声音浏览器重新扫描。",
+      "noEffects": "未找到兼容的 VST3 效果。请前往“系统设置 › 插件”重新扫描。",
       "addEffect": "添加 VST3 音频效果",
       "noInsert": "无插入"
     },
@@ -1426,7 +1452,7 @@
       "remove": "移除 {name}",
       "chooseTitle": "选择乐器",
       "searchInstruments": "搜索 VST3 乐器",
-      "noInstruments": "未找到兼容的 VST3 乐器。请从声音浏览器重新扫描。",
+      "noInstruments": "未找到兼容的 VST3 乐器。请前往“系统设置 › 插件”重新扫描。",
       "assign": "分配 VST3 乐器输入"
     },
     "inputCapsule": {
@@ -1482,7 +1508,7 @@
     "rack": {
       "ariaLabel": "插件插入架",
       "inserts": "插入",
-      "emptyHint": "在声音浏览器中双击效果以添加到此处。"
+      "emptyHint": "使用混音台中的空插入插槽添加效果。"
     },
     "instrumentSlot": {
       "ariaLabel": "乐器插槽",
@@ -1491,7 +1517,7 @@
       "empty": "空",
       "openEditor": "打开乐器编辑器",
       "remove": "移除乐器",
-      "chooseHint": "从声音浏览器中选择乐器。"
+      "chooseHint": "使用混音台中的乐器插槽选择乐器。"
     },
     "pluginSlot": {
       "move": "移动 {name}",
