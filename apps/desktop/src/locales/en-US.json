@@ -399,6 +399,10 @@
           "label": "General",
           "description": "Center C and note labels"
         },
+        "audioPlugins": {
+          "label": "Audio plug-ins",
+          "description": "Discovery and compatibility"
+        },
         "displayGeneral": {
           "label": "General",
           "description": "Light, dark and system"
@@ -415,6 +419,28 @@
       "actions": {
         "startingEngine": "Starting engine…",
         "applyAudio": "Apply audio"
+      },
+      "plugins": {
+        "category": "Plugins",
+        "page": "Audio plug-ins",
+        "title": "Audio plug-ins",
+        "description": "Review the plug-ins Heron discovered and rebuild the catalog after installing or removing one.",
+        "catalog": {
+          "title": "Catalog status",
+          "description": "Heron scans at launch and reuses unchanged plug-in fingerprints to keep startup fast.",
+          "effects": "Compatible effects",
+          "instruments": "Compatible instruments",
+          "unavailable": "Unavailable",
+          "lastScan": "Last scan",
+          "neverScanned": "Not scanned yet"
+        },
+        "discovery": {
+          "title": "Plug-in discovery",
+          "description": "Force a fresh scan of all VST3 and CLAP locations, including quarantined plug-ins.",
+          "rescan": "Rescan audio plug-ins",
+          "scanning": "Scanning audio plug-ins…",
+          "progress": "{completed} of {total} plug-in bundles"
+        }
       }
     },
     "shortcuts": {
@@ -1157,7 +1183,7 @@
       "remove": "Remove {name}",
       "addEffectTitle": "Add audio effect",
       "searchEffects": "Search VST3 audio effects",
-      "noEffects": "No compatible VST3 effects found. Rescan from the Sound Browser.",
+      "noEffects": "No compatible VST3 effects found. Rescan from System Settings › Plugins.",
       "addEffect": "Add VST3 audio effect",
       "noInsert": "NO INSERT"
     },
@@ -1168,7 +1194,7 @@
       "remove": "Remove {name}",
       "chooseTitle": "Choose instrument",
       "searchInstruments": "Search VST3 instruments",
-      "noInstruments": "No compatible VST3 instruments found. Rescan from the Sound Browser.",
+      "noInstruments": "No compatible VST3 instruments found. Rescan from System Settings › Plugins.",
       "assign": "Assign VST3 instrument input"
     },
     "inputCapsule": {
@@ -1224,7 +1250,7 @@
     "rack": {
       "ariaLabel": "Plugin insert rack",
       "inserts": "INSERTS",
-      "emptyHint": "Double-click an effect in the Sound Browser to add it here."
+      "emptyHint": "Use an empty insert slot in the Mixer to add an effect."
     },
     "instrumentSlot": {
       "ariaLabel": "Instrument slot",
@@ -1233,7 +1259,7 @@
       "empty": "EMPTY",
       "openEditor": "Open instrument editor",
       "remove": "Remove instrument",
-      "chooseHint": "Choose an instrument from the Sound Browser."
+      "chooseHint": "Use the instrument slot in the Mixer to choose an instrument."
     },
     "pluginSlot": {
       "move": "Move {name}",

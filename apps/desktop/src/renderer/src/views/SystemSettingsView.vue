@@ -12,6 +12,7 @@ import { useApplicationSettingsStore } from "../stores/applicationSettings"
 import { useAudioPreferencesStore } from "../stores/audioPreferences"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useMidiInputStore } from "../stores/midiInput"
+import { usePluginStore } from "../stores/plugins"
 import { useProjectStore } from "../stores/project"
 
 const router = useRouter()
@@ -20,6 +21,7 @@ const audioRuntimeStore = useAudioRuntimeStore()
 const projectStore = useProjectStore()
 const applicationSettingsStore = useApplicationSettingsStore()
 const midiInputStore = useMidiInputStore()
+const pluginStore = usePluginStore()
 const { preferences, applyError, applying } = storeToRefs(audioPreferencesStore)
 const { runtime } = storeToRefs(audioRuntimeStore)
 const {
@@ -33,6 +35,12 @@ const {
   applying: midiApplying,
   error: midiError
 } = storeToRefs(midiInputStore)
+const {
+  catalog: pluginCatalog,
+  scanProgress: pluginScanProgress,
+  loading: pluginsLoading,
+  error: pluginError
+} = storeToRefs(pluginStore)
 
 const backLabel = computed(() => (projectStore.session ? "Back to studio" : "Back to welcome"))
 
@@ -54,6 +62,10 @@ async function configureRuntime(preferences: AudioHostRuntimePreferences): Promi
 
 async function configureMidi(preferences: MidiSyncPreferences): Promise<void> {
   await midiInputStore.configure(preferences)
+}
+
+async function rescanPlugins(): Promise<void> {
+  await pluginStore.scan(true)
 }
 
 onMounted(async () => {
@@ -89,10 +101,15 @@ onMounted(async () => {
     :midi-snapshot="midiSnapshot"
     :midi-applying="midiApplying"
     :midi-error="midiError"
+    :plugin-catalog="pluginCatalog"
+    :plugin-scan-progress="pluginScanProgress"
+    :plugins-loading="pluginsLoading"
+    :plugin-error="pluginError"
     :back-label="backLabel"
     @close="close"
     @apply-audio="applyAudio"
     @configure-runtime="configureRuntime"
     @configure-midi="configureMidi"
+    @rescan-plugins="rescanPlugins"
   />
 </template>

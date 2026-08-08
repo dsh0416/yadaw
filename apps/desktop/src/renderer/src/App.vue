@@ -16,6 +16,8 @@ import { useOperationStore } from "./stores/operations"
 import { useApplicationWindowStore } from "./stores/applicationWindow"
 import { useMidiInputStore } from "./stores/midiInput"
 import { useProjectHistoryStore } from "./stores/projectHistory"
+import { usePluginStore } from "./stores/plugins"
+import { useProjectStore } from "./stores/project"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 import AboutHeronHost from "./components/about/AboutHeronHost.vue"
@@ -34,7 +36,10 @@ const operationStore = useOperationStore()
 const applicationWindowStore = useApplicationWindowStore()
 const midiInputStore = useMidiInputStore()
 const projectHistoryStore = useProjectHistoryStore()
+const pluginStore = usePluginStore()
+const projectStore = useProjectStore()
 const { settings } = storeToRefs(applicationSettingsStore)
+const { desktopSession } = storeToRefs(projectStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const { audioHostRef } = storeToRefs(audioRuntimeStore)
 const { platform, menus, execute: executeApplicationCommand } = useApplicationCommands()
@@ -65,6 +70,14 @@ watch(
   audioHostRef,
   (host) => {
     if (host) void audioPreferencesStore.restore()
+  },
+  { immediate: true }
+)
+
+watch(
+  desktopSession,
+  (session) => {
+    if (session) void pluginStore.load()
   },
   { immediate: true }
 )
