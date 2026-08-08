@@ -61,7 +61,10 @@ window and reports its content bounds back to Rust. Close ordering is strict:
 detach the VST3 view, unregister the host surface, then destroy the Electron
 window. Pure Wayland is rejected explicitly; X11, AppKit, and Win32 share this
 same ownership protocol. The embedded runtime must never lazily create or pump
-a second platform event loop as a fallback.
+a second platform event loop as a fallback. The proposed native Wayland and
+XWayland compatibility policy is recorded in
+[ADR-0005](adr/0005-tier-linux-plug-in-editor-compatibility.md); it is not
+current architecture until accepted and implemented.
 
 Do not:
 
