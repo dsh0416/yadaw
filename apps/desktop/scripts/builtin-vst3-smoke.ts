@@ -12,6 +12,7 @@ interface ProbeOutput {
       audioInputs?: number
       audioOutputs?: number
       eventInputs?: number
+      supportedAudioModes?: string[]
     }>
   }
 }
@@ -27,21 +28,24 @@ const expected = [
     classId: "46774F504DF84B4AC1F308AB88DD3677",
     audioInputs: 1,
     audioOutputs: 1,
-    eventInputs: 0
+    eventInputs: 0,
+    supportedAudioModes: ["mono", "mono-to-stereo", "stereo"]
   },
   {
     bundle: "Heron Sine.vst3",
     classId: "C1351DFA4DDD4B4AC1F30896F6D9DF76",
     audioInputs: 0,
     audioOutputs: 1,
-    eventInputs: 1
+    eventInputs: 1,
+    supportedAudioModes: ["mono", "stereo"]
   },
   {
     bundle: "Heron Metronome.vst3",
     classId: "8CD16A11027ACC7FDF0C1419E86D1024",
     audioInputs: 0,
     audioOutputs: 1,
-    eventInputs: 1
+    eventInputs: 1,
+    supportedAudioModes: ["mono", "stereo"]
   }
 ] as const
 
@@ -59,7 +63,8 @@ for (const plugin of expected) {
     !descriptor.hasEditor ||
     descriptor.audioInputs !== plugin.audioInputs ||
     descriptor.audioOutputs !== plugin.audioOutputs ||
-    descriptor.eventInputs !== plugin.eventInputs
+    descriptor.eventInputs !== plugin.eventInputs ||
+    JSON.stringify(descriptor.supportedAudioModes) !== JSON.stringify(plugin.supportedAudioModes)
   ) {
     throw new Error(`${plugin.bundle} did not match its committed VST3 contract`)
   }

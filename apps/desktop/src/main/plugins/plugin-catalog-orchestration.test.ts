@@ -114,4 +114,42 @@ describe("PluginCatalogService orchestration", () => {
     )
     expect(second).toEqual(first)
   })
+
+  it("does not load a soft-advertised layout after the deep probe crashes", async () => {
+    const probeClient = { probe: vi.fn().mockRejectedValue(new Error("probe crashed")) }
+    const service = new PluginCatalogService("user-data", "probe", "builtins", {
+      probeClient: probeClient as never
+    })
+
+    const resolved = await service.resolveDescriptorForRuntime({
+      ...externalDescriptor(),
+      supportedAudioModes: ["mono-to-stereo"]
+    })
+
+    expect(resolved).toMatchObject({
+      compatibility: "load-error",
+      compatibilityReason: "probe crashed",
+      supportedAudioModes: []
+    })
+  })
+
+  it("does not fall back to soft metadata when the requested class disappears", async () => {
+    const probeClient = {
+      probe: vi.fn().mockResolvedValue([
+        {
+          ...externalDescriptor(),
+          locator: { ...externalDescriptor().locator, nativeId: "different-effect" }
+        }
+      ])
+    }
+    const service = new PluginCatalogService("user-data", "probe", "builtins", {
+      probeClient: probeClient as never
+    })
+
+    const resolved = await service.resolveDescriptorForRuntime(externalDescriptor())
+
+    expect(resolved.supportedAudioModes).toEqual([])
+    expect(resolved.compatibility).toBe("load-error")
+    expect(resolved.compatibilityReason).toContain("requested plug-in class")
+  })
 })

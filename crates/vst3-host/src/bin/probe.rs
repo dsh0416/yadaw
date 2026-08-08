@@ -12,9 +12,11 @@ use heron_vst3_host::{
     AraFactoryInfo, AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioLayout, ClassId,
     ClassInfo, Module, PluginKind, StereoProcessor,
 };
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 const CLASS_PROBE_ENV: &str = "HERON_VST3_PROBE_CLASS";
+const LAYOUT_PROBE_ENV: &str = "HERON_VST3_PROBE_LAYOUT";
 /// When set to `soft`, enumerate factory classes without instantiating processors.
 const PROBE_MODE_ENV: &str = "HERON_VST3_PROBE_MODE";
 
@@ -59,6 +61,13 @@ struct AudioBusOutput {
     name: String,
     channels: i32,
     default_active: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LayoutProbeOutput {
+    supported: bool,
+    buses: Vec<AudioBusOutput>,
 }
 
 impl From<AudioBusDescriptor> for AudioBusOutput {
@@ -205,49 +214,52 @@ fn soft_inspect(class: &ClassInfo) -> ClassOutput {
     }
 }
 
-fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
-    let supports = |kind, layout| {
-        StereoProcessor::create_with_layout(Rc::clone(module), class.id, 48_000.0, kind, layout)
-            .is_ok()
-    };
-    let effect_modes = [
-        (AudioLayout::Mono, "mono"),
-        (AudioLayout::MonoToStereo, "mono-to-stereo"),
-        (AudioLayout::Stereo, "stereo"),
-    ]
-    .into_iter()
-    .filter_map(|(layout, name)| supports(PluginKind::Effect, layout).then_some(name.to_owned()))
-    .collect::<Vec<_>>();
-    let instrument_modes = [(AudioLayout::Mono, "mono"), (AudioLayout::Stereo, "stereo")]
-        .into_iter()
-        .filter_map(|(layout, name)| {
-            supports(PluginKind::Instrument, layout).then_some(name.to_owned())
-        })
+fn deep_inspect(module_path: &Path, class: ClassInfo) -> ClassOutput {
+    let effect_layouts = [
+        (PluginKind::Effect, AudioLayout::Mono, "mono"),
+        (
+            PluginKind::Effect,
+            AudioLayout::MonoToStereo,
+            "mono-to-stereo",
+        ),
+        (PluginKind::Effect, AudioLayout::Stereo, "stereo"),
+    ];
+    let instrument_layouts = [
+        (PluginKind::Instrument, AudioLayout::Mono, "mono"),
+        (PluginKind::Instrument, AudioLayout::Stereo, "stereo"),
+    ];
+    let effect_results = probe_layouts(module_path, &class, &effect_layouts);
+    let instrument_results = probe_layouts(module_path, &class, &instrument_layouts);
+    let effect_modes = effect_results
+        .iter()
+        .map(|(name, _)| (*name).to_owned())
+        .collect::<Vec<_>>();
+    let instrument_modes = instrument_results
+        .iter()
+        .map(|(name, _)| (*name).to_owned())
         .collect::<Vec<_>>();
     let factory_categories = parse_subcategories(&class.subcategories);
     let (kind, supported_audio_modes) =
         classify_plugin_kind(&factory_categories, &effect_modes, &instrument_modes);
     let initialized = !supported_audio_modes.is_empty();
     let instrument = kind == PluginKind::Instrument;
-    let preferred_layout = supported_audio_modes
+    let preferred_mode = supported_audio_modes
         .iter()
         .find(|mode| mode.as_str() == "stereo")
-        .or_else(|| supported_audio_modes.first())
-        .map(|mode| match mode.as_str() {
-            "mono" => AudioLayout::Mono,
-            "mono-to-stereo" => AudioLayout::MonoToStereo,
-            _ => AudioLayout::Stereo,
-        });
-    let buses = preferred_layout
-        .and_then(|layout| {
-            StereoProcessor::create_with_layout(Rc::clone(module), class.id, 48_000.0, kind, layout)
-                .ok()
+        .or_else(|| supported_audio_modes.first());
+    let results = if kind == PluginKind::Instrument {
+        &instrument_results
+    } else {
+        &effect_results
+    };
+    let buses = preferred_mode
+        .and_then(|preferred| {
+            results
+                .iter()
+                .find(|(name, _)| *name == preferred)
+                .map(|(_, output)| output.buses.clone())
         })
-        .and_then(|processor| processor.audio_buses().ok())
-        .unwrap_or_default()
-        .into_iter()
-        .map(AudioBusOutput::from)
-        .collect::<Vec<_>>();
+        .unwrap_or_default();
     let audio_inputs = buses.iter().filter(|bus| bus.direction == "input").count() as u32;
     let audio_outputs = buses.iter().filter(|bus| bus.direction == "output").count() as u32;
     ClassOutput {
@@ -268,7 +280,22 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
     }
 }
 
-fn json_from_stdout(stdout: &[u8]) -> Option<ClassOutput> {
+fn probe_layouts<'a>(
+    module_path: &Path,
+    class: &ClassInfo,
+    layouts: &'a [(PluginKind, AudioLayout, &'a str)],
+) -> Vec<(&'a str, LayoutProbeOutput)> {
+    layouts
+        .iter()
+        .filter_map(|&(kind, layout, name)| {
+            probe_layout_in_child(module_path, class, kind, layout)
+                .filter(|output| output.supported)
+                .map(|output| (name, output))
+        })
+        .collect()
+}
+
+fn json_from_stdout<T: DeserializeOwned>(stdout: &[u8]) -> Option<T> {
     if let Ok(value) = serde_json::from_slice(stdout) {
         return Some(value);
     }
@@ -285,12 +312,18 @@ fn json_from_stdout(stdout: &[u8]) -> Option<ClassOutput> {
     None
 }
 
-fn deep_inspect_in_child(module_path: &Path, class: &ClassInfo) -> Option<ClassOutput> {
+fn probe_layout_in_child(
+    module_path: &Path,
+    class: &ClassInfo,
+    kind: PluginKind,
+    layout: AudioLayout,
+) -> Option<LayoutProbeOutput> {
     const CHILD_TIMEOUT: Duration = Duration::from_secs(8);
     let executable = env::current_exe().ok()?;
     let mut child = Command::new(executable)
         .arg(module_path)
         .env(CLASS_PROBE_ENV, class.id.to_string())
+        .env(LAYOUT_PROBE_ENV, layout_probe_name(kind, layout))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -314,30 +347,87 @@ fn deep_inspect_in_child(module_path: &Path, class: &ClassInfo) -> Option<ClassO
     stdout.read_to_end(&mut bytes).ok()?;
     // The child flushes its JSON payload before tearing the module down, so a
     // crash during teardown can still leave a completed probe result on stdout.
-    // Prefer that result over the exit status; a child that failed before
-    // probing produces no JSON and falls back to `soft_inspect` regardless.
+    // A crash during activation or processing produces no result and therefore
+    // cannot advertise that layout to the embedded runtime.
     json_from_stdout(&bytes)
 }
 
 fn inspect(module_path: &Path, class: ClassInfo, ara: Option<AraOutput>) -> ClassOutput {
-    let mut output = deep_inspect_in_child(module_path, &class).unwrap_or_else(|| {
-        // Child crashed or rejected the processor setup. Keep the class visible
-        // from the already-successful module load instead of quarantining the bundle.
-        soft_inspect(&class)
-    });
+    let mut output = deep_inspect(module_path, class);
     output.ara = ara;
     output
 }
 
-fn run_class_probe(module_path: &Path, class_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn layout_probe_name(kind: PluginKind, layout: AudioLayout) -> &'static str {
+    match (kind, layout) {
+        (PluginKind::Effect, AudioLayout::Mono) => "effect:mono",
+        (PluginKind::Effect, AudioLayout::MonoToStereo) => "effect:mono-to-stereo",
+        (PluginKind::Effect, AudioLayout::Stereo) => "effect:stereo",
+        (PluginKind::Instrument, AudioLayout::Mono) => "instrument:mono",
+        (PluginKind::Instrument, AudioLayout::Stereo) => "instrument:stereo",
+        (PluginKind::Instrument, AudioLayout::MonoToStereo) => "instrument:mono-to-stereo",
+    }
+}
+
+fn parse_layout_probe(value: &str) -> Option<(PluginKind, AudioLayout)> {
+    match value {
+        "effect:mono" => Some((PluginKind::Effect, AudioLayout::Mono)),
+        "effect:mono-to-stereo" => Some((PluginKind::Effect, AudioLayout::MonoToStereo)),
+        "effect:stereo" => Some((PluginKind::Effect, AudioLayout::Stereo)),
+        "instrument:mono" => Some((PluginKind::Instrument, AudioLayout::Mono)),
+        "instrument:stereo" => Some((PluginKind::Instrument, AudioLayout::Stereo)),
+        _ => None,
+    }
+}
+
+fn run_layout_probe(
+    module_path: &Path,
+    class_id: &str,
+    requested_layout: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let class_id: ClassId = class_id.parse()?;
+    let (kind, layout) = parse_layout_probe(requested_layout).ok_or("invalid VST3 probe layout")?;
     let module = Rc::new(Module::open(module_path)?);
-    let class = module
+    let _class = module
         .classes()?
         .into_iter()
         .find(|class| class.id == class_id)
         .ok_or("requested VST3 class was not exported by the module")?;
-    let output = deep_inspect(&module, class);
+    let output = match StereoProcessor::create_with_layout(
+        Rc::clone(&module),
+        class_id,
+        48_000.0,
+        kind,
+        layout,
+    ) {
+        Ok(mut processor) => {
+            let buses = processor
+                .audio_buses()
+                .unwrap_or_default()
+                .into_iter()
+                .map(AudioBusOutput::from)
+                .collect();
+            let mut input_left = [0.0_f32; 64];
+            let mut input_right = [0.0_f32; 64];
+            let mut output_left = [0.0_f32; 64];
+            let mut output_right = [0.0_f32; 64];
+            LayoutProbeOutput {
+                supported: processor
+                    .process_stereo(
+                        &mut input_left,
+                        &mut input_right,
+                        &mut output_left,
+                        &mut output_right,
+                    )
+                    .is_ok(),
+                buses,
+            }
+        }
+        Err(_) => LayoutProbeOutput {
+            supported: false,
+            buses: Vec::new(),
+        },
+    };
     println!("{}", serde_json::to_string(&output)?);
     stdout().flush()?;
     // Keep the module alive until after stdout is flushed; some hosts tear down
@@ -359,8 +449,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .find(|arg| arg != "--soft")
         .ok_or("usage: heron-vst3-probe [--soft] <module.vst3>")?;
     let path = PathBuf::from(path);
-    if let Ok(class_id) = env::var(CLASS_PROBE_ENV) {
-        return run_class_probe(&path, &class_id);
+    if let (Ok(class_id), Ok(layout)) = (env::var(CLASS_PROBE_ENV), env::var(LAYOUT_PROBE_ENV)) {
+        return run_layout_probe(&path, &class_id, &layout);
     }
 
     let soft = soft_probe_requested();
@@ -438,9 +528,9 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioBusOutput, PluginKind,
-        categories_for_output, classify_plugin_kind, looks_like_instrument, parse_subcategories,
-        soft_buses,
+        AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioBusOutput, AudioLayout,
+        PluginKind, categories_for_output, classify_plugin_kind, layout_probe_name,
+        looks_like_instrument, parse_layout_probe, parse_subcategories, soft_buses,
     };
 
     fn modes(names: &[&str]) -> Vec<String> {
@@ -455,6 +545,23 @@ mod tests {
             classify_plugin_kind(&modes(&["Instrument", "Synth"]), &effect, &instrument);
         assert_eq!(kind, PluginKind::Instrument);
         assert_eq!(supported, instrument);
+    }
+
+    #[test]
+    fn layout_probe_names_round_trip_for_every_hosted_layout() {
+        for (kind, layout) in [
+            (PluginKind::Effect, AudioLayout::Mono),
+            (PluginKind::Effect, AudioLayout::MonoToStereo),
+            (PluginKind::Effect, AudioLayout::Stereo),
+            (PluginKind::Instrument, AudioLayout::Mono),
+            (PluginKind::Instrument, AudioLayout::Stereo),
+        ] {
+            assert_eq!(
+                parse_layout_probe(layout_probe_name(kind, layout)),
+                Some((kind, layout))
+            );
+        }
+        assert_eq!(parse_layout_probe("effect:surround"), None);
     }
 
     #[test]
