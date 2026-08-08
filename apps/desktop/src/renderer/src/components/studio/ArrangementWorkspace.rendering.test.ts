@@ -334,6 +334,12 @@ describe("ArrangementWorkspace rendering", () => {
       types: [PROJECT_MEDIA_DRAG_TYPE],
       getData: vi.fn(() => JSON.stringify({ assetId: midiAsset.id, kind: midiAsset.kind }))
     } as unknown as DataTransfer
+    await audioLane.trigger("drop", { dataTransfer: projectMidiTransfer, clientX: 0 })
+    await flushPromises()
+    expect(prepareMidi).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "MIDI assets can only be dropped on an Instrument track or blank arrangement space."
+    )
     await wrapper.get(".timeline-content").trigger("drop", {
       dataTransfer: projectMidiTransfer,
       clientX: 200
@@ -342,6 +348,26 @@ describe("ArrangementWorkspace rendering", () => {
     expect(prepareMidi).toHaveBeenCalledWith(
       { kind: "asset", assetId: midiAsset.id },
       { insertionTick: 3840 }
+    )
+
+    const missingAudioTransfer = {
+      files: [],
+      types: [PROJECT_MEDIA_DRAG_TYPE],
+      getData: vi.fn(() => JSON.stringify({ assetId: "missing", kind: "audio" }))
+    } as unknown as DataTransfer
+    executeKeyChange.mockClear()
+    await wrapper.get(".timeline-content").trigger("drop", {
+      dataTransfer: missingAudioTransfer,
+      clientX: 0
+    })
+    await flushPromises()
+    expect(executeKeyChange).not.toHaveBeenCalled()
+
+    executeKeyChange.mockResolvedValueOnce(false)
+    await audioLane.trigger("drop", { dataTransfer: projectAudioTransfer, clientX: 0 })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "The audio asset could not be placed in the arrangement."
     )
 
     const resolveDroppedFilePaths = vi
@@ -360,6 +386,32 @@ describe("ArrangementWorkspace rendering", () => {
       type: "create-audio-clip",
       clip: expect.objectContaining({ assetId: recordingAsset.id, trackId: "track:audio-1" })
     })
+
+    resolveDroppedFilePaths.mockReturnValue(["/samples/Bass.mid"])
+    prepareMidi.mockClear()
+    await audioLane.trigger("drop", { dataTransfer: externalTransfer, clientX: 0 })
+    await flushPromises()
+    expect(prepareMidi).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "MIDI assets can only be dropped on an Instrument track or blank arrangement space."
+    )
+    await wrapper.get(".timeline-content").trigger("drop", {
+      dataTransfer: externalTransfer,
+      clientX: 0
+    })
+    await flushPromises()
+    expect(prepareMidi).toHaveBeenCalledWith(
+      { kind: "file", path: "/samples/Bass.mid" },
+      { insertionTick: 0 }
+    )
+
+    resolveDroppedFilePaths.mockReturnValue(["/samples/Kick.mp3"])
+    vi.mocked(project.importAudio).mockResolvedValueOnce(["missing"])
+    await audioLane.trigger("drop", { dataTransfer: externalTransfer, clientX: 0 })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "The asset was imported and retained, but no clip could be placed."
+    )
 
     resolveDroppedFilePaths.mockReturnValue(["/samples/readme.txt"])
     await wrapper.get(".timeline-content").trigger("drop", {

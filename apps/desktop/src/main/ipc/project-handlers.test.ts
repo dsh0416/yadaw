@@ -487,6 +487,39 @@ describe("registerProjectHandlers", () => {
     })
   })
 
+  it("validates audio import picker and explicit path inputs", async () => {
+    const context = createContext()
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+    const requestMeta = () =>
+      mutationMeta(workspace.projectGraph, { expectedRevision: workspace.revision })
+
+    electronMocks.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    await expect(
+      invoke(electronMocks, IPC_CHANNELS.projectAudioImport, requestMeta(), undefined)
+    ).resolves.toMatchObject({ ok: true, value: null })
+
+    await expect(
+      invoke(electronMocks, IPC_CHANNELS.projectAudioImport, requestMeta(), [])
+    ).resolves.toMatchObject({ ok: false, error: { code: "validation-failed" } })
+    await expect(
+      invoke(electronMocks, IPC_CHANNELS.projectAudioImport, requestMeta(), ["/samples/readme.txt"])
+    ).resolves.toMatchObject({ ok: false, error: { code: "validation-failed" } })
+    await expect(
+      invoke(electronMocks, IPC_CHANNELS.projectAudioImport, requestMeta(), 42)
+    ).resolves.toMatchObject({ ok: false, error: { code: "validation-failed" } })
+
+    electronMocks.showOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ["/samples/Kick.flac"]
+    })
+    await invoke(electronMocks, IPC_CHANNELS.projectAudioImport, requestMeta(), undefined)
+    expect(context.audioImport.import).toHaveBeenCalledWith(
+      ["/samples/Kick.flac"],
+      expect.any(String)
+    )
+  })
+
   it("quarantines an audio import whose database commit outcome is unknown", async () => {
     const context = createContext()
     vi.mocked(context.audioImport.import).mockRejectedValue(

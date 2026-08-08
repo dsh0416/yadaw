@@ -24,6 +24,8 @@ const midi: ProjectAssetSummary = {
   byteLength: 128
 }
 
+const secondAudio: ProjectAssetSummary = { ...audio, id: "audio-2", name: "Snare.wav" }
+
 function stores() {
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -88,10 +90,31 @@ describe("media browser store", () => {
     expect(media.selectedAsset).toEqual(audio)
     expect(media.auditioningAssetId).toBe(audio.id)
 
+    media.reconcileAssets([audio, midi])
+    expect(media.selectedAssetId).toBe(audio.id)
     media.reconcileAssets([midi])
     expect(media.selectedAssetId).toBeNull()
     await media.reset()
     expect(media.auditioningAssetId).toBeNull()
     expect(media.auditionFailed).toBe(false)
+  })
+
+  it("reports start failures and replaces or toggles an active audition", async () => {
+    const { media, project } = stores()
+    window.heron.startAssetAudition = vi.fn(async () => rpcFailure("errors.audioEngineUnavailable"))
+    await media.toggleAudition(audio)
+    expect(media.auditioningAssetId).toBeNull()
+    expect(media.auditionFailed).toBe(true)
+
+    window.heron.startAssetAudition = vi.fn(async () => rpcSuccess(undefined))
+    await media.toggleAudition(audio)
+    await media.toggleAudition(audio)
+    expect(media.auditioningAssetId).toBeNull()
+
+    project.projectAssets = [audio, secondAudio]
+    await media.toggleAudition(audio)
+    await media.toggleAudition(secondAudio)
+    expect(window.heron.stopAssetAudition).toHaveBeenCalledTimes(2)
+    expect(media.auditioningAssetId).toBe(secondAudio.id)
   })
 })

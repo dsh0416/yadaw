@@ -5,6 +5,7 @@ import type { ProjectAssetSummary } from "@heron/contracts"
 import { rpcFailure, rpcSuccess } from "../../test/ipc"
 import { useProjectStore } from "../../stores/project"
 import { useMidiImportStore } from "../../stores/midiImport"
+import { useMediaBrowserStore } from "../../stores/mediaBrowser"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import { PROJECT_MEDIA_DRAG_TYPE } from "../../utils/mediaDrag"
 import MediaBrowserPanel from "./MediaBrowserPanel.vue"
@@ -95,6 +96,10 @@ describe("MediaBrowserPanel", () => {
     await wrapper.findAll(".import-row button")[0]!.trigger("click")
     await flushPromises()
     expect(importAudio).toHaveBeenCalledOnce()
+    importAudio.mockResolvedValueOnce([])
+    await wrapper.findAll(".import-row button")[0]!.trigger("click")
+    await flushPromises()
+    expect(useMediaBrowserStore().selectedAssetId).toBe("audio-1")
 
     await wrapper.findAll(".import-row button")[1]!.trigger("click")
     await flushPromises()
@@ -111,6 +116,25 @@ describe("MediaBrowserPanel", () => {
 
     await wrapper.get('button[aria-label="Close Media Browser"]').trigger("click")
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it("reconciles focus selection and handles zero-rate audio and drags without transfer data", async () => {
+    const wrapper = mountBrowser()
+    const project = useProjectStore()
+    const media = useMediaBrowserStore()
+    project.projectAssets = [{ ...assets[0]!, sampleRate: 0 }, assets[1]!] as ProjectAssetSummary[]
+    await wrapper.vm.$nextTick()
+    const audioRow = wrapper.findAll(".asset-row")[0]!
+
+    await audioRow.trigger("focus")
+    await audioRow.trigger("keydown", { key: "Enter" })
+    await audioRow.trigger("dragstart")
+    expect(media.selectedAssetId).toBe("audio-1")
+    expect(audioRow.text()).toContain("0.0 s")
+
+    project.projectAssets = [assets[1]!]
+    await wrapper.vm.$nextTick()
+    expect(media.selectedAssetId).toBeNull()
   })
 
   it("keeps the audition control active and reports a native stop failure", async () => {
