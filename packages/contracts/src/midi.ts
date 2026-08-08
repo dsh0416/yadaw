@@ -206,6 +206,10 @@ export interface MidiImportPreview {
   warnings: string[]
 }
 
+export type MidiImportPrepareRequest =
+  | { kind: "file"; path?: string }
+  | { kind: "asset"; assetId: string }
+
 export type MidiImportTrackTarget =
   | { type: "ignore" }
   | { type: "existing"; trackId: string; instrumentTypeKey?: string }

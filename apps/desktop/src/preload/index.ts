@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 import { IPC_CHANNELS } from "@heron/contracts"
 import type {
   ApplicationWindowCommandId,
@@ -21,6 +21,7 @@ import { classifyRendererEntrypoint } from "../shared/renderer-security"
 
 const api: HeronDesktopApi = {
   platform: process.platform as HeronDesktopApi["platform"],
+  resolveDroppedFilePath: (file) => webUtils.getPathForFile(file as File),
   bootstrap: (meta) => invokeRpc(IPC_CHANNELS.bootstrap, meta),
   engineInfo: (meta) => invokeRpc(IPC_CHANNELS.engineInfo, meta),
   processGain: (meta, request: ProcessGainRequest) =>
@@ -89,6 +90,7 @@ const api: HeronDesktopApi = {
   closeProject: (meta, disposition?: ProjectCloseDisposition) =>
     invokeRpc(IPC_CHANNELS.projectClose, meta, disposition),
   listProjectAssets: (meta) => invokeRpc(IPC_CHANNELS.projectAssetsList, meta),
+  importProjectAudio: (meta, paths) => invokeRpc(IPC_CHANNELS.projectAudioImport, meta, paths),
   updateProjectConfiguration: (meta, configuration: ProjectConfiguration) =>
     invokeRpc(IPC_CHANNELS.projectConfigurationUpdate, meta, configuration),
   getApplicationSettings: (meta) => invokeRpc(IPC_CHANNELS.settingsGet, meta),
@@ -120,6 +122,8 @@ const api: HeronDesktopApi = {
   deletePendingRecording: (meta, id: string) =>
     invokeRpc(IPC_CHANNELS.recordingDeletePending, meta, id),
   readAssetAudio: (meta, id: string) => invokeRpc(IPC_CHANNELS.assetAudioRead, meta, id),
+  startAssetAudition: (meta, id: string) => invokeRpc(IPC_CHANNELS.assetAuditionStart, meta, id),
+  stopAssetAudition: (meta) => invokeRpc(IPC_CHANNELS.assetAuditionStop, meta),
   readAssetWaveform: (meta, request: WaveformWindowRequest) =>
     invokeRpc(IPC_CHANNELS.assetWaveformRead, meta, request),
   recordingWaveformSnapshot: (meta, request: WaveformWindowRequest) =>

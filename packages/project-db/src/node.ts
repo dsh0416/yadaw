@@ -26,6 +26,7 @@ import {
   WAVEFORM_CACHE_VERSION,
   assets,
   keySignatureEvents,
+  midiSources,
   mixerChannels,
   pluginInstances,
   pluginStateChunks,
@@ -309,17 +310,45 @@ export class ProjectDatabase {
   }
 
   listAssets(): Promise<ProjectAssetSummary[]> {
+    return Promise.all([
+      this.db
+        .select({
+          id: assets.id,
+          name: assets.name,
+          contentHash: assets.contentHash,
+          sampleRate: assets.sampleRate,
+          channels: assets.channels,
+          bitDepth: assets.bitDepth,
+          frameCount: assets.frameCount
+        })
+        .from(assets)
+        .orderBy(asc(assets.createdAt), asc(assets.id)),
+      this.db
+        .select({
+          id: midiSources.id,
+          name: midiSources.name,
+          contentHash: midiSources.contentHash,
+          rawBytes: midiSources.rawBytes
+        })
+        .from(midiSources)
+        .orderBy(asc(midiSources.name), asc(midiSources.id))
+    ]).then(([audioRows, midiRows]) => [
+      ...audioRows.map((asset) => ({ ...asset, kind: "audio" as const })),
+      ...midiRows.map(({ rawBytes, ...asset }) => ({
+        ...asset,
+        kind: "midi" as const,
+        byteLength: rawBytes.byteLength
+      }))
+    ])
+  }
+
+  readMidiSource(sourceId: string): Promise<MidiSourceInput | null> {
     return this.db
-      .select({
-        id: assets.id,
-        name: assets.name,
-        sampleRate: assets.sampleRate,
-        channels: assets.channels,
-        bitDepth: assets.bitDepth,
-        frameCount: assets.frameCount
-      })
-      .from(assets)
-      .orderBy(asc(assets.createdAt), asc(assets.id))
+      .select()
+      .from(midiSources)
+      .where(eq(midiSources.id, sourceId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null)
   }
 
   async mixerSnapshot(): Promise<ProjectGraphSnapshot> {

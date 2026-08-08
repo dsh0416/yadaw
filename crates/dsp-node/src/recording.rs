@@ -52,6 +52,9 @@ mod waveform_analysis;
 mod writer;
 mod writer_format;
 
+pub(crate) use waveform_analysis::analyze_waveform_path;
+pub(crate) use writer_format::{broadcast_metadata, float_format, recording_error};
+
 #[cfg(any(test, feature = "bench-internals"))]
 pub use realtime_tap::RecordingTap;
 #[cfg(feature = "bench-internals")]
@@ -61,7 +64,7 @@ pub use repair::{repair_recording_header, write_deterministic_test_recording};
 pub use waveform::NativeWaveformSnapshot;
 pub use waveform::{
     NativeAnalyzedWaveform, NativeFinalizeRecordingConfig, NativeFinalizedRecording,
-    NativeRecordingResult, NativeRecordingStartConfig,
+    NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformLevel,
 };
 pub use waveform_analysis::{analyze_waveform, finalize_recording};
 #[cfg(any(test, feature = "bench-internals"))]

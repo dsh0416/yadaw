@@ -79,6 +79,11 @@ pub enum ControlCommand {
     PreviewMixerParameter {
         preview: MixerParameterPreview,
     },
+    StartAssetAudition {
+        path: String,
+        hardware_outputs: [u32; 2],
+    },
+    StopAssetAudition,
     MixerSnapshot,
     CompiledGraphSnapshot,
     ClearMeterClips,

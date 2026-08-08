@@ -26,6 +26,7 @@ import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
 import { useApplicationSettingsStore } from "../stores/applicationSettings"
 import { useMidiInputStore } from "../stores/midiInput"
+import { useMediaBrowserStore } from "../stores/mediaBrowser"
 import { useRecordingStore } from "../stores/recording"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useTransportStore } from "../stores/transport"
@@ -63,6 +64,7 @@ export function useApplicationCommands() {
   const applicationWindowStore = useApplicationWindowStore()
   const applicationSettingsStore = useApplicationSettingsStore()
   const midiInputStore = useMidiInputStore()
+  const mediaBrowserStore = useMediaBrowserStore()
   const recordingStore = useRecordingStore()
   const workspaceStore = useStudioWorkspaceStore()
   const transportStore = useTransportStore()
@@ -315,6 +317,14 @@ export function useApplicationCommands() {
         if (router.currentRoute.value.name === "studio") workspaceStore.toggleMixerDock()
         break
       case "transport.toggle-playback":
+        if (isEditableTarget(document.activeElement)) break
+        if (
+          router.currentRoute.value.name === "studio" &&
+          workspaceStore.mediaBrowserOpen &&
+          (await mediaBrowserStore.toggleSelectedAudition())
+        ) {
+          break
+        }
         if (router.currentRoute.value.name === "studio" && !activeRecording.value) {
           await transportStore.toggle()
         }

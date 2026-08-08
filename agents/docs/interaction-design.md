@@ -120,12 +120,26 @@ control-routing identity, not a replacement for the user-facing plug-in name.
 
 Current is a project asset library, not a disk-wide media manager.
 
+- The Media Browser occupies the right panel and is mutually exclusive with
+  Notes. Its top-bar button opens it and closes it when already active.
+- The right panel starts closed. Its width persists between 260 and 480 CSS
+  pixels, defaults to 320 pixels, and exposes pointer and keyboard resizing.
+- The left panel contains only the contextual Inspector. Instruments, effects,
+  and plug-in discovery remain in the Mixer.
 - It shows audio and MIDI assets that belong to the open project.
 - Search filters the current project assets.
 - Import uses the system file chooser or a supported drag source and commits the
   media into the project before it is treated as a reusable asset.
+- Audio import accepts WAV/BWF, MP3, and FLAC; MIDI import accepts `.mid` and
+  `.midi`. Audio with more than two channels is rejected with an explanation.
 - Audio may be auditioned after import. Pre-import audition and BPM-synchronized
   preview are deferred.
+- Only one audio asset is auditioned at a time. The play button and Space while
+  an audio asset row is selected toggle audition through the current stereo
+  Output without moving transport, creating a clip, dirtying the project, or
+  adding Undo history. Audition remains available during playback.
+- Audio dropped on an Audio track creates a clip there; audio dropped on blank
+  arrangement space creates an Audio track and then a clip.
 - MIDI dropped on an empty arrangement area creates an appropriate Instrument
   track and enters the import flow.
 - MIDI dropped on an existing Instrument track targets that track.
@@ -133,6 +147,8 @@ Current is a project asset library, not a disk-wide media manager.
   needs confirmation; users may also invoke it directly.
 - An invalid or partially supported file explains whether the project changed
   and offers a next action. It does not leave an empty unexplained asset.
+- Rename, delete, reveal-in-file-manager, tags, favorites, and global folders are
+  not Media Browser actions in this version.
 
 Indexed user folders, tags, favorites, global metadata search, and background
 disk scanning are backlog work. Do not add architecture for them to the Current

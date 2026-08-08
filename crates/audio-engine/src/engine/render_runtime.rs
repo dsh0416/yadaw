@@ -1,10 +1,10 @@
 use super::{
-    BlockMidiEvent, ChannelPeak, ClipSamples, CountInState, EngineCommand, HardwareOutputFrame,
-    InputFrame, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES, MUSICAL_TICKS_PER_QUARTER,
-    NativeMixerRuntime, Ordering, ProcessContext, RealtimeParameter, RecordingTap,
-    ScheduledMidiEvent, ScheduledMidiEventKind, SignalWidth, StereoFrame, TRANSPORT_COUNTING_IN,
-    TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
-    TimeSignatureEvent, TransportAction,
+    AuditionPlayback, BlockMidiEvent, ChannelPeak, ClipSamples, CountInState, EngineCommand,
+    HardwareOutputFrame, HeapProd, InputFrame, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
+    MUSICAL_TICKS_PER_QUARTER, NativeMixerRuntime, Ordering, ProcessContext, RealtimeParameter,
+    RecordingTap, ScheduledMidiEvent, ScheduledMidiEventKind, SignalWidth, StereoFrame,
+    TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED,
+    TRANSPORT_WAITING, TimeSignatureEvent, TransportAction,
 };
 
 impl NativeMixerRuntime {
@@ -40,6 +40,10 @@ impl NativeMixerRuntime {
                 .iter()
                 .flatten()
                 .any(|route| route.monitoring);
+        let has_audition = self
+            .audition
+            .as_ref()
+            .is_some_and(|value| value.is_active());
         let mut offset = 0;
         let mut stream_underrun = false;
         while offset < outputs.len() {
@@ -59,7 +63,7 @@ impl NativeMixerRuntime {
             };
             let running = matches!(state, TRANSPORT_PLAYING | TRANSPORT_RECORDING);
             let advancing = running || counting_in;
-            if !advancing && !has_monitor {
+            if !advancing && !has_monitor && !has_audition {
                 outputs[offset..].fill([0.0; MAX_OUTPUT_CHANNELS]);
                 break;
             }
@@ -317,6 +321,18 @@ impl NativeMixerRuntime {
         {
             outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);
             stream_underrun = true;
+        }
+        if let Some(audition) = self.audition.as_mut() {
+            let available = audition.frames.len().saturating_sub(audition.cursor);
+            let count = available.min(outputs.len());
+            for (output, sample) in outputs
+                .iter_mut()
+                .zip(&audition.frames[audition.cursor..audition.cursor + count])
+            {
+                output[audition.hardware_outputs[0]] += sample[0];
+                output[audition.hardware_outputs[1]] += sample[1];
+            }
+            audition.cursor = audition.cursor.saturating_add(count);
         }
         stream_underrun
     }

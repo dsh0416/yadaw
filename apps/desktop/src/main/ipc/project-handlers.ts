@@ -1,9 +1,9 @@
 import { dialog } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
-import type { ProjectCloseDisposition, RpcRequestMeta } from "@heron/contracts"
+import type { ProjectCloseDisposition, RpcError, RpcRequestMeta } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { t } from "../settings"
-import { isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project"
+import { AudioImportBatchError, isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project"
 import { registerRpcHandler } from "./rpc"
 import { exclusiveOfflineOperationFailure } from "./operation-guard"
 import {
@@ -257,6 +257,11 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       preparePersistedState: disposition === "save" ? () => synchronizePluginStates() : undefined,
       stopTransport: async () => {
         try {
+          await context.assetAudition.stop()
+        } catch {
+          // There may be no active audio engine or audition.
+        }
+        try {
           await transport.command({ type: "stop" })
         } catch {
           // The audio engine may already be stopped.
@@ -275,6 +280,154 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     const invalid = validateReadTarget(meta, workspace.project)
     if (invalid) return invalid
     return projects.listAssets()
+  })
+
+  registerRpcHandler(IPC_CHANNELS.assetAuditionStart, async ({ meta }, value: unknown) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace || typeof value !== "string" || !value) {
+      return resourceValidationFailure(meta, "assetId")
+    }
+    const invalid = validateReadTarget(meta, workspace.project)
+    if (invalid) return invalid
+    await context.assetAudition.start(value)
+  })
+
+  registerRpcHandler(IPC_CHANNELS.assetAuditionStop, async ({ meta }) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) return resourceValidationFailure(meta, "target")
+    const invalid = validateReadTarget(meta, workspace.project)
+    if (invalid) return invalid
+    await context.assetAudition.stop()
+  })
+
+  registerRpcHandler(IPC_CHANNELS.projectAudioImport, async ({ meta }, value: unknown) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) return resourceValidationFailure(meta, "target")
+    const invalid = validateMutationTarget(meta, workspace.projectGraph, workspace.revision)
+    if (invalid) return invalid
+    const exclusive = exclusiveOfflineOperationFailure(context, meta)
+    if (exclusive) return exclusive
+    let paths: string[]
+    if (value === undefined) {
+      const selected = await dialog.showOpenDialog({
+        title: t("dialog.importAudio.title"),
+        properties: ["openFile", "multiSelections"],
+        filters: [
+          { name: t("dialog.importAudio.filter"), extensions: ["wav", "bwf", "mp3", "flac"] }
+        ]
+      })
+      if (selected.canceled || selected.filePaths.length === 0) return rpcSuccess(meta, null)
+      paths = selected.filePaths
+    } else if (Array.isArray(value)) {
+      const candidates: unknown[] = value
+      if (
+        candidates.length === 0 ||
+        !candidates.every(
+          (path) => typeof path === "string" && /\.(?:wav|bwf|mp3|flac)$/i.test(path.trim())
+        )
+      ) {
+        return validationFailure(meta, "paths")
+      }
+      paths = candidates.filter((path): path is string => typeof path === "string")
+    } else {
+      return validationFailure(meta, "paths")
+    }
+    lifecycle.assertProjectWriteAllowed()
+    const begun = operations.registry.begin({
+      operationId: meta.mutation!.operationId,
+      idempotencyKey: meta.mutation!.idempotencyKey,
+      target: workspace.projectGraph
+    })
+    if (!begun.ok) return resourceValidationFailure(meta, "operation")
+    if (begun.value.disposition !== "started") {
+      return begun.value.operation.result ?? resourceValidationFailure(meta, "operation")
+    }
+    try {
+      const imported = await context.audioImport.import(paths, meta.mutation!.operationId)
+      const session = projects.current ?? workspace.session
+      const next = lifecycle.applicationState.commitWorkspaceProjection(
+        session,
+        await projectGraph.snapshot(),
+        await projects.listAssets()
+      )
+      lifecycle.syncProject(session)
+      const result = rpcSuccess(
+        meta,
+        { ...imported, workspace: next },
+        {
+          resourceRevision: next.revision
+        }
+      )
+      operations.registry.finish(meta.mutation!.operationId, "committed", result)
+      return result
+    } catch (error) {
+      if (
+        error instanceof AudioImportBatchError &&
+        !error.databaseWriteDispatched &&
+        error.selectedAssetIds.length > 0
+      ) {
+        const session = projects.current ?? workspace.session
+        const next = lifecycle.applicationState.commitWorkspaceProjection(
+          session,
+          await projectGraph.snapshot(),
+          await projects.listAssets()
+        )
+        lifecycle.syncProject(session)
+        const result = rpcSuccess(
+          meta,
+          {
+            selectedAssetIds: [...error.selectedAssetIds],
+            importedAssetIds: [...error.importedAssetIds],
+            workspace: next
+          },
+          {
+            resourceRevision: next.revision,
+            warnings: [
+              {
+                code: "audio-import-partial",
+                userMessageKey: "errors.audioImportPartial",
+                resource: workspace.projectGraph
+              }
+            ]
+          }
+        )
+        operations.registry.finish(meta.mutation!.operationId, "committed", result)
+        return result
+      }
+      const outcomeUnknown = error instanceof AudioImportBatchError && error.databaseWriteDispatched
+      const failure: RpcError = outcomeUnknown
+        ? {
+            code: "operation-timeout-unknown",
+            category: "timeout-unknown",
+            outcome: "unknown",
+            retry: "after-reconcile",
+            correlationId: `audio-import-${meta.requestId}`,
+            userMessageKey: "errors.operationOutcomeUnknown",
+            resource: workspace.projectGraph,
+            details: { type: "operation-timeout-unknown", dispatched: true }
+          }
+        : {
+            code: "resource-unavailable",
+            category: "unavailable",
+            outcome: "not-committed",
+            retry: "safe",
+            correlationId: `audio-import-${meta.requestId}`,
+            userMessageKey: "errors.operationFailed",
+            resource: workspace.projectGraph,
+            details: {
+              type: "resource-unavailable",
+              component: "project-worker",
+              dispatched: false
+            }
+          }
+      const result = rpcFailure(meta, failure)
+      operations.registry.finish(
+        meta.mutation!.operationId,
+        outcomeUnknown ? "quarantined" : "not-committed",
+        result
+      )
+      return result
+    }
   })
 
   registerRpcHandler(IPC_CHANNELS.projectConfigurationUpdate, async ({ meta }, value: unknown) => {

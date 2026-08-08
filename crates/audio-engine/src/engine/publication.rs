@@ -1,10 +1,11 @@
 use super::{
-    Arc, AtomicBool, AtomicU32, AtomicU64, AudioEngine, CompiledAudioGraphSnapshot, EngineCommand,
-    InputPeakBank, MeterAtomics, NativeMixerGraph, NativeMixerParameterPreview, NativeMixerRuntime,
-    NativeMixerSnapshot, NativeTransportSnapshot, Ordering, Producer, RealtimeParameterCommand,
-    Result, RunningAudioEngine, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TransportAction,
+    Arc, AtomicBool, AtomicU32, AtomicU64, AudioEngine, AuditionPlayback,
+    CompiledAudioGraphSnapshot, EngineCommand, InputPeakBank, MAX_OUTPUT_CHANNELS, MeterAtomics,
+    NativeMixerGraph, NativeMixerParameterPreview, NativeMixerRuntime, NativeMixerSnapshot,
+    NativeTransportSnapshot, Ordering, Producer, RealtimeParameterCommand, Result,
+    RunningAudioEngine, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TransportAction,
     TransportClockHandle, TransportShared, TryLockError, audio_error, build_mixer_runtime,
-    compiled_graph_snapshot, invalid_config,
+    compiled_graph_snapshot, decode_clip_audio, invalid_config,
 };
 
 /// Immutable input for a supervised graph-worker compile.
@@ -334,6 +335,51 @@ impl AudioEngine {
         Ok(())
     }
 
+    pub fn start_asset_audition(&self, path: &str, hardware_outputs: [u32; 2]) -> Result<()> {
+        let sample_rate = {
+            let guard = self
+                .running
+                .lock()
+                .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+            guard
+                .as_ref()
+                .ok_or_else(|| invalid_config("audio engine must be running before audition"))?
+                .metrics
+                .sample_rate
+        };
+        let command = prepare_audition_command(path, sample_rate, hardware_outputs)?;
+        let mut guard = self
+            .running
+            .lock()
+            .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+        let engine = guard
+            .as_mut()
+            .ok_or_else(|| invalid_config("audio engine stopped before audition was ready"))?;
+        Self::validate_session_sample_rate(engine.metrics.sample_rate, sample_rate)?;
+        engine.reclaim_retired_auditions();
+        engine
+            .commands
+            .try_push(command)
+            .map_err(|_| audio_error("audition control queue", "full"))?;
+        Ok(())
+    }
+
+    pub fn stop_asset_audition(&self) -> Result<()> {
+        let mut guard = self
+            .running
+            .lock()
+            .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+        let engine = guard
+            .as_mut()
+            .ok_or_else(|| invalid_config("audio engine must be running before audition"))?;
+        engine.reclaim_retired_auditions();
+        engine
+            .commands
+            .try_push(EngineCommand::StopAudition)
+            .map_err(|_| audio_error("audition control queue", "full"))?;
+        Ok(())
+    }
+
     pub fn mixer_snapshot(&self) -> Result<NativeMixerSnapshot> {
         let guard = self
             .running
@@ -548,4 +594,27 @@ impl AudioEngine {
             .ok()
             .and_then(|snapshots| snapshots.get(&build_generation).cloned())
     }
+}
+
+pub(super) fn prepare_audition_command(
+    path: &str,
+    sample_rate: u32,
+    hardware_outputs: [u32; 2],
+) -> Result<EngineCommand> {
+    let outputs = hardware_outputs.map(|channel| {
+        channel
+            .checked_sub(1)
+            .and_then(|index| usize::try_from(index).ok())
+            .filter(|index| *index < MAX_OUTPUT_CHANNELS)
+            .ok_or_else(|| invalid_config("audition hardware output is unavailable"))
+    });
+    let [left, right] = outputs;
+    let left = left?;
+    let right = right?;
+    let frames = decode_clip_audio(path, sample_rate)?;
+    Ok(EngineCommand::StartAudition(Box::new(AuditionPlayback {
+        frames,
+        cursor: 0,
+        hardware_outputs: [left, right],
+    })))
 }

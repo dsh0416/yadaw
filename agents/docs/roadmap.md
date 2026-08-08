@@ -59,6 +59,9 @@ claim that the Live or Studio journey is complete.
 - Mixer channels, buses, outputs, sends, meters, Master, and plug-in chains.
 - VST3 instruments and effects, editor windows, state persistence, and ARA 2.
 - Offline full-mix export.
+- A right-side project Media Browser for searchable audio/MIDI assets, canonical
+  WAV/BWF/MP3/FLAC and MIDI import, arrangement drop, and transport-independent
+  audio audition.
 - A single-output low-latency mode with latency budgeting and explicit bypass
   policy.
 - Cross-platform development builds for Windows, macOS, and Linux.
@@ -82,11 +85,11 @@ for at least two hours without reading source or developer documentation.
 - [ ] Send level is directly adjustable on the channel strip; routing, tap,
       enablement, and deletion remain available as secondary configuration.
 - [ ] Frequently read or adjusted state is not hidden behind a menu or popover.
-- [ ] The project asset library browses audio and MIDI already in the project
+- [x] The project asset library browses audio and MIDI already in the project
       and imports both formats.
-- [ ] MIDI can be dropped on an empty arrangement area, dropped on an existing
+- [x] MIDI can be dropped on an empty arrangement area, dropped on an existing
       Instrument track, or passed through the import-mapping dialog.
-- [ ] Audio becomes available for audition after import; pre-import audition,
+- [x] Audio becomes available for audition after import; pre-import audition,
       disk-wide browsing, and library indexing do not block this milestone.
 - [ ] User-facing health information follows the status, detail, notification,
       blocking-decision, and diagnostic layers in

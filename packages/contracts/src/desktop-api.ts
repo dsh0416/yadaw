@@ -39,6 +39,7 @@ import type {
 import type {
   MidiImportCommitResult,
   MidiImportPlan,
+  MidiImportPrepareRequest,
   MidiImportPreview,
   MidiRuntimeResourceSnapshot,
   MidiSyncPreferences
@@ -57,6 +58,7 @@ import type {
 import type {
   CreateProjectRequest,
   ProjectAssetSummary,
+  ProjectAssetImportResult,
   ProjectCloseDisposition,
   ProjectConfiguration,
   ProjectOpenPreparation,
@@ -125,6 +127,7 @@ export const IPC_CHANNELS = {
   projectSave: "project:save",
   projectClose: "project:close",
   projectAssetsList: "project:assets-list",
+  projectAudioImport: "project:audio-import",
   projectConfigurationUpdate: "project:configuration-update",
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
@@ -139,6 +142,8 @@ export const IPC_CHANNELS = {
   recordingRecover: "recording:recover",
   recordingDeletePending: "recording:delete-pending",
   assetAudioRead: "asset:audio-read",
+  assetAuditionStart: "asset:audition-start",
+  assetAuditionStop: "asset:audition-stop",
   assetWaveformRead: "asset:waveform-read",
   recordingWaveformSnapshot: "recording:waveform-snapshot",
   pluginsList: "plugins:list",
@@ -169,6 +174,7 @@ export interface HeronSplashApi {
 
 export interface HeronDesktopApi {
   readonly platform: DesktopPlatform
+  resolveDroppedFilePath(file: unknown): string
   bootstrap(meta: RpcRequestMeta): Promise<RpcResult<ApplicationBootstrapSnapshot>>
   engineInfo(meta: RpcRequestMeta): Promise<RpcResult<NativeEngineInfo>>
   processGain(
@@ -257,6 +263,10 @@ export interface HeronDesktopApi {
     disposition?: ProjectCloseDisposition
   ): Promise<RpcResult<ProjectCloseResult>>
   listProjectAssets(meta: RpcRequestMeta): Promise<RpcResult<ProjectAssetSummary[]>>
+  importProjectAudio(
+    meta: RpcRequestMeta,
+    paths?: string[]
+  ): Promise<RpcResult<ProjectAssetImportResult | null>>
   updateProjectConfiguration(
     meta: RpcRequestMeta,
     configuration: ProjectConfiguration
@@ -291,6 +301,8 @@ export interface HeronDesktopApi {
   recoverRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<RecordingRecoveryResult>>
   deletePendingRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<void>>
   readAssetAudio(meta: RpcRequestMeta, id: string): Promise<RpcResult<Uint8Array>>
+  startAssetAudition(meta: RpcRequestMeta, id: string): Promise<RpcResult<void>>
+  stopAssetAudition(meta: RpcRequestMeta): Promise<RpcResult<void>>
   readAssetWaveform(
     meta: RpcRequestMeta,
     request: WaveformWindowRequest
@@ -321,7 +333,7 @@ export interface HeronDesktopApi {
   ): Promise<RpcResult<PluginParameterEnqueueResult>>
   prepareMidiImport(
     meta: RpcRequestMeta,
-    path?: string
+    request?: MidiImportPrepareRequest
   ): Promise<RpcResult<MidiImportPreview | null>>
   commitMidiImport(
     meta: RpcRequestMeta,

@@ -1,6 +1,103 @@
 use super::*;
 
 #[test]
+fn audition_renders_while_stopped_without_moving_the_transport() {
+    let mut runtime = transport_test_runtime(48_000, 1_000, 240, TRANSPORT_STOPPED);
+    runtime.clips.clear();
+    runtime.audition = Some(Box::new(AuditionPlayback {
+        frames: vec![[0.25, -0.5], [0.5, -0.25]],
+        cursor: 0,
+        hardware_outputs: [2, 3],
+    }));
+    let inputs = [[0.0; MAX_INPUT_CHANNELS]; 2];
+    let mut outputs = [[0.0; MAX_OUTPUT_CHANNELS]; 2];
+
+    runtime.render_block(&inputs, &mut outputs, None, None);
+
+    assert_eq!(outputs[0][2..4], [0.25, -0.5]);
+    assert_eq!(outputs[1][2..4], [0.5, -0.25]);
+    assert_eq!(
+        runtime.transport.position_frames.load(Ordering::Relaxed),
+        240
+    );
+}
+
+#[test]
+fn replacing_and_stopping_audition_does_not_change_playback_state() {
+    let mut runtime = transport_test_runtime(48_000, 1_000, 10, TRANSPORT_PLAYING);
+    runtime.clips.clear();
+    runtime.audition = Some(Box::new(AuditionPlayback {
+        frames: vec![[0.1, 0.1]],
+        cursor: 0,
+        hardware_outputs: [0, 1],
+    }));
+    assert!(
+        runtime
+            .handle_command(EngineCommand::StartAudition(Box::new(AuditionPlayback {
+                frames: vec![[0.75, -0.75]],
+                cursor: 0,
+                hardware_outputs: [0, 1],
+            })))
+            .is_none()
+    );
+    let inputs = [[0.0; MAX_INPUT_CHANNELS]; 1];
+    let mut outputs = [[0.0; MAX_OUTPUT_CHANNELS]; 1];
+
+    runtime.render_block(&inputs, &mut outputs, None, None);
+
+    assert_eq!(outputs[0][..2], [0.75, -0.75]);
+    assert_eq!(
+        runtime.transport.state.load(Ordering::Relaxed),
+        TRANSPORT_PLAYING
+    );
+    assert_eq!(
+        runtime.transport.position_frames.load(Ordering::Relaxed),
+        11
+    );
+    assert!(
+        runtime
+            .handle_command(EngineCommand::StopAudition)
+            .is_none()
+    );
+    assert!(runtime.audition.is_none());
+    assert_eq!(
+        runtime.transport.state.load(Ordering::Relaxed),
+        TRANSPORT_PLAYING
+    );
+}
+
+#[test]
+fn audition_started_before_mixer_load_is_staged_until_a_runtime_is_available() {
+    let retirement_ring = HeapRb::<Box<AuditionPlayback>>::new(2);
+    let (mut retired, mut retired_consumer) = retirement_ring.split();
+    let mut pending = None;
+
+    let forwarded = stage_command_without_mixer(
+        EngineCommand::StartAudition(Box::new(AuditionPlayback {
+            frames: vec![[0.25, -0.25]],
+            cursor: 0,
+            hardware_outputs: [0, 1],
+        })),
+        &mut pending,
+        &mut retired,
+    );
+
+    assert!(forwarded.is_none());
+    assert!(
+        pending.is_some(),
+        "audition must wait for mixer publication"
+    );
+    assert!(retired_consumer.try_pop().is_none());
+
+    let forwarded =
+        stage_command_without_mixer(EngineCommand::StopAudition, &mut pending, &mut retired);
+
+    assert!(forwarded.is_none());
+    assert!(pending.is_none());
+    assert!(retired_consumer.try_pop().is_some());
+}
+
+#[test]
 fn application_source_reaches_recording_slots_before_monitoring_is_applied() {
     use ringbuf::traits::{Consumer, Producer};
 

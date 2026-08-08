@@ -89,6 +89,10 @@
       "title": "导入标准 MIDI 文件",
       "filter": "标准 MIDI 文件"
     },
+    "importAudio": {
+      "title": "导入音频文件",
+      "filter": "音频文件"
+    },
     "chooseSwap": {
       "title": "选择录音交换目录"
     },
@@ -149,6 +153,7 @@
     "operationCancelled": "操作已取消。",
     "operationOutcomeUnknown": "操作结果未知，需要重新协调状态。",
     "operationFailed": "操作无法完成。",
+    "audioImportPartial": "部分音频文件已导入，但至少有一个文件无法导入。",
     "transportUnavailable": "IPC 传输不可用。",
     "audioEngineUnavailable": "音频引擎不可用。",
     "projectUnavailable": "工程不可用。",
@@ -984,7 +989,6 @@
       "comingSoon": "即将推出"
     },
     "topbar": {
-      "library": "资料库",
       "inspector": "检查器",
       "quickHelp": "快速帮助",
       "downloadManager": "下载管理器",
@@ -1006,6 +1010,36 @@
       "noOutput": "无 Output",
       "tooltip": "低延迟模式 · {output} · {budget} ms 预算 · 临时旁路 {count} 个插件",
       "noMonitoringPath": "低延迟模式已启用 · {output} · {budget} ms 预算 · 当前无监听路径"
+    },
+    "mediaBrowser": {
+      "ariaLabel": "工程媒体浏览器",
+      "eyebrow": "工程资产",
+      "title": "媒体浏览器",
+      "close": "关闭媒体浏览器",
+      "resizeAria": "调整右栏宽度",
+      "importAudio": "音频",
+      "importMidi": "MIDI",
+      "search": "搜索工程资产",
+      "filterAria": "筛选工程资产",
+      "filter": {
+        "all": "全部",
+        "audio": "音频",
+        "midi": "MIDI"
+      },
+      "assets": "工程资产",
+      "audioDetail": "{channels} 声道 · {rate} kHz · {duration} 秒",
+      "midiDetail": "MIDI · {size} 字节",
+      "emptyTitle": "没有匹配的资产",
+      "emptyDetail": "可将 WAV/BWF、MP3、FLAC 或 MIDI 文件导入当前工程。",
+      "audioTrackOnly": "音频资产只能放到音频轨，或编排区空白处。",
+      "audioNotPlaced": "无法将音频资产放入编排。",
+      "midiTrackOnly": "MIDI 资产只能放到乐器轨，或编排区空白处。",
+      "importedNotPlaced": "资产已导入并保留，但未能创建片段。",
+      "importedAudioTrackOnly": "音频已导入并保留，但只能放到音频轨或编排区空白处。",
+      "unsupportedDrop": "此文件类型无法导入工程。",
+      "startAudition": "试听 {name}",
+      "stopAudition": "停止试听 {name}",
+      "auditionFailed": "无法通过当前 Output 试听此音频资产。"
     },
     "transport": {
       "ariaLabel": "走带控制",
@@ -1122,34 +1156,6 @@
       "monitorAria": "监听 {name}",
       "inputMonitoring": "输入监听",
       "inputMonitoringDisabled": "请先选择硬件或应用输入"
-    },
-    "soundBrowser": {
-      "eyebrow": "资料库",
-      "title": "声音浏览器",
-      "searchAria": "搜索声音",
-      "searchPlaceholder": "搜索声音与设备",
-      "tabsAria": "声音浏览器",
-      "tabs": {
-        "instruments": "乐器",
-        "effects": "音频效果",
-        "samples": "采样",
-        "plugins": "插件"
-      },
-      "headings": {
-        "instruments": "音频插件乐器",
-        "effects": "音频插件效果",
-        "samples": "工程音频",
-        "catalog": "插件目录"
-      },
-      "empty": {
-        "instruments": "未找到兼容的音频插件乐器。",
-        "effects": "未找到兼容的音频插件效果。"
-      },
-      "builtIn": "内置 · ",
-      "rescan": "重新扫描音频插件",
-      "formatFilter": "按格式筛选音频插件",
-      "allFormats": "全部",
-      "scanning": "正在扫描…"
     },
     "trackInspector": {
       "ariaLabel": "所选轨道检查器",

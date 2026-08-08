@@ -1,8 +1,8 @@
 use super::{
-    Arc, AtomicBool, AtomicU32, AtomicU64, AudioEngine, AudioEngineKey, DeviceTrait,
-    ENGINE_COMMAND_CAPACITY, EngineCommand, HeapRb, InputFrame, InputPeakBank, MAX_INPUT_CHANNELS,
-    MAX_OUTPUT_CHANNELS, MeterBank, NativeAudioEngineConfig, NativeAudioRuntimeSnapshot,
-    NativeMixerRuntime, NativeRoundTripLatencyMeasurementRequest,
+    Arc, AtomicBool, AtomicU32, AtomicU64, AudioEngine, AudioEngineKey, AuditionPlayback,
+    DeviceTrait, ENGINE_COMMAND_CAPACITY, EngineCommand, HeapRb, InputFrame, InputPeakBank,
+    MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MeterBank, NativeAudioEngineConfig,
+    NativeAudioRuntimeSnapshot, NativeMixerRuntime, NativeRoundTripLatencyMeasurementRequest,
     NativeRoundTripLatencyMeasurementSnapshot, Ordering, OutputMixerControl, OutputStreamContext,
     Producer, RING_BUFFER_BLOCKS, RecorderController, Result, RoundTripLatencyMeasurement,
     RunningAudioEngine, RuntimeMetrics, SampleFormat, Split, StreamTrait, TRANSPORT_RECORDING,
@@ -187,6 +187,9 @@ impl AudioEngine {
         let (commands, command_consumer) = command_ring.split();
         let retirement_ring = HeapRb::<Box<NativeMixerRuntime>>::new(ENGINE_COMMAND_CAPACITY);
         let (retirement_producer, retired_mixers) = retirement_ring.split();
+        let audition_retirement_ring =
+            HeapRb::<Box<AuditionPlayback>>::new(ENGINE_COMMAND_CAPACITY);
+        let (audition_retirement_producer, retired_auditions) = audition_retirement_ring.split();
 
         let input_stream = build_stream_for_format!(
             build_input_stream,
@@ -212,6 +215,7 @@ impl AudioEngine {
                     commands: command_consumer,
                     mixer: initial_mixer,
                     retired_mixers: retirement_producer,
+                    retired_auditions: audition_retirement_producer,
                 },
                 round_trip_latency: Arc::clone(&round_trip_latency),
                 recording_tap,
@@ -249,6 +253,7 @@ impl AudioEngine {
             recorder,
             commands,
             retired_mixers,
+            retired_auditions,
             meter_bank,
             transport,
             input_peaks,

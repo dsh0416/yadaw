@@ -254,5 +254,6 @@ pub(super) fn build_mixer_runtime(
         application_captures,
         input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
         meter_frame_clock: 0,
+        audition: None,
     })
 }

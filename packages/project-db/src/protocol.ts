@@ -112,6 +112,7 @@ export interface WorkerRequestMap {
     command: ProjectCommand
     fallbackOutputId: string
   }
+  "read-midi-source": { sourceId: string }
   "rollback-midi": {
     sourceId: string
     command: ProjectCommand
@@ -152,6 +153,7 @@ export interface WorkerResultMap {
   "abort-project-command": void
   "project-command-status": ProjectCommandTransactionStatus
   "import-midi": void
+  "read-midi-source": MidiSourceState | null
   "rollback-midi": void
   "save-plugin-states": void
   "asset-content-hashes": AssetContentHash[]

@@ -503,6 +503,14 @@ export class AudioHostService {
     return this.audioTransport.previewMixerParameter(preview)
   }
 
+  startAssetAudition(path: string, hardwareOutputs: [number, number]): Promise<void> {
+    return this.audioTransport.startAssetAudition(path, hardwareOutputs)
+  }
+
+  stopAssetAudition(): Promise<void> {
+    return this.audioTransport.stopAssetAudition()
+  }
+
   mixerSnapshot(): Promise<MixerRuntimeSnapshot> {
     return this.audioTransport.mixerSnapshot()
   }

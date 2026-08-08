@@ -82,13 +82,31 @@ export type ProjectLifecycleState =
 
 export type ProjectCloseDisposition = "save" | "discard" | "cancel"
 
-export interface ProjectAssetSummary {
+export interface ProjectAssetBase {
   id: string
   name: string
+  contentHash: string
+}
+
+export interface ProjectAudioAssetSummary extends ProjectAssetBase {
+  kind: "audio"
   sampleRate: number
   channels: number
   bitDepth: RecordingBitDepth
   frameCount: bigint
+}
+
+export interface ProjectMidiAssetSummary extends ProjectAssetBase {
+  kind: "midi"
+  byteLength: number
+}
+
+export type ProjectAssetSummary = ProjectAudioAssetSummary | ProjectMidiAssetSummary
+
+export interface ProjectAssetImportResult {
+  selectedAssetIds: string[]
+  importedAssetIds: string[]
+  workspace: ProjectWorkspaceSnapshot
 }
 
 export interface ProjectWorkspaceSnapshot {

@@ -19,17 +19,24 @@ Double-click the instrument slot later to open the plug-in's editor.
 
 ## Import MIDI
 
-Use the MIDI import command and select a Standard MIDI File. The import dialog
-lists its sequences and note counts.
+Open the right-side **Media Browser**, choose **MIDI**, and select a Standard
+MIDI File. The import dialog lists its sequences and note counts. Imported MIDI
+also remains available as a reusable project asset.
 
 For each sequence:
 
 - choose **New Instrument track** and optionally assign a VST 3 instrument; or
+- choose an existing Instrument track; or
 - choose **Ignore**.
 
 Choose whether to keep the current project Tempo Track or import the file's
 tempo map. Keeping project tempo places the MIDI at the playhead. Importing
 tempo starts at tick zero and replaces the existing tempo map.
+
+You can also drag a MIDI asset or operating-system MIDI file into the
+arrangement. Dropping on an Instrument track opens mapping with that track
+preselected. Dropping on blank arrangement space defaults to a new Instrument
+track. Audio tracks reject MIDI drops and explain the valid target.
 
 ## Open the piano roll
 

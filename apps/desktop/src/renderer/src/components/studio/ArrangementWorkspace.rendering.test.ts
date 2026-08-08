@@ -1,20 +1,32 @@
 import { createPinia, setActivePinia } from "pinia"
-import { DOMWrapper, mount } from "@vue/test-utils"
+import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
 import type { MixerChannelState } from "@heron/contracts"
 import type { ProjectAssetSummary as Asset } from "@heron/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
 import { useArrangementViewStore } from "../../stores/arrangementView"
+import { useMidiImportStore } from "../../stores/midiImport"
+import { PROJECT_MEDIA_DRAG_TYPE } from "../../utils/mediaDrag"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 
 const recordingAsset: Asset = {
   id: "recording-1",
   name: "First take.bwf",
+  kind: "audio",
+  contentHash: "recording-1-hash",
   sampleRate: 48_000,
   channels: 2,
   bitDepth: "float32",
   frameCount: 48_000n
+}
+
+const midiAsset: Asset = {
+  id: "midi-1",
+  name: "Bass.mid",
+  kind: "midi",
+  contentHash: "midi-1-hash",
+  byteLength: 128
 }
 
 describe("ArrangementWorkspace rendering", () => {
@@ -291,6 +303,139 @@ describe("ArrangementWorkspace rendering", () => {
     await nameEditor.setValue("  Rhythm Guitar  ")
     await nameEditor.trigger("blur")
     expect(updateChannel).toHaveBeenCalledWith("audio-1", { name: "Rhythm Guitar" })
+
+    const audioLane = wrapper.get('[data-track-id="track:audio-1"]')
+    const projectAudioTransfer = {
+      files: [],
+      types: [PROJECT_MEDIA_DRAG_TYPE],
+      getData: vi.fn(() =>
+        JSON.stringify({ assetId: recordingAsset.id, kind: recordingAsset.kind })
+      )
+    } as unknown as DataTransfer
+    await audioLane.trigger("dragover", { dataTransfer: projectAudioTransfer, clientX: 100 })
+    await audioLane.trigger("drop", { dataTransfer: projectAudioTransfer, clientX: 100 })
+    await flushPromises()
+    expect(executeKeyChange).toHaveBeenLastCalledWith({
+      type: "create-audio-clip",
+      clip: expect.objectContaining({
+        assetId: recordingAsset.id,
+        trackId: "track:audio-1",
+        name: "First take",
+        startFrame: 32_000,
+        lengthFrames: 48_000
+      })
+    })
+
+    project.projectAssets = [recordingAsset, midiAsset]
+    const midiImport = useMidiImportStore()
+    const prepareMidi = vi.spyOn(midiImport, "prepare").mockResolvedValue()
+    const projectMidiTransfer = {
+      files: [],
+      types: [PROJECT_MEDIA_DRAG_TYPE],
+      getData: vi.fn(() => JSON.stringify({ assetId: midiAsset.id, kind: midiAsset.kind }))
+    } as unknown as DataTransfer
+    await audioLane.trigger("drop", { dataTransfer: projectMidiTransfer, clientX: 0 })
+    await flushPromises()
+    expect(prepareMidi).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "MIDI assets can only be dropped on an Instrument track or blank arrangement space."
+    )
+    await wrapper.get(".timeline-content").trigger("drop", {
+      dataTransfer: projectMidiTransfer,
+      clientX: 200
+    })
+    await flushPromises()
+    expect(prepareMidi).toHaveBeenCalledWith(
+      { kind: "asset", assetId: midiAsset.id },
+      { insertionTick: 3840 }
+    )
+
+    const missingAudioTransfer = {
+      files: [],
+      types: [PROJECT_MEDIA_DRAG_TYPE],
+      getData: vi.fn(() => JSON.stringify({ assetId: "missing", kind: "audio" }))
+    } as unknown as DataTransfer
+    executeKeyChange.mockClear()
+    await wrapper.get(".timeline-content").trigger("drop", {
+      dataTransfer: missingAudioTransfer,
+      clientX: 0
+    })
+    await flushPromises()
+    expect(executeKeyChange).not.toHaveBeenCalled()
+
+    executeKeyChange.mockResolvedValueOnce(false)
+    await audioLane.trigger("drop", { dataTransfer: projectAudioTransfer, clientX: 0 })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "The audio asset could not be placed in the arrangement."
+    )
+
+    const resolveDroppedFilePaths = vi
+      .spyOn(project, "resolveDroppedFilePaths")
+      .mockReturnValue(["/samples/Kick.mp3"])
+    vi.spyOn(project, "importAudio").mockResolvedValue([recordingAsset.id])
+    const externalTransfer = {
+      files: [{} as File],
+      types: ["Files"],
+      getData: vi.fn(() => "")
+    } as unknown as DataTransfer
+    await audioLane.trigger("drop", { dataTransfer: externalTransfer, clientX: 0 })
+    await flushPromises()
+    expect(project.importAudio).toHaveBeenCalledWith(["/samples/Kick.mp3"])
+    expect(executeKeyChange).toHaveBeenLastCalledWith({
+      type: "create-audio-clip",
+      clip: expect.objectContaining({ assetId: recordingAsset.id, trackId: "track:audio-1" })
+    })
+
+    resolveDroppedFilePaths.mockReturnValue(["/samples/Bass.mid"])
+    prepareMidi.mockClear()
+    await audioLane.trigger("drop", { dataTransfer: externalTransfer, clientX: 0 })
+    await flushPromises()
+    expect(prepareMidi).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "MIDI assets can only be dropped on an Instrument track or blank arrangement space."
+    )
+    await wrapper.get(".timeline-content").trigger("drop", {
+      dataTransfer: externalTransfer,
+      clientX: 0
+    })
+    await flushPromises()
+    expect(prepareMidi).toHaveBeenCalledWith(
+      { kind: "file", path: "/samples/Bass.mid" },
+      { insertionTick: 0 }
+    )
+
+    resolveDroppedFilePaths.mockReturnValue(["/samples/Kick.mp3"])
+    vi.mocked(project.importAudio).mockResolvedValueOnce(["missing"])
+    await audioLane.trigger("drop", { dataTransfer: externalTransfer, clientX: 0 })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "The asset was imported and retained, but no clip could be placed."
+    )
+
+    resolveDroppedFilePaths.mockReturnValue(["/samples/readme.txt"])
+    await wrapper.get(".timeline-content").trigger("drop", {
+      dataTransfer: externalTransfer,
+      clientX: 0
+    })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "This file type cannot be imported into the project."
+    )
+
+    vi.spyOn(mixer, "createAudioTrack").mockResolvedValue(false)
+    const dataTransfer = {
+      files: [],
+      types: [PROJECT_MEDIA_DRAG_TYPE],
+      getData: vi.fn(() =>
+        JSON.stringify({ assetId: recordingAsset.id, kind: recordingAsset.kind })
+      )
+    } as unknown as DataTransfer
+    await wrapper.get(".timeline-content").trigger("drop", { dataTransfer, clientX: 0 })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "The audio asset could not be placed in the arrangement."
+    )
   })
 
   it("uses the timeline viewport as the track rail's vertical scroll source", async () => {

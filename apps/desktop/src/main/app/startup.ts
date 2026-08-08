@@ -187,6 +187,8 @@ export function startApplication(
         projectCommands: services.projectCommands,
         mixerRuntime: services.mixerRuntime,
         transport: services.transport,
+        audioImport: services.audioImport,
+        assetAudition: services.assetAudition,
         plugins,
         midiImport: services.midiImport,
         lifecycle: services.lifecycle,

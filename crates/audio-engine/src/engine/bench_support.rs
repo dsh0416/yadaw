@@ -187,6 +187,7 @@ fn runtime_for(scenario: RenderScenario) -> Box<NativeMixerRuntime> {
         application_captures: (0..scenario.tracks + 2).map(|_| None).collect(),
         input_peak_scratch: [0.0; super::MAX_INPUT_CHANNELS],
         meter_frame_clock: 0,
+        audition: None,
     })
 }
 

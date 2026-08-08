@@ -21,6 +21,8 @@ const fakes = vi.hoisted(() => ({
 
 vi.mock("../project", () => ({
   AssetMaterializer: class {},
+  AssetAuditionService: class {},
+  AudioImportService: class {},
   AudioGraphCompiler: class {},
   AudioGraphPublisher: class {},
   ProjectGraphService: class {

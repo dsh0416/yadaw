@@ -235,6 +235,13 @@ export function createContext(
     projectCommands: {
       execute: vi.fn(async () => ({ ok: true }))
     },
+    audioImport: {
+      import: vi.fn(async () => ({ selectedAssetIds: [], importedAssetIds: [] }))
+    },
+    assetAudition: {
+      start: vi.fn(async () => undefined),
+      stop: vi.fn(async () => undefined)
+    },
     mixerRuntime: {
       preview: vi.fn(async () => undefined),
       runtimeSnapshot: vi.fn(async () => ({ meters: [], capturedAt: 1 })),

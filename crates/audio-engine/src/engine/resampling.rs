@@ -1,7 +1,7 @@
 use super::{
-    Adjustable, Arc, Async, Consumer, Device, DeviceTrait, EngineCommand, FixedAsync, FromSample,
-    HardwareOutputFrame, HeapCons, HeapProd, INPUT_RESAMPLER_OUTPUT_FRAMES, InputFrame,
-    InputPeakBank, InterleavedSlice, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
+    Adjustable, Arc, Async, AuditionPlayback, Consumer, Device, DeviceTrait, EngineCommand,
+    FixedAsync, FromSample, HardwareOutputFrame, HeapCons, HeapProd, INPUT_RESAMPLER_OUTPUT_FRAMES,
+    InputFrame, InputPeakBank, InterleavedSlice, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
     MAX_PLUGIN_BLOCK_FRAMES, OUTPUT_RESAMPLER_FRAMES, Observer, Ordering, OutputMixerControl,
     OutputStreamContext, Producer, Resampler, Result, RoundTripInputDetector,
     RoundTripLatencyMeasurement, RoundTripOutputProbe, RuntimeMetrics, Sample,
@@ -9,6 +9,32 @@ use super::{
     UNKNOWN_LATENCY_US, audio_error, duration_to_micros, frames_to_micros, frames_to_nanos,
     invalid_config, mark_stream_error,
 };
+
+pub(super) fn stage_command_without_mixer(
+    command: EngineCommand,
+    pending_audition: &mut Option<Box<AuditionPlayback>>,
+    retired_auditions: &mut HeapProd<Box<AuditionPlayback>>,
+) -> Option<EngineCommand> {
+    match command {
+        EngineCommand::StartAudition(audition) => {
+            if let Some(previous) = pending_audition.replace(audition)
+                && let Err(previous) = retired_auditions.try_push(previous)
+            {
+                std::mem::forget(previous);
+            }
+            None
+        }
+        EngineCommand::StopAudition => {
+            if let Some(previous) = pending_audition.take()
+                && let Err(previous) = retired_auditions.try_push(previous)
+            {
+                std::mem::forget(previous);
+            }
+            None
+        }
+        command => Some(command),
+    }
+}
 
 pub(super) struct AdaptiveResampler {
     pub(super) consumer: HeapCons<InputFrame>,
@@ -381,6 +407,7 @@ where
         mut commands,
         mut mixer,
         mut retired_mixers,
+        mut retired_auditions,
     } = mixer_control;
     let channels = usize::from(config.channels);
     let mut resampler = AdaptiveResampler::new(
@@ -405,6 +432,7 @@ where
     let mut realtime_midi = crate::midi_input::realtime_consumer();
     let mut render_inputs = vec![[0.0; MAX_INPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
     let mut device_outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
+    let mut pending_audition = None;
 
     device
         .build_output_stream(
@@ -435,7 +463,9 @@ where
 
                 while let Some(command) = commands.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
-                        if let Some(replacement) = runtime.handle_command(command) {
+                        if let Some(replacement) =
+                            runtime.handle_command_realtime(command, &mut retired_auditions)
+                        {
                             callback_metrics
                                 .published_graph_generation
                                 .store(replacement.generation, Ordering::Release);
@@ -452,9 +482,21 @@ where
                                 }
                             }
                         }
-                    } else if let EngineCommand::LoadMixer(mut runtime) = command {
+                    } else if let Some(EngineCommand::LoadMixer(mut runtime)) =
+                        stage_command_without_mixer(
+                            command,
+                            &mut pending_audition,
+                            &mut retired_auditions,
+                        )
+                    {
                         runtime.external_sync_enabled = external_sync_enabled;
                         runtime.activate_application_captures();
+                        if let Some(audition) = pending_audition.take() {
+                            runtime.handle_command_realtime(
+                                EngineCommand::StartAudition(audition),
+                                &mut retired_auditions,
+                            );
+                        }
                         callback_metrics
                             .published_graph_generation
                             .store(runtime.generation, Ordering::Release);

@@ -271,6 +271,43 @@ export const useProjectStore = defineStore("project", () => {
     projectAssets.value = result.value
   }
 
+  async function importAudio(paths?: string[]): Promise<string[]> {
+    const target = projectGraphRef.value
+    if (!target) return []
+    const result = await window.heron.importProjectAudio(
+      mutationMeta(target, "project-audio-import", projectRevision.value),
+      paths
+    )
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      if (result.error.outcome === "unknown") await refreshAssets()
+      return []
+    }
+    if (!result.value) return []
+    applyWorkspace(result.value.workspace)
+    const warning = result.warnings.find((candidate) => candidate.code === "audio-import-partial")
+    if (warning) rpcError.value = t(warning.userMessageKey)
+    return result.value.selectedAssetIds
+  }
+
+  function resolveDroppedFilePaths(files: readonly File[]): string[] {
+    return files.map((file) => window.heron.resolveDroppedFilePath(file)).filter(Boolean)
+  }
+
+  async function startAssetAudition(assetId: string): Promise<boolean> {
+    const target = projectRef.value
+    if (!target) return false
+    const result = await window.heron.startAssetAudition(readMeta(target), assetId)
+    return result.ok
+  }
+
+  async function stopAssetAudition(): Promise<boolean> {
+    const target = projectRef.value
+    if (!target) return true
+    const result = await window.heron.stopAssetAudition(readMeta(target))
+    return result.ok
+  }
+
   function markDirty(): void {
     if (lifecycle.value.status === "open" && !lifecycle.value.session.dirty) {
       lifecycle.value = openState({ ...lifecycle.value.session, dirty: true })
@@ -326,6 +363,10 @@ export const useProjectStore = defineStore("project", () => {
     close,
     updateConfiguration,
     refreshAssets,
+    importAudio,
+    resolveDroppedFilePaths,
+    startAssetAudition,
+    stopAssetAudition,
     markDirty,
     beginProjectMutation,
     waitForProjectMutations

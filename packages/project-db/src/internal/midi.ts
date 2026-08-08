@@ -16,7 +16,7 @@ export function importMidiSource(
 ): Promise<void> {
   return db.transaction(async (tx) => {
     await assertProjectCommandAllowed(tx, command)
-    await tx.insert(midiSources).values(source)
+    await tx.insert(midiSources).values(source).onConflictDoNothing({ target: midiSources.id })
     await applyProjectCommand(tx, command, fallbackOutputId)
   })
 }

@@ -1,9 +1,4 @@
-use std::sync::Mutex;
-
 use super::*;
-
-// Midi realtime rings and the actor share process-global state; serialize those tests.
-static GLOBAL_MIDI_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 struct ExternalSyncReset(Arc<RealtimeInputShared>);
 

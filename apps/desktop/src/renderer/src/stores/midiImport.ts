@@ -24,9 +24,13 @@ export const useMidiImportStore = defineStore("midi-import", () => {
   const tempoMode = shallowRef<MidiTempoMode>("project")
   const busy = shallowRef(false)
   const error = shallowRef("")
+  const insertionTick = shallowRef<number | null>(null)
   const open = computed(() => preview.value !== null)
 
-  async function prepare(path?: string): Promise<void> {
+  async function prepare(
+    request?: Parameters<typeof window.heron.prepareMidiImport>[1],
+    placement?: { targetTrackId?: string; insertionTick?: number }
+  ): Promise<void> {
     busy.value = true
     error.value = ""
     const target = projectStore.projectRef
@@ -36,16 +40,21 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     }
     const result = await window.heron.prepareMidiImport(
       mutationMeta(target, "midi-import-prepare"),
-      path
+      request
     )
     if (result.ok && result.value) {
       preview.value = result.value
       targets.value = Object.fromEntries(
         result.value.tracks.map((track) => [
           key(track.sourceTrack, track.sequence),
-          { type: track.noteCount > 0 ? "new" : "ignore" }
+          track.noteCount > 0
+            ? placement?.targetTrackId
+              ? { type: "existing", trackId: placement.targetTrackId }
+              : { type: "new" }
+            : { type: "ignore" }
         ])
       )
+      insertionTick.value = placement?.insertionTick ?? null
       tempoMode.value = "project"
     } else if (!result.ok) error.value = rpcErrorMessage(result.error)
     busy.value = false
@@ -70,7 +79,8 @@ export const useMidiImportStore = defineStore("midi-import", () => {
       insertionTick:
         tempoMode.value === "midi"
           ? 0
-          : secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds),
+          : (insertionTick.value ??
+            secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds)),
       tracks: current.tracks.map((track) => ({
         sourceTrack: track.sourceTrack,
         sequence: track.sequence,
@@ -94,6 +104,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     projectStore.applyWorkspace(result.value.workspace)
     projectHistoryStore.acceptExternalResult(result.value.command)
     preview.value = null
+    insertionTick.value = null
     busy.value = false
     return true
   }
@@ -103,6 +114,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     preview.value = null
     targets.value = {}
     error.value = ""
+    insertionTick.value = null
   }
 
   return {

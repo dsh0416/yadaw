@@ -200,7 +200,7 @@ describe("registerMidiRpcHandlers", () => {
       electronMocks,
       IPC_CHANNELS.midiImportPrepare,
       mutationMeta(workspace.project),
-      "/files/demo.mid"
+      { kind: "file", path: "/files/demo.mid" }
     )
 
     expect(result).toMatchObject({ ok: true, value: prepared })

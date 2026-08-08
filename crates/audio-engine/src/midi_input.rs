@@ -1,3 +1,5 @@
+#[cfg(test)]
+use std::sync::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{
@@ -969,3 +971,7 @@ fn unavailable_snapshot(message: &str) -> MidiInputSnapshot {
 #[cfg(test)]
 #[allow(clippy::wildcard_imports)]
 mod tests;
+
+#[cfg(test)]
+// MIDI realtime rings and mock audio callbacks share process-global state.
+pub(crate) static GLOBAL_MIDI_TEST_LOCK: Mutex<()> = Mutex::new(());

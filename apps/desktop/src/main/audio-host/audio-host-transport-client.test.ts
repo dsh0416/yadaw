@@ -18,6 +18,31 @@ function createClient(request: (command: Record<string, unknown>) => Promise<Con
 }
 
 describe("AudioHostTransportClient direct-telemetry fallback", () => {
+  it("starts and stops asset audition only when the host accepts each command", async () => {
+    const request = vi
+      .fn<(command: Record<string, unknown>) => Promise<ControlResponse>>()
+      .mockResolvedValueOnce({ request_id: 1, result: { type: "accepted" } })
+      .mockResolvedValueOnce({ request_id: 2, result: { type: "accepted" } })
+      .mockResolvedValueOnce({ request_id: 3, result: { type: "error" } })
+      .mockResolvedValueOnce({ request_id: 4, result: { type: "error" } })
+    const { client } = createClient(request)
+
+    await expect(client.startAssetAudition("/project/Kick.bwf", [1, 2])).resolves.toBeUndefined()
+    await expect(client.stopAssetAudition()).resolves.toBeUndefined()
+    await expect(client.startAssetAudition("/project/Kick.bwf", [3, 4])).rejects.toThrow(
+      "audio host rejected asset audition"
+    )
+    await expect(client.stopAssetAudition()).rejects.toThrow(
+      "audio host rejected stopping asset audition"
+    )
+    expect(request).toHaveBeenNthCalledWith(1, {
+      type: "start-asset-audition",
+      path: "/project/Kick.bwf",
+      hardware_outputs: [1, 2]
+    })
+    expect(request).toHaveBeenNthCalledWith(2, { type: "stop-asset-audition" })
+  })
+
   it("maps macOS application targets and permission-denied snapshots", async () => {
     const logicalTarget = {
       platform: "macos",
