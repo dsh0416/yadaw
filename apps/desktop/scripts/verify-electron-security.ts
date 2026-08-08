@@ -124,7 +124,7 @@ if (process.platform === "darwin") {
 
     const entitlementInspection = spawnSync(
       "codesign",
-      ["--display", "--entitlements", ":-", appBundle],
+      ["--display", "--entitlements", "-", "--xml", appBundle],
       { encoding: "utf8" }
     )
     if (entitlementInspection.status !== 0) {
