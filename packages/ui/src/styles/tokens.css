@@ -82,6 +82,10 @@
   --ui-signal-meter-safe: var(--ui-palette-green-400);
   --ui-signal-meter-warning: var(--ui-palette-amber-400);
   --ui-signal-meter-clip: var(--ui-palette-red-400);
+  --ui-signal-mixer-mute: #2f9ed0;
+  --ui-signal-mixer-solo: #e4b93f;
+  --ui-signal-mixer-input: #e8892f;
+  --ui-signal-mixer-bounce: #73d6c9;
 
   --ui-space-0: 0;
   --ui-space-1: 0.25rem;
@@ -320,6 +324,10 @@
   --ui-signal-meter-safe: #16764c;
   --ui-signal-meter-warning: #a26800;
   --ui-signal-meter-clip: #c52e38;
+  --ui-signal-mixer-mute: #176fc0;
+  --ui-signal-mixer-solo: #8a5700;
+  --ui-signal-mixer-input: #9b4f00;
+  --ui-signal-mixer-bounce: #167a77;
 
   --ui-shadow-sm: 0 1px 2px rgb(14 16 20 / 12%);
   --ui-shadow-md: 0 8px 24px rgb(14 16 20 / 16%);

@@ -6,7 +6,6 @@ import { useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import type {
   KeySignatureMode,
-  MixerChannelMeter,
   MixerChannelPatch,
   MixerParameterPreview,
   TimeSignatureEventState
@@ -70,17 +69,6 @@ const {
   loopEnabled,
   loopRange
 } = storeToRefs(transportStore)
-const EMPTY_MASTER_METER: MixerChannelMeter = {
-  channelId: "master",
-  preFaderPeak: [0, 0],
-  postFaderPeak: [0, 0],
-  heldPeak: [0, 0],
-  clipped: false
-}
-const masterMeter = computed(() =>
-  mixerStore.master ? mixerStore.meterFor(mixerStore.master.id) : EMPTY_MASTER_METER
-)
-
 const lowLatencyTargetName = computed(
   () =>
     mixerStore.outputs.find(
@@ -246,7 +234,6 @@ onBeforeUnmount(() => {
       :piano-roll-available="pianoRollStore.openClipIds.length > 0"
       :metronome-channel="mixerStore.metronome"
       :master-channel="mixerStore.master"
-      :master-meter="masterMeter"
       :low-latency-mode-enabled="lowLatencySnapshot.enabled"
       :low-latency-mode-busy="lowLatencyApplying"
       :low-latency-mode-disabled="!lowLatencyModeStore.canConfigure"

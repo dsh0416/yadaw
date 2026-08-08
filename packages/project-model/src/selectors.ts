@@ -22,11 +22,27 @@ export function patchMixerGraph(
   id: string,
   patch: Record<string, unknown>
 ): ProjectGraphSnapshot {
-  const next = structuredClone(graph)
-  const values =
-    target === "channel" ? next.channels : target === "send" ? next.sends : next.plugins
-  const value = values.find((candidate) => candidate.id === id)
-  if (value) Object.assign(value, patch)
+  if (target === "channel") {
+    const channels = patchById(graph.channels, id, patch)
+    return channels ? { ...graph, channels } : graph
+  }
+  if (target === "send") {
+    const sends = patchById(graph.sends, id, patch)
+    return sends ? { ...graph, sends } : graph
+  }
+  const plugins = patchById(graph.plugins, id, patch)
+  return plugins ? { ...graph, plugins } : graph
+}
+
+function patchById<T extends { id: string }>(
+  values: readonly T[],
+  id: string,
+  patch: Record<string, unknown>
+): T[] | null {
+  const index = values.findIndex((value) => value.id === id)
+  if (index < 0) return null
+  const next = [...values]
+  next[index] = { ...values[index]!, ...patch }
   return next
 }
 

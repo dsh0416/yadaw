@@ -1,6 +1,6 @@
 import { shallowMount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
-import type { MixerChannelMeter, MixerChannelState, TempoMapSnapshot } from "@heron/contracts"
+import type { MixerChannelState, TempoMapSnapshot } from "@heron/contracts"
 import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementTimelineTrack from "./ArrangementTimelineTrack.vue"
 import ArrangementTimelineTrackSource from "./ArrangementTimelineTrack.vue?raw"
@@ -35,14 +35,6 @@ const channel: MixerChannelState = {
   hardwareOutputChannels: []
 }
 
-const meter: MixerChannelMeter = {
-  channelId: channel.id,
-  preFaderPeak: [0, 0],
-  postFaderPeak: [0, 0],
-  heldPeak: [0, 0],
-  clipped: false
-}
-
 function row(kind: "audio" | "instrument" = "audio"): ArrangementTrackRow {
   return {
     track: {
@@ -58,8 +50,7 @@ function row(kind: "audio" | "instrument" = "audio"): ArrangementTrackRow {
     audioClips: [],
     midiClips: [],
     scale: 1,
-    height: 88,
-    meter: { ...meter, channelId: kind === "audio" ? channel.id : "instrument-1" }
+    height: 88
   }
 }
 

@@ -1379,6 +1379,8 @@
       "levelDb": "{level} dB",
       "sendLevel": "发送电平",
       "sendLevelValue": "发送电平（分贝）",
+      "sendLevelFor": "发送至 {target} 的电平",
+      "sendLevelValueFor": "发送至 {target} 的电平值（分贝）",
       "addSend": "在空槽位添加发送",
       "noSend": "无发送"
     },

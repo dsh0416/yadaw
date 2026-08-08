@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
+import { DOMWrapper, enableAutoUnmount, flushPromises, mount } from "@vue/test-utils"
 import type { MixerBusState, MixerChannelState, MixerSendState } from "@heron/contracts"
-import { UiCascadingSelect } from "@heron/ui"
+import { UiCascadingSelect, UiRotaryControl } from "@heron/ui"
 import MixerSendSection from "./MixerSendSection.vue"
 
 const channel: MixerChannelState = {
@@ -51,9 +51,8 @@ const send: MixerSendState = {
   levelDb: -12
 }
 
-afterEach(() => {
-  document.body.innerHTML = ""
-})
+// Send menus teleport into `document.body`, so wrappers must unmount between tests.
+enableAutoUnmount(afterEach)
 
 describe("MixerSendSection", () => {
   it("edits all three send positions and parameter gestures from the compact row", async () => {
@@ -64,15 +63,27 @@ describe("MixerSendSection", () => {
         sends: [send],
         buses: [bus],
         outputs: [output],
-        sendTargets: [],
-        slotRows: 2
+        sendTargets: [{ kind: "output", channelId: "output" }],
+        slotRows: 1
       }
     })
 
-    expect(wrapper.get('button[aria-label="Edit send to BUS 7"]').text()).toContain("POST")
+    expect(wrapper.get(".send-row").classes()).toContain("tap-post")
+    expect(wrapper.get('button[aria-label="Edit send to BUS 7"]').text()).toBe("BUS 7")
     expect(wrapper.text()).not.toContain("EMPTY SEND")
     expect(wrapper.find('button[aria-label="Add send in empty slot"]').exists()).toBe(false)
-    expect(wrapper.findAll(".send-row.alignment-spacer")).toHaveLength(1)
+    expect(wrapper.findAll(".send-row.alignment-spacer")).toHaveLength(0)
+
+    const level = wrapper.get('input[aria-label="BUS 7 send level"]')
+    await level.setValue("-6")
+    expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
+      target: "send",
+      id: "send",
+      parameter: "levelDb",
+      value: -6
+    })
+    expect(wrapper.emitted("updateSend")?.at(-1)).toEqual(["send", { levelDb: -6 }])
+
     await wrapper.get('button[aria-label="Edit send to BUS 7"]').trigger("click")
     await flushPromises()
 
@@ -87,27 +98,61 @@ describe("MixerSendSection", () => {
     await new DOMWrapper(tapButtons[2]).trigger("click")
     expect(wrapper.emitted("updateSend")?.at(-1)).toEqual(["send", { tap: "post-pan" }])
 
-    const level = new DOMWrapper(
-      document.body.querySelector<HTMLInputElement>('input[aria-label="Send level"]')
-    )
     expect(document.body.querySelector('[aria-label="Send pan"]')).toBeNull()
-    await level.setValue("-6")
-    expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "send",
-      id: "send",
-      parameter: "levelDb",
-      value: -6
-    })
-    expect(wrapper.emitted("updateSend")?.at(-1)).toEqual(["send", { levelDb: -6 }])
+    expect(document.body.querySelector('[aria-label="Send level"]')).toBeNull()
 
-    const target = new DOMWrapper(
-      document.body.querySelector<HTMLSelectElement>('select[aria-label="Send target"]')
+    const destination = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Send target"]'
     )
-    await target.setValue("output:output")
+    expect(destination?.textContent?.trim()).toBe("BUS 7")
+    expect(document.body.querySelector('select[aria-label="Send target"]')).toBeNull()
+    await new DOMWrapper(destination).trigger("click")
+    await flushPromises()
+    const destinationGroups = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(".ui-cascading-select__sub-trigger")
+    )
+    expect(destinationGroups.map((button) => button.textContent?.trim())).toEqual([
+      "Buses",
+      "Outputs"
+    ])
+    await new DOMWrapper(destinationGroups[1]).trigger("keydown", { key: "ArrowRight" })
+    await flushPromises()
+    const outputOption = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(".ui-cascading-select__item")
+    ).find((button) => button.textContent?.trim() === "Output 1–2")
+    await new DOMWrapper(outputOption).trigger("click")
     expect(wrapper.emitted("updateSend")?.at(-1)).toEqual([
       "send",
       { targetChannelId: "output", targetBus: null }
     ])
+  })
+
+  it("uses Logic position and a stronger ring without redundant row labels", async () => {
+    const wrapper = mount(MixerSendSection, {
+      props: {
+        channel,
+        sends: [{ ...send, tap: "pre" }],
+        buses: [bus],
+        outputs: [output],
+        sendTargets: [],
+        slotRows: 1
+      }
+    })
+
+    expect(wrapper.get(".send-row").classes()).toContain("tap-pre")
+    expect(wrapper.get(".send-row").attributes("data-tap")).toBe("pre")
+    expect(wrapper.get(".send-config").text()).toBe("BUS 7")
+    expect(wrapper.find(".send-config i").exists()).toBe(false)
+    expect(wrapper.find(".send-config b").exists()).toBe(false)
+    expect(wrapper.get(".send-level").attributes("style")).toContain("--rotary-control-accent")
+    expect(wrapper.get(".send-level").attributes("style")).toContain("--ui-color-action")
+    expect(wrapper.get(".send-level").classes()).toContain("ui-rotary-control--ring-emphasized")
+    expect(wrapper.getComponent(UiRotaryControl).props("dragRangePixels")).toBe(180)
+
+    await wrapper.setProps({ sends: [{ ...send, tap: "post-pan" }] })
+    expect(wrapper.get(".send-row").classes()).toContain("tap-post-pan")
+    expect(wrapper.get(".send-config").text()).toBe("BUS 7")
+    expect(wrapper.get(".send-level").attributes("style")).toContain("--ui-signal-meter-safe")
   })
 
   it("adds a send from available BUS and Output targets", async () => {

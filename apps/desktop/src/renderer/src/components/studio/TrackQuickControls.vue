@@ -14,7 +14,7 @@ const { t } = useI18n()
 
 const props = defineProps<{
   channel: MixerChannelState
-  meter: MixerChannelMeter
+  meter?: MixerChannelMeter
 }>()
 
 const emit = defineEmits<{
@@ -103,6 +103,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
 
     <TrackGainControl
       :channel-name="channel.name"
+      :channel-id="channel.id"
       :value="channel.gainDb"
       :meter="meter"
       @preview="preview('gainDb', $event)"

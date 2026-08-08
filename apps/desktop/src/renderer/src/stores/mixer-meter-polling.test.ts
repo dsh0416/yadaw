@@ -44,4 +44,45 @@ describe("useMixerMeterPolling", () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(refresh).not.toHaveBeenCalled()
   })
+
+  it("coalesces overlapping intervals into one trailing refresh", async () => {
+    let resolveRefresh!: () => void
+    const refresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve
+        })
+    )
+    const polling = useMixerMeterPolling(refresh)
+
+    polling.start()
+    await vi.advanceTimersByTimeAsync(99)
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    resolveRefresh()
+    await Promise.resolve()
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    polling.stop()
+    resolveRefresh()
+  })
+
+  it("does not schedule a trailing refresh after polling stops", async () => {
+    let resolveRefresh!: () => void
+    const refresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve
+        })
+    )
+    const polling = useMixerMeterPolling(refresh)
+
+    polling.start()
+    await vi.advanceTimersByTimeAsync(33)
+    polling.stop()
+    resolveRefresh()
+    await Promise.resolve()
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
 })

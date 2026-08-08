@@ -127,9 +127,14 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
   }
 
   function preview(value: MixerParameterPreview): void {
-    graph.value = patchMixerGraph(graph.value, value.target, value.id, {
-      [value.parameter]: value.target === "plugin" ? value.value >= 0.5 : value.value
-    })
+    // Continuous controls keep their gesture value locally. Replacing the project graph on every
+    // pointer event invalidates the entire arrangement and Mixer component trees. Plug-in bypass is
+    // discrete and still needs an immediate optimistic state change before its project command.
+    if (value.target === "plugin") {
+      graph.value = patchMixerGraph(graph.value, value.target, value.id, {
+        [value.parameter]: value.value >= 0.5
+      })
+    }
     pendingPreviews.set(`${value.target}:${value.id}:${value.parameter}`, value)
     previewFlush ??= Promise.resolve().then(flushPreviews)
   }

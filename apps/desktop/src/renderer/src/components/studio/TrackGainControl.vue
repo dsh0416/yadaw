@@ -2,6 +2,7 @@
 import { computed, shallowRef } from "vue"
 import type { MixerChannelMeter } from "@heron/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import { useMixerRuntimeStore } from "../../stores/mixerRuntime"
 import {
   dbToLevelPercent,
   FADER_MAX_DB,
@@ -12,8 +13,9 @@ import {
 
 const props = defineProps<{
   channelName: string
+  channelId?: string
   value: number
-  meter: MixerChannelMeter
+  meter?: MixerChannelMeter
   disabled?: boolean
 }>()
 
@@ -23,11 +25,13 @@ const emit = defineEmits<{
 }>()
 
 const tooltipVisible = shallowRef(false)
+const runtimeStore = useMixerRuntimeStore()
+const meter = computed(() => props.meter ?? runtimeStore.meterFor(props.channelId ?? ""))
 const valueLabel = computed(() =>
   props.value <= FADER_MIN_DB ? "−∞ dB" : `${props.value.toFixed(1)} dB`
 )
 const meterStyle = computed(() => {
-  const amplitude = Math.max(0, ...props.meter.postFaderPeak)
+  const amplitude = Math.max(0, ...meter.value.postFaderPeak)
   const db = amplitude > 0 ? 20 * Math.log10(amplitude) : Number.NEGATIVE_INFINITY
   return {
     "--meter-level": `${dbToLevelPercent(db, METER_MIN_DB, METER_MAX_DB)}%`
