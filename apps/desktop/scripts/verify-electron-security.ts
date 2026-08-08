@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path"
 import { FuseState, FuseV1Options, getCurrentFuseWire, type FuseConfig } from "@electron/fuses"
 
 const releaseDirectory = resolve(import.meta.dirname, "../../../release")
+const macEntitlementsPath = resolve(import.meta.dirname, "../build/entitlements.mac.plist")
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -86,6 +87,10 @@ if (!(await exists(asarPath))) {
 if (process.platform === "darwin") {
   const appBundle = resolve(dirname(executable), "../..")
   const infoPlist = join(appBundle, "Contents", "Info.plist")
+  const configuredEntitlements = parsePlist(await readFile(macEntitlementsPath, "utf8"))
+  if (configuredEntitlements["com.apple.security.device.audio-input"] !== true) {
+    throw new Error("macOS signing configuration is missing the audio-input entitlement")
+  }
   const verification = spawnSync(
     "codesign",
     ["--verify", "--deep", "--strict", "--all-architectures", "--verbose=2", appBundle],
@@ -102,27 +107,6 @@ if (process.platform === "darwin") {
     throw new Error("Packaged macOS application has an empty microphone usage description")
   }
 
-  const entitlementInspection = spawnSync(
-    "codesign",
-    ["--display", "--entitlements", ":-", appBundle],
-    { encoding: "utf8" }
-  )
-  if (entitlementInspection.status !== 0) {
-    const details =
-      entitlementInspection.stderr.trim() || entitlementInspection.stdout.trim() || "unknown error"
-    throw new Error(`Unable to inspect packaged macOS entitlements: ${details}`)
-  }
-  const entitlementOutput = `${entitlementInspection.stdout}\n${entitlementInspection.stderr}`
-  const plistStart = entitlementOutput.indexOf("<?xml")
-  const plistEnd = entitlementOutput.lastIndexOf("</plist>")
-  if (plistStart < 0 || plistEnd < plistStart) {
-    throw new Error("codesign did not return a readable entitlement property list")
-  }
-  const entitlements = entitlementOutput.slice(plistStart, plistEnd + "</plist>".length)
-  if (parsePlist(entitlements)["com.apple.security.device.audio-input"] !== true) {
-    throw new Error("Packaged macOS application is missing the audio-input entitlement")
-  }
-
   if (process.env.HERON_REQUIRE_DEVELOPER_ID_SIGNATURE === "true") {
     const inspection = spawnSync("codesign", ["--display", "--verbose=4", appBundle], {
       encoding: "utf8"
@@ -136,6 +120,29 @@ if (process.platform === "darwin") {
       throw new Error(
         `Packaged macOS application is not signed with Developer ID: ${details.trim()}`
       )
+    }
+
+    const entitlementInspection = spawnSync(
+      "codesign",
+      ["--display", "--entitlements", ":-", appBundle],
+      { encoding: "utf8" }
+    )
+    if (entitlementInspection.status !== 0) {
+      const entitlementDetails =
+        entitlementInspection.stderr.trim() ||
+        entitlementInspection.stdout.trim() ||
+        "unknown error"
+      throw new Error(`Unable to inspect packaged macOS entitlements: ${entitlementDetails}`)
+    }
+    const entitlementOutput = `${entitlementInspection.stdout}\n${entitlementInspection.stderr}`
+    const plistStart = entitlementOutput.indexOf("<?xml")
+    const plistEnd = entitlementOutput.lastIndexOf("</plist>")
+    if (plistStart < 0 || plistEnd < plistStart) {
+      throw new Error("codesign did not return a readable entitlement property list")
+    }
+    const entitlements = entitlementOutput.slice(plistStart, plistEnd + "</plist>".length)
+    if (parsePlist(entitlements)["com.apple.security.device.audio-input"] !== true) {
+      throw new Error("Packaged macOS application is missing the audio-input entitlement")
     }
   }
 
