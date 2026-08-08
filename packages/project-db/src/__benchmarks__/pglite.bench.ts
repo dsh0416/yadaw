@@ -4,7 +4,9 @@ import { join } from "node:path"
 import { performance } from "node:perf_hooks"
 import type { ProjectCommand } from "@heron/contracts"
 import { afterAll, beforeAll, bench, describe } from "vitest"
+import { PROJECT_MIGRATIONS_FOLDER } from "../migrations"
 import { ProjectDatabase } from "../node"
+import { buildProjectTemplateArchive } from "../template"
 
 let database: ProjectDatabase
 let directory: string
@@ -32,13 +34,19 @@ function formatPercentiles(samples: number[]): string {
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "heron-pglite-bench-"))
-  database = await ProjectDatabase.create(join(directory, "pgdata"), {
-    name: "PGlite benchmark",
-    sampleRate: 48_000,
-    numerator: 4,
-    denominator: 4,
-    waveformDisplayMode: "separate"
-  })
+  const templateArchivePath = join(directory, "project-template.pglite.gz")
+  await buildProjectTemplateArchive(templateArchivePath, PROJECT_MIGRATIONS_FOLDER)
+  database = await ProjectDatabase.create(
+    join(directory, "pgdata"),
+    {
+      name: "PGlite benchmark",
+      sampleRate: 48_000,
+      numerator: 4,
+      denominator: 4,
+      waveformDisplayMode: "separate"
+    },
+    templateArchivePath
+  )
 
   const channelCommands: ProjectCommand[] = Array.from({ length: 64 }, (_, index) => ({
     type: "create-channel",

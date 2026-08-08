@@ -4,7 +4,6 @@ import { PGlite } from "@electric-sql/pglite"
 import { asc, eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/pglite"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
-import { migrate as runMigrations } from "drizzle-orm/pglite/migrator"
 import type {
   ProjectGraphSnapshot,
   ProjectAssetSummary,
@@ -41,9 +40,12 @@ import { readMixerSnapshot } from "./internal/mixer-reads"
 import { ProjectAssetRepository } from "./internal/assets"
 import { dumpProjectArchive } from "./internal/archive"
 import { importMidiSource, rollbackMidiSource } from "./internal/midi"
+import { migrateProjectDatabase } from "./migrations"
 
 const DEFAULT_INITIAL_TEMPO = 120
-const MIGRATIONS_FOLDER = fileURLToPath(new URL(/* @vite-ignore */ "../drizzle", import.meta.url))
+const PROJECT_TEMPLATE_ARCHIVE = fileURLToPath(
+  new URL(/* @vite-ignore */ "../project-template.pglite.gz", import.meta.url)
+)
 
 type ProjectDb = PgliteDatabase<typeof schema>
 
@@ -64,7 +66,8 @@ export class ProjectDatabase {
       numerator: number
       denominator: number
       waveformDisplayMode: "separate" | "aggregate"
-    }
+    },
+    templateArchivePath = PROJECT_TEMPLATE_ARCHIVE
   ): Promise<ProjectDatabase> {
     if (
       !PROJECT_SAMPLE_RATES.includes(
@@ -73,9 +76,13 @@ export class ProjectDatabase {
     ) {
       throw new RangeError("Unsupported project sample rate")
     }
-    const instance = new ProjectDatabase(new PGlite(dataDir))
+    const instance = new ProjectDatabase(
+      await PGlite.create({
+        dataDir,
+        loadDataDir: new Blob([await readFile(templateArchivePath)])
+      })
+    )
     try {
-      await instance.migrate()
       await instance.db.transaction(async (tx) => {
         await tx.insert(project).values({
           id: PROJECT_ID,
@@ -253,7 +260,7 @@ export class ProjectDatabase {
   }
 
   async migrate(): Promise<void> {
-    await runMigrations(this.db, { migrationsFolder: MIGRATIONS_FOLDER })
+    await migrateProjectDatabase(this.db)
   }
 
   async getConfiguration(): Promise<ProjectConfiguration> {

@@ -62,6 +62,10 @@ The following rules are mandatory:
 - The Electron main build must copy the committed migration directory to
   `out/drizzle`, and the project worker must resolve that directory relative to
   `import.meta.url`. Tests use the same committed migration directory directly.
+- The Electron main build must also generate
+  `out/project-template.pglite.gz` from those migrations. The template contains
+  the current schema and migration journal but no project instance rows. New
+  projects load this template and do not run the migrator.
 - Migrations describe structure. Deterministic new-project seed data belongs in
   the project creation transaction, not in a data migration.
 - A custom SQL migration requires an explicit review note explaining why
@@ -183,8 +187,9 @@ Every database change must cover the relevant checks below.
 - Foreign-key cascade/restrict behavior, self-relations, unique constraints,
   partial indexes, and check constraints are exercised.
 - `drizzle-kit check` passes.
-- The production main build includes `out/drizzle`, and the built worker can
-  create a database from it.
+- The production main build includes `out/drizzle` and the schema-only
+  `out/project-template.pglite.gz`; the built worker can create a database from
+  the template and migrate existing archives from the packaged migrations.
 
 ### Repository behavior
 

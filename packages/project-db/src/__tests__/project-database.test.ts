@@ -3,8 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PGlite } from "@electric-sql/pglite"
 import type { MixerChannelState, ProjectCommand } from "@heron/contracts"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { PROJECT_MIGRATIONS_FOLDER } from "../migrations"
 import { ProjectDatabase } from "../node"
+import { buildProjectTemplateArchive } from "../template"
 
 interface TestDatabase {
   database: ProjectDatabase
@@ -12,6 +14,8 @@ interface TestDatabase {
 }
 
 const databases: TestDatabase[] = []
+let templateDirectory: string
+let templateArchivePath: string
 
 function encodePeaks(values: number[]): Uint8Array {
   const bytes = new Uint8Array(values.length * 4)
@@ -22,13 +26,17 @@ function encodePeaks(values: number[]): Uint8Array {
 
 async function createDatabase(name = "Test project"): Promise<TestDatabase> {
   const directory = await mkdtemp(join(tmpdir(), "heron-project-db-"))
-  const database = await ProjectDatabase.create(join(directory, "pgdata"), {
-    name,
-    sampleRate: 48_000,
-    numerator: 4,
-    denominator: 4,
-    waveformDisplayMode: "separate"
-  })
+  const database = await ProjectDatabase.create(
+    join(directory, "pgdata"),
+    {
+      name,
+      sampleRate: 48_000,
+      numerator: 4,
+      denominator: 4,
+      waveformDisplayMode: "separate"
+    },
+    templateArchivePath
+  )
   const result = { database, directory }
   databases.push(result)
   return result
@@ -223,6 +231,12 @@ async function revertAraDocumentStateMigration(database: PGlite): Promise<void> 
   `)
 }
 
+beforeAll(async () => {
+  templateDirectory = await mkdtemp(join(tmpdir(), "heron-project-template-test-"))
+  templateArchivePath = join(templateDirectory, "project-template.pglite.gz")
+  await buildProjectTemplateArchive(templateArchivePath, PROJECT_MIGRATIONS_FOLDER)
+})
+
 afterEach(async () => {
   for (const resource of databases.splice(0)) {
     await resource.database.close()
@@ -230,7 +244,35 @@ afterEach(async () => {
   }
 })
 
+afterAll(async () => {
+  await rm(templateDirectory, { force: true, recursive: true })
+})
+
 describe("ProjectDatabase", () => {
+  it("builds a reusable schema-only template with the complete migration journal", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "heron-project-template-verifier-"))
+    const verifier = await PGlite.create({
+      dataDir: join(directory, "pgdata"),
+      loadDataDir: new Blob([await readFile(templateArchivePath)])
+    })
+    try {
+      const projectRows = await verifier.query<{ count: number }>(
+        "select count(*)::int as count from project"
+      )
+      const migrationRows = await verifier.query<{ count: number }>(
+        "select count(*)::int as count from drizzle.__drizzle_migrations"
+      )
+      const journal = JSON.parse(
+        await readFile(join(PROJECT_MIGRATIONS_FOLDER, "meta", "_journal.json"), "utf8")
+      ) as { entries: unknown[] }
+      expect(projectRows.rows[0]?.count).toBe(0)
+      expect(migrationRows.rows[0]?.count).toBe(journal.entries.length)
+    } finally {
+      await verifier.close()
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
   it("runs generated migrations, seeds the graph, and updates normalized configuration", async () => {
     const { database } = await createDatabase()
 

@@ -7,7 +7,8 @@
   "exports": {
     "./schema": "./src/schema.ts",
     "./protocol": "./src/protocol.ts",
-    "./node": "./src/node.ts"
+    "./node": "./src/node.ts",
+    "./template": "./src/template.ts"
   },
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json && pnpm db:check",
