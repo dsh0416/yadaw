@@ -63,6 +63,8 @@ mac:
   icon: build/icon.icns
   minimumSystemVersion: "14.2"
   extendInfo:
+    NSMicrophoneUsageDescription: >-
+      Heron uses audio input devices you select for monitoring and recording.
     NSAudioCaptureUsageDescription: >-
       Heron captures audio from applications you select for monitoring and recording.
   hardenedRuntime: true
