@@ -1,4 +1,8 @@
-import { DEFAULT_PROJECT_END_TICK, type ProjectGraphSnapshot } from "@heron/contracts"
+import {
+  DEFAULT_PROJECT_END_TICK,
+  resolvePluginProcessorAudioMode,
+  type ProjectGraphSnapshot
+} from "@heron/contracts"
 import type { AudioHostGraph } from "../audio-host"
 
 export type RuntimeLatencyPolicy =
@@ -106,6 +110,9 @@ export class AudioGraphCompiler {
         role: plugin.role,
         slot_order: plugin.slotOrder,
         audio_mode: plugin.audioMode,
+        duplicate_mono_output:
+          plugin.audioMode === "mono-to-stereo" &&
+          resolvePluginProcessorAudioMode(plugin.descriptor, plugin.audioMode) === "mono",
         enabled: plugin.enabled,
         aux_input_buses: plugin.descriptor.buses
           .filter(

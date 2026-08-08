@@ -64,6 +64,7 @@ export interface AudioHostGraph {
     role: string
     slot_order: number
     audio_mode: PluginAudioMode
+    duplicate_mono_output?: boolean
     enabled: boolean
     aux_input_buses: Array<{
       input_port_key: string

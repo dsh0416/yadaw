@@ -364,6 +364,7 @@ mod tests {
             role: "effect".to_owned(),
             slot_order,
             audio_mode: PluginAudioMode::Stereo,
+            duplicate_mono_output: false,
             enabled: true,
             aux_input_buses: Vec::new(),
             latency_samples,

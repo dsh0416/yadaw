@@ -10,7 +10,7 @@ import type {
   PluginParameterInfo,
   PluginStateEnvelope
 } from "@heron/contracts"
-import { pluginTypeKey } from "@heron/contracts"
+import { pluginTypeKey, resolvePluginProcessorAudioMode } from "@heron/contracts"
 import { binaryBytes, inlineBinary } from "./wire"
 import type { ControlResponse } from "./wire"
 import type { PluginEditorToolbarAction } from "./audio-host-editor-windows"
@@ -105,6 +105,10 @@ export class AudioHostPluginClient {
     if (existing) return existing
     const locator = plugin.locator
     const state = plugin.state
+    const processorAudioMode = resolvePluginProcessorAudioMode(plugin.descriptor, plugin.audioMode)
+    if (!processorAudioMode) {
+      throw new Error(`Plugin audio mode ${plugin.audioMode} is unavailable`)
+    }
     const response = await (
       immediate ? this.requestImmediately.bind(this) : this.request.bind(this)
     )({
@@ -116,7 +120,7 @@ export class AudioHostPluginClient {
         native_id: locator.nativeId
       },
       plugin_kind: plugin.descriptor.kind,
-      audio_mode: plugin.audioMode,
+      audio_mode: processorAudioMode,
       active_aux_inputs: plugin.sidechainInputs.map((route) => {
         const bus = plugin.descriptor.buses.find(
           (candidate) =>

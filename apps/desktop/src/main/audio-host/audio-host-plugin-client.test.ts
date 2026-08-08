@@ -98,6 +98,22 @@ describe("AudioHostPluginClient", () => {
     expect(client.loadedInstanceIds()).toEqual(["plugin-1"])
   })
 
+  it("loads a hosted mono-to-stereo effect with its native mono processor layout", async () => {
+    const { client, request } = createClient()
+    request.mockResolvedValue({
+      result: { type: "plugin-loaded", runtime_handle: 8, latency_samples: 0, tail_samples: 0 }
+    })
+    const monoToStereo: PluginInstanceState = {
+      ...plugin,
+      descriptor: { ...descriptor, supportedAudioModes: ["mono"] },
+      audioMode: "mono-to-stereo"
+    }
+
+    await client.loadPlugin(monoToStereo, 48_000)
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ audio_mode: "mono" }))
+  })
+
   it("rejects invalid load responses", async () => {
     const { client, request } = createClient()
     request.mockResolvedValue({ result: { type: "ok" } })

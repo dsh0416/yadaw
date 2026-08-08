@@ -196,10 +196,18 @@ pub(super) fn live_graph(
         .plugins
         .iter()
         .map(|plugin| {
+            let processor = processors
+                .and_then(|processors| processors.get(&plugin.instance_id))
+                .cloned()
+                .map(|processor| {
+                    if plugin.duplicate_mono_output {
+                        processor.with_mono_output_duplication()
+                    } else {
+                        processor
+                    }
+                });
             Ok(engine::NativePluginInstance {
-                processor: processors
-                    .and_then(|processors| processors.get(&plugin.instance_id))
-                    .cloned(),
+                processor,
                 instance_id: plugin.instance_id.clone(),
                 channel_index: channel_index(&plugin.channel_id)?,
                 role: plugin.role.clone(),
@@ -929,6 +937,7 @@ mod tests {
                 role: "effect".to_owned(),
                 slot_order: 1,
                 audio_mode: PluginAudioMode::Stereo,
+                duplicate_mono_output: false,
                 enabled: true,
                 aux_input_buses: vec![LivePluginAuxInputBus {
                     input_port_key: "vst3:audio:input:7".to_owned(),

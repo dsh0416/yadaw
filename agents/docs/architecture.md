@@ -108,6 +108,15 @@ resolved to bounded numeric tokens before graph publication, so the callback
 never performs string lookup. VST3 maps bus and parameter IDs into this model;
 CLAP uses its native IDs. ARA remains a VST3-only sidecar.
 
+Project audio modes describe the channel-strip signal contract, independently
+of a processor's native bus layout. A proven native 1-in/2-out layout provides
+`mono-to-stereo` directly. A processor with only a proven 1-in/1-out layout can
+provide the same host mode through an explicit format-neutral post-process
+adapter that copies left output to right without callback allocation. Native
+layout probing remains isolated; the embedded runtime never retries a layout
+that the probe did not validate. See
+[ADR-0005](adr/0005-host-owned-plugin-channel-adapters.md).
+
 `heron-clap-host` is the only owner of CLAP unsafe FFI and depends directly on
 the pinned `clap-sys` version. It separates a main-thread, `!Send + !Sync`
 control instance from a `Send + !Sync` audio endpoint. Factory probing occurs

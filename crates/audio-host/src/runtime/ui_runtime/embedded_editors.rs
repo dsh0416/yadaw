@@ -1131,6 +1131,7 @@ mod tests {
                 role: "effect".to_owned(),
                 slot_order: 0,
                 audio_mode: PluginAudioMode::Stereo,
+                duplicate_mono_output: false,
                 enabled: true,
                 aux_input_buses: vec![LivePluginAuxInputBus {
                     input_port_key: "vst3:audio:input:1".into(),

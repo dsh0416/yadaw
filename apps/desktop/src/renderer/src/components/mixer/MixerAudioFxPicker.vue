@@ -7,6 +7,7 @@ import {
   pluginCategoriesLabel,
   pluginDescriptorKey,
   pluginLocator,
+  pluginSupportsHostedAudioMode,
   type PluginDescriptor
 } from "@heron/contracts"
 import {
@@ -68,7 +69,7 @@ const pickerMenu = computed(() => {
         children: pluginAudioModeOptions(plugin.kind, props.inputWidth, t).map((option) => {
           const id = JSON.stringify([descriptorKey, option.value])
           selections.set(id, { descriptor: plugin, audioMode: option.value })
-          const supported = plugin.supportedAudioModes.includes(option.value)
+          const supported = pluginSupportsHostedAudioMode(plugin, option.value)
           return {
             kind: "item",
             id,
