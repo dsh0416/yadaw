@@ -124,7 +124,7 @@ describe("MixerChannelStrip", () => {
     await gainEditor.trigger("input")
     await wrapper.setProps({
       meter: {
-        ...wrapper.props("meter"),
+        ...wrapper.props("meter")!,
         postFaderPeak: [0.4, 0.4]
       }
     })
@@ -158,10 +158,11 @@ describe("MixerChannelStrip", () => {
     await pan.setValue("63")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { pan: 1 }])
 
-    expect(wrapper.find('input[aria-label="Vocal pan value"]').exists()).toBe(false)
     await wrapper.setProps({ channel: { ...channel, pan: 1 } })
     expect(wrapper.find(".pan-readout").exists()).toBe(false)
     await pan.trigger("dblclick")
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { pan: 0 }])
+    await pan.trigger("keydown", { key: "F2" })
     const panEditor = wrapper.get('input[aria-label="Vocal pan value"]')
     expect((panEditor.element as HTMLInputElement).value).toBe("63")
     await panEditor.setValue("-64")
@@ -186,7 +187,7 @@ describe("MixerChannelStrip", () => {
       "volume",
       "name"
     ])
-    expect(wrapper.findAll(".fader-scale .db-scale-mark").map((mark) => mark.text())).toEqual([
+    expect(wrapper.findAll(".fader .ui-db-scale__mark").map((mark) => mark.text())).toEqual([
       "+12",
       "0",
       "−12",
@@ -194,7 +195,7 @@ describe("MixerChannelStrip", () => {
       "−60",
       "−∞"
     ])
-    expect(wrapper.findAll(".meter-scale .db-scale-mark").map((mark) => mark.text())).toEqual([
+    expect(wrapper.findAll(".meter-rack .ui-db-scale__mark").map((mark) => mark.text())).toEqual([
       "0",
       "−6",
       "−12",
@@ -271,14 +272,14 @@ describe("MixerChannelStrip", () => {
       global: { plugins: [pinia] }
     })
 
-    expect(wrapper.get('button[aria-label="Mute Vocal"]').classes()).toContain("mute")
+    expect(wrapper.get('button[aria-label="Mute Vocal"]').classes()).toContain("tone-mute")
     expect(wrapper.get('button[aria-label="Mute Vocal"]').classes()).toContain("active")
-    expect(wrapper.get('button[aria-label="Solo Vocal"]').classes()).toContain("solo")
+    expect(wrapper.get('button[aria-label="Solo Vocal"]').classes()).toContain("tone-solo")
     expect(wrapper.get('button[aria-label="Solo Vocal"]').classes()).toContain("active")
-    expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("record")
+    expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("tone-record")
     expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("active")
     const monitor = wrapper.get('button[aria-label="Monitor Vocal"]')
-    expect(monitor.classes()).toContain("monitor")
+    expect(monitor.classes()).toContain("tone-input")
     expect(monitor.classes()).toContain("active")
     expect(monitor.attributes("disabled")).toBeUndefined()
     await monitor.trigger("click")

@@ -119,8 +119,7 @@ const { rows: trackRows } = useArrangementTrackProjection({
   audioClips: () => clips.value,
   midiClips: () => mixerStore.graph.midiClips,
   trackScale: viewStore.trackScale,
-  trackHeight: viewStore.effectiveTrackHeight,
-  meterFor: mixerStore.meterFor
+  trackHeight: viewStore.effectiveTrackHeight
 })
 const {
   moveAudioClip,

@@ -37,7 +37,7 @@ function relayChannelUpdate(channelId: string, patch: MixerChannelPatch): void {
 
 <template>
   <div
-    v-for="({ track, scale, meter }, index) in rows"
+    v-for="({ track, scale }, index) in rows"
     :key="track.id"
     :class="['track-header', { selected: track.id === selectedChannelId }]"
     @click="emit('select', track.id)"
@@ -57,7 +57,6 @@ function relayChannelUpdate(channelId: string, patch: MixerChannelPatch): void {
     <TrackQuickControls
       class="track-quick-controls"
       :channel="track"
-      :meter="meter"
       @preview="emit('preview', $event)"
       @update-channel="relayChannelUpdate"
     />

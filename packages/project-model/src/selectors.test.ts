@@ -190,11 +190,15 @@ describe("patchMixerGraph", () => {
     )
     expect(before.plugins[0]?.enabled).toBe(true)
     expect(patchedPlugin.plugins[0]?.enabled).toBe(false)
+    expect(patchedChannel.tracks).toBe(before.tracks)
+    expect(patchedChannel.channels[1]).toBe(before.channels[1])
+    expect(patchedSend.channels).toBe(before.channels)
+    expect(patchedPlugin.sends).toBe(before.sends)
   })
 
   it("leaves the graph unchanged when the id is missing", () => {
     const before = graph()
-    expect(patchMixerGraph(before, "channel", "missing", { gainDb: 1 })).toEqual(before)
+    expect(patchMixerGraph(before, "channel", "missing", { gainDb: 1 })).toBe(before)
   })
 })
 

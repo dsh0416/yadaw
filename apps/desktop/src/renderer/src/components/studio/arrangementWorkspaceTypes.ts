@@ -1,4 +1,4 @@
-import type { MidiClipState, MixerChannelMeter, MixerChannelState } from "@heron/contracts"
+import type { MidiClipState, MixerChannelState } from "@heron/contracts"
 import type { TimelineClip } from "../../stores/transport"
 
 export type ArrangementTimelineTrack = MixerChannelState & {
@@ -12,5 +12,4 @@ export interface ArrangementTrackRow {
   midiClips: MidiClipState[]
   scale: number
   height: number
-  meter: MixerChannelMeter
 }

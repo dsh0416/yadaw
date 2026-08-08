@@ -2,6 +2,7 @@
 import { computed, shallowRef } from "vue"
 import type { MixerChannelMeter } from "@heron/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import { useMixerRuntimeStore } from "../../stores/mixerRuntime"
 import {
   dbToLevelPercent,
   FADER_MAX_DB,
@@ -12,8 +13,9 @@ import {
 
 const props = defineProps<{
   channelName: string
+  channelId?: string
   value: number
-  meter: MixerChannelMeter
+  meter?: MixerChannelMeter
   disabled?: boolean
 }>()
 
@@ -23,11 +25,10 @@ const emit = defineEmits<{
 }>()
 
 const tooltipVisible = shallowRef(false)
-const valueLabel = computed(() =>
-  props.value <= FADER_MIN_DB ? "−∞ dB" : `${props.value.toFixed(1)} dB`
-)
+const runtimeStore = useMixerRuntimeStore()
+const meter = computed(() => props.meter ?? runtimeStore.meterFor(props.channelId ?? ""))
 const meterStyle = computed(() => {
-  const amplitude = Math.max(0, ...props.meter.postFaderPeak)
+  const amplitude = Math.max(0, ...meter.value.postFaderPeak)
   const db = amplitude > 0 ? 20 * Math.log10(amplitude) : Number.NEGATIVE_INFINITY
   return {
     "--meter-level": `${dbToLevelPercent(db, METER_MIN_DB, METER_MAX_DB)}%`
@@ -39,6 +40,12 @@ const gesture = useParameterGesture({
   preview: (value) => emit("preview", value),
   commit: (value) => emit("commit", value)
 })
+const displayedValue = computed(() =>
+  gesture.active.value ? gesture.gestureValue.value : props.value
+)
+const valueLabel = computed(() =>
+  displayedValue.value <= FADER_MIN_DB ? "−∞ dB" : `${displayedValue.value.toFixed(1)} dB`
+)
 
 function beginGesture(): void {
   tooltipVisible.value = true
@@ -80,7 +87,7 @@ function reset(): void {
       :min="FADER_MIN_DB"
       :max="FADER_MAX_DB"
       step="0.1"
-      :value="value"
+      :value="displayedValue"
       :disabled="disabled"
       :aria-label="`${channelName} quick volume`"
       :aria-valuetext="valueLabel"

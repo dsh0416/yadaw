@@ -126,6 +126,27 @@ Arrow/Page/Home/End keyboard behavior, and prevents accidental value changes whi
 workspace scrolls. Use `UiField layout="inline"` only in narrow inspectors; normal settings and
 dialogs keep stacked fields.
 
+`UiRotaryControl` is the shared compact DAW primitive for Pan, Send level, and equivalent bounded
+continuous parameters. It owns vertical drag, keyboard adjustment, direct numeric editing,
+double-click reset, value text, and focus behavior. Product wrappers translate domain values and
+emit project preview/commit intent; they must not reimplement the knob geometry or gesture. Pointer
+drag is scaled against the parameter's complete range rather than its step count, so fractional dB
+steps do not require impractically long travel. `ringWeight="emphasized"` is reserved for compact
+controls whose colored progress would otherwise be illegible.
+
+`UiVerticalFader`, `UiDbScale`, and `UiLevelMeter` own the reusable channel-strip geometry and
+accessibility contract. The fader prevents track clicks from jumping a value, previews continuously,
+commits once, supports Escape cancellation and double-click reset, and exposes formatted value text.
+The scale and meter accept plain marks and normalized display values; they do not calculate product
+telemetry, read settings, or write project state. Mixer hosts own dB conversion, peak hold and return
+behavior, clipping reset, and project command orchestration.
+
+`UiMixerStateButton` is the shared visual and accessibility primitive for Mute, Solo, Record,
+Input Monitoring, and equivalent compact Mixer states. It owns tone, active, disabled, joined, and
+focus presentation. The product host decides whether a state exists, whether it is available, and
+which project command a press emits. Plug-in slots remain product components because their identity,
+drag payload, runtime status, and commands depend on plug-in contracts.
+
 ### Overlays
 
 - `UiDialog` owns portal placement, overlay, focus trapping and restoration, Escape, outside

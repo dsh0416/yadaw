@@ -1,9 +1,4 @@
-export interface MixerDbScaleMark {
-  value: number
-  label: string
-  position: number
-  emphasis?: boolean
-}
+import type { UiScaleMark } from "@heron/ui"
 
 export const FADER_MIN_DB = -90
 export const FADER_MAX_DB = 12
@@ -21,7 +16,7 @@ function scaleMark(
   minDb: number,
   maxDb: number,
   emphasis = false
-): MixerDbScaleMark {
+): UiScaleMark {
   return {
     value,
     label,
@@ -30,7 +25,7 @@ function scaleMark(
   }
 }
 
-export const FADER_SCALE_MARKS: readonly MixerDbScaleMark[] = [
+export const FADER_SCALE_MARKS: readonly UiScaleMark[] = [
   scaleMark(12, "+12", FADER_MIN_DB, FADER_MAX_DB),
   scaleMark(0, "0", FADER_MIN_DB, FADER_MAX_DB, true),
   scaleMark(-12, "−12", FADER_MIN_DB, FADER_MAX_DB),
@@ -39,7 +34,7 @@ export const FADER_SCALE_MARKS: readonly MixerDbScaleMark[] = [
   scaleMark(-90, "−∞", FADER_MIN_DB, FADER_MAX_DB)
 ]
 
-export const METER_SCALE_MARKS: readonly MixerDbScaleMark[] = [
+export const METER_SCALE_MARKS: readonly UiScaleMark[] = [
   scaleMark(0, "0", METER_MIN_DB, METER_MAX_DB, true),
   scaleMark(-6, "−6", METER_MIN_DB, METER_MAX_DB),
   scaleMark(-12, "−12", METER_MIN_DB, METER_MAX_DB),

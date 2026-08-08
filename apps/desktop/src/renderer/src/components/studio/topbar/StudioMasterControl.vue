@@ -11,7 +11,7 @@ import TrackGainControl from "../TrackGainControl.vue"
 
 const props = defineProps<{
   channel: MixerChannelState | null
-  meter: MixerChannelMeter
+  meter?: MixerChannelMeter
 }>()
 const emit = defineEmits<{
   preview: [preview: MixerParameterPreview]
@@ -40,6 +40,7 @@ function commitGain(value: number): void {
   <section class="master-control" :aria-label="t('studio.master.ariaLabel')">
     <TrackGainControl
       :channel-name="t('studio.master.channelName')"
+      :channel-id="channel?.id ?? 'master'"
       :value="channel?.gainDb ?? FADER_MIN_DB"
       :meter="meter"
       :disabled="!channel"

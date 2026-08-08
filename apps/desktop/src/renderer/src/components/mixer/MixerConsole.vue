@@ -167,7 +167,6 @@ async function deleteChannel(channelId: string): Promise<void> {
         :key="channel.id"
         :channel="channel"
         :sends="mixerStore.sendsFor(channel.id)"
-        :meter="mixerStore.meterFor(channel.id)"
         :outputs="mixerStore.outputs"
         :buses="mixerStore.buses"
         :output-targets="mixerStore.availableOutputTargets(channel.id)"

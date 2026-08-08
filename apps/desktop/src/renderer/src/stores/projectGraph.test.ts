@@ -347,7 +347,7 @@ describe("project graph store", () => {
       parameter: "gainDb",
       value: -3
     })
-    expect(store.graph.channels[0]?.gainDb).toBe(-3)
+    expect(store.graph.channels[0]?.gainDb).toBe(0)
 
     store.preview({
       target: "channel",

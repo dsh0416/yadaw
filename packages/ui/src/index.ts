@@ -7,16 +7,20 @@ export { default as UiChoiceChip } from "./components/UiChoiceChip.vue"
 export { default as UiContextMenu } from "./components/UiContextMenu.vue"
 export { default as UiDialog } from "./components/UiDialog.vue"
 export { default as UiDropdownMenu } from "./components/UiDropdownMenu.vue"
+export { default as UiDbScale } from "./components/UiDbScale.vue"
 export { default as UiEmptyState } from "./components/UiEmptyState.vue"
 export { default as UiField } from "./components/UiField.vue"
 export { default as UiIconButton } from "./components/UiIconButton.vue"
 export { default as UiLoadingState } from "./components/UiLoadingState.vue"
+export { default as UiLevelMeter } from "./components/UiLevelMeter.vue"
 export { default as UiMenubar } from "./components/UiMenubar.vue"
+export { default as UiMixerStateButton } from "./components/UiMixerStateButton.vue"
 export { default as UiNumberInput } from "./components/UiNumberInput.vue"
 export { default as UiPopover } from "./components/UiPopover.vue"
 export { default as UiProgress } from "./components/UiProgress.vue"
 export { default as UiProvider } from "./components/UiProvider.vue"
 export { default as UiRadioGroup } from "./components/UiRadioGroup.vue"
+export { default as UiRotaryControl } from "./components/UiRotaryControl.vue"
 export { default as UiSectionHeading } from "./components/UiSectionHeading.vue"
 export { default as UiSegmentedControl } from "./components/UiSegmentedControl.vue"
 export { default as UiSelect } from "./components/UiSelect.vue"
@@ -27,6 +31,7 @@ export { default as UiSurface } from "./components/UiSurface.vue"
 export { default as UiTextInput } from "./components/UiTextInput.vue"
 export { default as UiTooltip } from "./components/UiTooltip.vue"
 export { default as UiToolbar } from "./components/UiToolbar.vue"
+export { default as UiVerticalFader } from "./components/UiVerticalFader.vue"
 export { default as AsioCompatibleLogo } from "./components/AsioCompatibleLogo.vue"
 export { default as HeronLogo } from "./components/HeronLogo.vue"
 export { default as VstCompatibleLogo } from "./components/VstCompatibleLogo.vue"
@@ -48,8 +53,15 @@ export type {
   UiControlSize,
   UiMenubarItem,
   UiMenubarMenu,
+  UiMixerStateButtonSize,
+  UiMixerStateButtonTone,
+  UiJoinedPosition,
   UiNoticeTone,
   UiRadioOption,
+  UiRotaryControlRingWeight,
+  UiRotaryControlSize,
+  UiScaleMark,
+  UiScaleSide,
   UiSelectGroup,
   UiSelectSize,
   UiSelectOption,

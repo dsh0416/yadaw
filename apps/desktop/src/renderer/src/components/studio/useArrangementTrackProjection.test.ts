@@ -24,7 +24,7 @@ const channel: MixerChannelState = {
 }
 
 describe("useArrangementTrackProjection", () => {
-  it("joins clips, dimensions and a missing-meter fallback into one readonly row", () => {
+  it("joins clips and dimensions into one readonly row", () => {
     const tracks = shallowRef([{ ...channel, trackId: "track-1", sortOrder: 0 }])
     const scope = effectScope()
     const projection = scope.run(() =>
@@ -52,16 +52,14 @@ describe("useArrangementTrackProjection", () => {
         ],
         midiClips: () => [],
         trackScale: () => 1.5,
-        trackHeight: () => 132,
-        meterFor: () => undefined
+        trackHeight: () => 132
       })
     )!
 
     expect(projection.rows.value).toHaveLength(1)
     expect(projection.rows.value[0]).toMatchObject({
       scale: 1.5,
-      height: 132,
-      meter: { channelId: "audio-1", clipped: false }
+      height: 132
     })
     expect(projection.rows.value[0]?.audioClips.map((clip) => clip.id)).toEqual(["clip-1"])
     scope.stop()

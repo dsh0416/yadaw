@@ -325,7 +325,7 @@ export const useMixerStore = defineStore("mixer", () => {
       sortOrder: graph.value.sends.filter(
         (candidate) => candidate.sourceChannelId === sourceChannelId
       ).length,
-      enabled: false,
+      enabled: true,
       tap: "post-pan",
       levelDb: -90
     }

@@ -1,4 +1,5 @@
 import { mount } from "@vue/test-utils"
+import { createPinia } from "pinia"
 import { describe, expect, it } from "vitest"
 import StudioMasterControl from "./StudioMasterControl.vue"
 
@@ -34,7 +35,8 @@ function mountMaster(masterChannel: typeof channel | null = channel) {
     props: {
       channel: masterChannel,
       meter
-    }
+    },
+    global: { plugins: [createPinia()] }
   })
 }
 

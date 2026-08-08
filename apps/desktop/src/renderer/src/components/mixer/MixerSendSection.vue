@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { Trash2 } from "@lucide/vue"
-import { UiCascadingSelect, UiPopover, UiSelect } from "@heron/ui"
+import { UiCascadingSelect, UiPopover, UiRotaryControl } from "@heron/ui"
 import type {
   MixerBusState,
   MixerChannelState,
@@ -12,7 +12,6 @@ import type {
   MixerSendState,
   MixerSendTap
 } from "@heron/contracts"
-import { useParameterGesture } from "../../composables/useParameterGesture"
 import { mixerRouteGroups } from "./mixer-route-groups"
 
 const props = defineProps<{
@@ -33,13 +32,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const sendGestures = new Map<string, ReturnType<typeof useParameterGesture>>()
 const supportsSends = computed(() => ["audio", "instrument", "aux"].includes(props.channel.kind))
 const emptyRows = computed(() => Math.max(0, props.slotRows - props.sends.length))
 const canAddSend = computed(() => props.sendTargets.length > 0)
 const alignmentRows = computed(() => Math.max(0, emptyRows.value - (canAddSend.value ? 1 : 0)))
 const sendTargetGroups = computed(() =>
   mixerRouteGroups(props.sendTargets, props.buses, props.outputs, t)
+)
+const destinationTargetGroups = computed(
+  () =>
+    new Map(
+      props.sends.map((send) => {
+        const currentTarget = targetForSend(send)
+        const targets = currentTarget
+          ? [
+              currentTarget,
+              ...props.sendTargets.filter(
+                (candidate) => targetValue(candidate) !== targetValue(currentTarget)
+              )
+            ]
+          : props.sendTargets
+        return [send.id, mixerRouteGroups(targets, props.buses, props.outputs, t)] as const
+      })
+    )
 )
 
 function targetName(send: MixerSendState): string {
@@ -63,6 +78,13 @@ function sendTargetValue(send: MixerSendState): string {
   return send.targetChannelId ? `output:${send.targetChannelId}` : `bus:${send.targetBus}`
 }
 
+function targetForSend(send: MixerSendState): MixerRouteTarget | null {
+  if (send.targetChannelId) return { kind: "output", channelId: send.targetChannelId }
+  return send.targetBus === null || send.targetBus === undefined
+    ? null
+    : { kind: "bus", bus: send.targetBus }
+}
+
 function parseTarget(value: string): MixerRouteTarget {
   const separator = value.indexOf(":")
   const kind = value.slice(0, separator)
@@ -80,52 +102,31 @@ function targetPatch(value: string): MixerSendPatch {
   }
 }
 
-function isTargetAvailable(send: MixerSendState, target: MixerRouteTarget): boolean {
-  const value = targetValue(target)
-  return (
-    value === sendTargetValue(send) ||
-    props.sendTargets.some((candidate) => targetValue(candidate) === value)
-  )
-}
-
 function tapLabel(tap: MixerSendTap): string {
   if (tap === "pre") return t("mixer.sendSection.tapPre")
   if (tap === "post") return t("mixer.sendSection.tapPost")
   return t("mixer.sendSection.tapPan")
 }
 
-function sendLevel(send: MixerSendState): string {
-  return send.levelDb <= -90 ? "−∞" : send.levelDb.toFixed(1)
+function formatSendLevel(value: number): string {
+  return value <= -90 ? "−∞" : value.toFixed(1)
 }
 
 function updateSend(send: MixerSendState, patch: MixerSendPatch): void {
   emit("updateSend", send.id, patch)
 }
 
-function sendLevelGesture(send: MixerSendState) {
-  let gesture = sendGestures.get(send.id)
-  if (!gesture) {
-    gesture = useParameterGesture({
-      currentValue: () => {
-        const current = props.sends.find((candidate) => candidate.id === send.id)
-        return current?.levelDb ?? send.levelDb
-      },
-      preview: (value) =>
-        emit("preview", {
-          target: "send",
-          id: send.id,
-          parameter: "levelDb",
-          value
-        }),
-      commit: (value) => updateSend(send, { levelDb: value })
-    })
-    sendGestures.set(send.id, gesture)
-  }
-  return gesture
+function sendAccent(tap: MixerSendTap): string {
+  return tap === "post-pan" ? "var(--ui-signal-meter-safe)" : "var(--ui-color-action)"
 }
 
-function numberValue(event: Event): number {
-  return Number((event.currentTarget as HTMLInputElement).value)
+function previewSendLevel(send: MixerSendState, value: number): void {
+  emit("preview", {
+    target: "send",
+    id: send.id,
+    parameter: "levelDb",
+    value
+  })
 }
 
 function createSend(value: string): void {
@@ -136,118 +137,94 @@ function createSend(value: string): void {
 <template>
   <section class="send-section" data-section="sends" :aria-label="t('mixer.sendSection.ariaLabel')">
     <template v-if="supportsSends">
-      <UiPopover v-for="send in sends" :key="send.id" side="top" :side-offset="7">
-        <template #trigger>
-          <button
-            :class="['send-row', { disabled: !send.enabled }]"
-            :aria-label="t('mixer.sendSection.editSend', { target: targetName(send) })"
-          >
-            <i aria-hidden="true" />
-            <span>{{ targetName(send) }}</span>
-            <b>{{ tapLabel(send.tap) }}</b>
-            <output>{{ sendLevel(send) }}</output>
-          </button>
-        </template>
-        <div class="send-popover">
-          <header>
-            <div>
-              <span>{{ t("mixer.sendSection.header") }}</span
-              ><strong>{{ targetName(send) }}</strong>
+      <div
+        v-for="send in sends"
+        :key="send.id"
+        :class="['send-row', `tap-${send.tap}`, { disabled: !send.enabled }]"
+        :data-tap="send.tap"
+      >
+        <UiRotaryControl
+          class="send-level"
+          size="compact"
+          :value="send.levelDb"
+          :min="-90"
+          :max="12"
+          :step="0.1"
+          :default-value="-90"
+          :drag-range-pixels="180"
+          :accent="sendAccent(send.tap)"
+          ring-weight="emphasized"
+          :disabled="!send.enabled"
+          :label="t('mixer.sendSection.sendLevelFor', { target: targetName(send) })"
+          :value-label="t('mixer.sendSection.sendLevelValueFor', { target: targetName(send) })"
+          :value-text="formatSendLevel"
+          @preview="previewSendLevel(send, $event)"
+          @commit="updateSend(send, { levelDb: $event })"
+        />
+        <UiPopover side="top" :side-offset="7">
+          <template #trigger>
+            <button
+              class="send-config"
+              type="button"
+              :title="`${targetName(send)} · ${tapLabel(send.tap)} · ${formatSendLevel(send.levelDb)} dB`"
+              :aria-label="t('mixer.sendSection.editSend', { target: targetName(send) })"
+            >
+              <span>{{ targetName(send) }}</span>
+            </button>
+          </template>
+          <div class="send-popover">
+            <header>
+              <div>
+                <span>{{ t("mixer.sendSection.header") }}</span
+                ><strong>{{ targetName(send) }}</strong>
+              </div>
+              <button
+                class="delete-send"
+                :aria-label="t('mixer.sendSection.deleteSend', { target: targetName(send) })"
+                @click="emit('deleteSend', send.id)"
+              >
+                <Trash2 :size="12" />
+              </button>
+            </header>
+            <label class="toggle-row">
+              <span>{{ t("mixer.sendSection.enabled") }}</span>
+              <button
+                :class="{ active: send.enabled }"
+                :aria-label="
+                  send.enabled
+                    ? t('mixer.sendSection.disableSend')
+                    : t('mixer.sendSection.enableSend')
+                "
+                :aria-pressed="send.enabled"
+                @click="updateSend(send, { enabled: !send.enabled })"
+              >
+                {{ send.enabled ? t("mixer.sendSection.on") : t("mixer.sendSection.off") }}
+              </button>
+            </label>
+            <label>
+              <span>{{ t("mixer.sendSection.destination") }}</span>
+              <UiCascadingSelect
+                :model-value="sendTargetValue(send)"
+                :groups="destinationTargetGroups.get(send.id) ?? []"
+                size="compact"
+                :aria-label="t('mixer.sendSection.sendTarget')"
+                @update:model-value="updateSend(send, targetPatch($event))"
+              />
+            </label>
+            <div class="tap-options" :aria-label="t('mixer.sendSection.sendPosition')">
+              <button
+                v-for="option in ['pre', 'post', 'post-pan'] as MixerSendTap[]"
+                :key="option"
+                :class="{ active: send.tap === option }"
+                :aria-pressed="send.tap === option"
+                @click="updateSend(send, { tap: option })"
+              >
+                {{ tapLabel(option) }}
+              </button>
             </div>
-            <button
-              class="delete-send"
-              :aria-label="t('mixer.sendSection.deleteSend', { target: targetName(send) })"
-              @click="emit('deleteSend', send.id)"
-            >
-              <Trash2 :size="12" />
-            </button>
-          </header>
-          <label class="toggle-row">
-            <span>{{ t("mixer.sendSection.enabled") }}</span>
-            <button
-              :class="{ active: send.enabled }"
-              :aria-label="
-                send.enabled
-                  ? t('mixer.sendSection.disableSend')
-                  : t('mixer.sendSection.enableSend')
-              "
-              :aria-pressed="send.enabled"
-              @click="updateSend(send, { enabled: !send.enabled })"
-            >
-              {{ send.enabled ? t("mixer.sendSection.on") : t("mixer.sendSection.off") }}
-            </button>
-          </label>
-          <label>
-            <span>{{ t("mixer.sendSection.destination") }}</span>
-            <UiSelect
-              :model-value="sendTargetValue(send)"
-              size="compact"
-              :aria-label="t('mixer.sendSection.sendTarget')"
-              @update:model-value="updateSend(send, targetPatch($event))"
-            >
-              <optgroup :label="t('mixer.sendSection.buses')">
-                <option
-                  v-for="bus in buses"
-                  :key="bus.channel"
-                  :value="`bus:${bus.channel}`"
-                  :disabled="!isTargetAvailable(send, { kind: 'bus', bus: bus.channel })"
-                >
-                  {{ bus.name }}
-                </option>
-              </optgroup>
-              <optgroup :label="t('mixer.sendSection.outputs')">
-                <option
-                  v-for="output in outputs"
-                  :key="output.id"
-                  :value="`output:${output.id}`"
-                  :disabled="!isTargetAvailable(send, { kind: 'output', channelId: output.id })"
-                >
-                  {{ output.name }}
-                </option>
-              </optgroup>
-            </UiSelect>
-          </label>
-          <div class="tap-options" :aria-label="t('mixer.sendSection.sendPosition')">
-            <button
-              v-for="option in ['pre', 'post', 'post-pan'] as MixerSendTap[]"
-              :key="option"
-              :class="{ active: send.tap === option }"
-              :aria-pressed="send.tap === option"
-              @click="updateSend(send, { tap: option })"
-            >
-              {{ tapLabel(option) }}
-            </button>
           </div>
-          <label class="parameter-row">
-            <span
-              >{{ t("mixer.sendSection.level") }}
-              <b>{{ t("mixer.sendSection.levelDb", { level: sendLevel(send) }) }}</b></span
-            >
-            <input
-              type="range"
-              min="-90"
-              max="12"
-              step="0.1"
-              :value="send.levelDb"
-              :aria-label="t('mixer.sendSection.sendLevel')"
-              @pointerdown="sendLevelGesture(send).begin"
-              @input="sendLevelGesture(send).preview"
-              @change="sendLevelGesture(send).commit"
-              @keydown="sendLevelGesture(send).keydown"
-              @dblclick="sendLevelGesture(send).reset(-90)"
-            />
-            <input
-              type="number"
-              min="-90"
-              max="12"
-              step="0.1"
-              :value="send.levelDb"
-              :aria-label="t('mixer.sendSection.sendLevelValue')"
-              @change="sendLevelGesture(send).reset(numberValue($event))"
-            />
-          </label>
-        </div>
-      </UiPopover>
+        </UiPopover>
+      </div>
 
       <div v-if="emptyRows > 0 && canAddSend" class="send-row empty empty-slot">
         <UiCascadingSelect
@@ -293,40 +270,46 @@ function createSend(value: string): void {
 }
 .send-row {
   display: grid;
-  grid-template-columns: 5px minmax(0, 1fr) 25px 28px;
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   width: 100%;
   height: 25px;
   min-width: 0;
-  padding: 0 3px;
+  padding: 0;
   border: 1px solid var(--ui-domain-color-4a6b80);
   border-radius: 4px;
   color: var(--ui-domain-color-f5f5f5);
   background: linear-gradient(var(--ui-domain-color-4f83a4), var(--ui-domain-color-3f6b87));
   font-size: var(--ui-type-size-caption);
+}
+.send-row.tap-post,
+.send-row.tap-post-pan {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+.send-row.tap-post .send-level,
+.send-row.tap-post-pan .send-level {
+  order: 2;
+}
+.send-config {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  height: 23px;
+  min-width: 0;
+  padding: 0 3px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
   cursor: pointer;
 }
-.send-row i {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--ui-domain-color-86e7ff);
-  box-shadow: 0 0 4px var(--ui-domain-color-86e7ff);
-}
-.send-row span {
+.send-config span {
   min-width: 0;
   overflow: hidden;
-  text-align: left;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.send-row b {
-  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
-}
-.send-row output {
-  color: var(--ui-domain-color-dceeff);
-  font: var(--ui-type-size-micro) var(--ui-type-family-data);
-  text-align: right;
 }
 .send-row.disabled {
   filter: saturate(0.2);
@@ -364,7 +347,7 @@ function createSend(value: string): void {
   box-shadow: none;
   pointer-events: none;
 }
-.send-row:focus-visible {
+.send-config:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
@@ -418,14 +401,6 @@ function createSend(value: string): void {
   display: flex;
   justify-content: space-between;
 }
-.parameter-row input[type="number"] {
-  height: 25px;
-  border: 1px solid var(--line-strong);
-  border-radius: 3px;
-  color: var(--text-primary);
-  background: var(--daw-control);
-  font-size: var(--ui-type-size-control);
-}
 .toggle-row {
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -458,20 +433,5 @@ function createSend(value: string): void {
   background: var(--daw-control);
   font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   cursor: pointer;
-}
-.parameter-row {
-  grid-template-columns: minmax(0, 1fr) 54px;
-}
-.parameter-row span {
-  grid-column: 1 / -1;
-}
-.parameter-row input[type="range"] {
-  min-width: 0;
-  accent-color: var(--accent);
-}
-.parameter-row input[type="number"] {
-  width: 54px;
-  min-width: 0;
-  padding: 0 4px;
 }
 </style>

@@ -1,6 +1,19 @@
 export type UiActionVariant = "primary" | "secondary" | "ghost" | "danger"
 export type UiControlSize = "sm" | "md" | "lg"
 export type UiSelectSize = "compact" | UiControlSize
+export type UiRotaryControlSize = "compact" | "standard"
+export type UiRotaryControlRingWeight = "standard" | "emphasized"
+export type UiMixerStateButtonTone = "neutral" | "mute" | "solo" | "record" | "input" | "bounce"
+export type UiMixerStateButtonSize = "narrow" | "wide" | "standard"
+export type UiJoinedPosition = "start" | "middle" | "end"
+export type UiScaleSide = "left" | "right"
+
+export interface UiScaleMark {
+  value: number
+  label: string
+  position: number
+  emphasis?: boolean
+}
 export type UiCascadingSelectAppearance = "default" | "embedded" | "workspace"
 export type UiCascadingSelectHoverTreatment = "surface" | "host-tint"
 export type UiNoticeTone = "neutral" | "info" | "success" | "warning" | "danger"

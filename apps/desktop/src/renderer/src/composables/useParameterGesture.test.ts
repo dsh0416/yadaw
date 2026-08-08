@@ -8,7 +8,7 @@ function inputEvent(value: string): Event {
 }
 
 describe("useParameterGesture", () => {
-  it("previews while dragging and commits the final value", () => {
+  it("commits the local preview value when the controlled input is rendered from stale props", () => {
     const preview = vi.fn()
     const commit = vi.fn()
     const gesture = useParameterGesture({
@@ -19,8 +19,8 @@ describe("useParameterGesture", () => {
 
     gesture.preview(inputEvent("12"))
     expect(preview).toHaveBeenCalledWith(12)
-    gesture.commit(inputEvent("14"))
-    expect(commit).toHaveBeenCalledWith(14)
+    gesture.commit(inputEvent("10"))
+    expect(commit).toHaveBeenCalledWith(12)
   })
 
   it("cancels with Escape and restores the start value on commit", () => {

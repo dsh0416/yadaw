@@ -51,7 +51,7 @@ defineProps<{
   pianoRollAvailable: boolean
   metronomeChannel: MixerChannelState | null
   masterChannel: MixerChannelState | null
-  masterMeter: MixerChannelMeter
+  masterMeter?: MixerChannelMeter
   lowLatencyModeEnabled?: boolean
   lowLatencyModeBusy?: boolean
   lowLatencyModeDisabled?: boolean

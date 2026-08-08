@@ -96,14 +96,18 @@ Heron follows Logic's Send tap convention:
 - **Pre Fader** — the knob moves to the opposite side of the destination and its
   ring is blue.
 
-Position, accessible text, and the detailed menu carry the same state, so color
-is never the only distinction. The official Logic behavior is described in
+The compact row does not repeat PRE, POST, or PAN text and does not add a separate
+enabled lamp. Knob position carries the tap at a glance, the configuration title
+and detailed menu expose it as text, and the whole row's color carries enabled or
+disabled state. The official Logic behavior is described in
 [Route audio via send effects in Logic Pro](https://support.apple.com/en-ie/guide/logicpro/lgcp8ea0091c/10.7/mac/11.0).
 
 Direct manipulation adjusts level. The secondary menu or popover changes
 destination, Pre/Post/Post Pan behavior, enablement, and deletion. Changing tap
 or destination remains explicit and undoable; dragging the level control must
-not open the configuration surface.
+not open the configuration surface. A newly created Send starts enabled, and
+the destination editor uses the same BUS/Output cascading menu as the empty
+Add Send slot.
 
 ### Plug-in slots
 

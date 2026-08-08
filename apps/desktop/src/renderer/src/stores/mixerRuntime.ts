@@ -1,7 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
-import { shallowRef } from "vue"
-import type { MixerRuntimeSnapshot } from "@heron/contracts"
-import { meterFor as selectMeterFor } from "@heron/project-model"
+import { computed, shallowRef } from "vue"
+import type { MixerChannelMeter, MixerRuntimeSnapshot } from "@heron/contracts"
 import { useMixerMeterPolling } from "./mixer-meter-polling"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -12,9 +11,26 @@ export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
   const runtime = shallowRef<MixerRuntimeSnapshot>(structuredClone(EMPTY_RUNTIME))
   const audioRuntime = useAudioRuntimeStore()
   const error = shallowRef("")
+  const emptyMeters = new Map<string, MixerChannelMeter>()
+  const metersByChannelId = computed(
+    () => new Map(runtime.value.meters.map((meter) => [meter.channelId, meter] as const))
+  )
 
-  function meterFor(channelId: string) {
-    return selectMeterFor(runtime.value, channelId)
+  function meterFor(channelId: string): MixerChannelMeter {
+    const current = metersByChannelId.value.get(channelId)
+    if (current) return current
+    let empty = emptyMeters.get(channelId)
+    if (!empty) {
+      empty = {
+        channelId,
+        preFaderPeak: [0, 0],
+        postFaderPeak: [0, 0],
+        heldPeak: [0, 0],
+        clipped: false
+      }
+      emptyMeters.set(channelId, empty)
+    }
+    return empty
   }
 
   async function refresh(): Promise<void> {
@@ -58,6 +74,7 @@ export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
     polling.stop()
     runtime.value = structuredClone(EMPTY_RUNTIME)
     error.value = ""
+    emptyMeters.clear()
   }
 
   return {

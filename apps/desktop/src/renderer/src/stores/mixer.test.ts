@@ -648,7 +648,7 @@ describe("mixer store", () => {
     expect(mixer.availableSendTargets("master")).toEqual([])
   })
 
-  it("creates new sends at the post-pan tap", async () => {
+  it("creates new sends enabled at the post-pan tap", async () => {
     const initial = graph()
     window.heron.executeProjectCommand = vi
       .fn()
@@ -668,7 +668,7 @@ describe("mixer store", () => {
           sourceChannelId: "audio",
           targetChannelId: "output",
           targetBus: null,
-          enabled: false,
+          enabled: true,
           tap: "post-pan",
           levelDb: -90
         })
