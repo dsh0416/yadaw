@@ -62,7 +62,14 @@ fn source_hash(path: &str) -> Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    let digest = hasher.finalize();
+    const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        encoded.push(HEX_DIGITS[usize::from(byte >> 4)] as char);
+        encoded.push(HEX_DIGITS[usize::from(byte & 0x0f)] as char);
+    }
+    Ok(encoded)
 }
 
 fn decode_audio(path: &str) -> Result<(AudioSpec, Vec<f32>)> {

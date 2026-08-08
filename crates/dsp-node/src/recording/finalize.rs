@@ -8,6 +8,17 @@ pub(super) struct TpdfDither {
     state: u64,
 }
 
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
+
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        encoded.push(HEX_DIGITS[usize::from(byte >> 4)] as char);
+        encoded.push(HEX_DIGITS[usize::from(byte & 0x0f)] as char);
+    }
+    encoded
+}
+
 impl TpdfDither {
     pub(super) fn new(seed: &[u8]) -> Self {
         let digest = Sha256::digest(seed);
@@ -197,9 +208,10 @@ pub(super) fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeF
         }
         hasher.update(&buffer[..read]);
     }
+    let content_hash = encode_hex(&hasher.finalize());
     Ok(NativeFinalizedRecording {
         path: config.output_path.clone(),
-        content_hash: format!("{:x}", hasher.finalize()),
+        content_hash,
         sample_rate: config.target_sample_rate,
         channels: channels as u32,
         bit_depth: config.bit_depth.clone(),
@@ -207,4 +219,14 @@ pub(super) fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeF
         time_reference: config.time_reference.max(0),
         waveform_levels: analyzed.waveform_levels,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::encode_hex;
+
+    #[test]
+    fn hex_encoding_is_lowercase_and_zero_padded() {
+        assert_eq!(encode_hex(&[0x00, 0x0f, 0x10, 0xab, 0xff]), "000f10abff");
+    }
 }
