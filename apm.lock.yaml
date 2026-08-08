@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-08-07T16:04:01.938773+00:00'
+generated_at: '2026-08-08T17:14:07.746135+00:00'
 apm_version: 0.26.0
 dependencies:
 - repo_url: antfu/skills
@@ -930,7 +930,7 @@ dependencies:
   name: skills
   host: github.com
   resolved_commit: 5706f866118f04a6238bf77368dafa4a2c34b96b
-  version: 5706f86
+  version: 0.0.0
   package_type: marketplace_plugin
   deployed_files:
   - .agents/skills/vueuse-functions
