@@ -60,11 +60,11 @@ objc2-core-foundation = { version = "0.3.2", default-features = false }
 objc2-foundation = { version = "0.3.2", default-features = false }
 ringbuf = "0.5"
 rubato = "4.0.0"
-sha2 = "0.10.9"
+sha2 = "0.11"
 midly = "=0.5.3"
 midir = "0.11"
 mp3lame-encoder = { version = "0.2.4", features = ["std"] }
-libloading = "0.8.9"
+libloading = "0.9"
 rmp-serde = "1.3"
 serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
@@ -75,7 +75,7 @@ truce = { version = "=6.3.0", default-features = false }
 truce-iced = "=6.3.0"
 truce-test = "=6.3.0"
 truce-vst3 = "=6.3.0"
-windows = "0.61.3"
+windows = "0.62.2"
 heron-dsp-core = { path = "crates/dsp-core" }
 heron-audio-plugin = { path = "crates/audio-plugin" }
 heron-clap-host = { path = "crates/clap-host" }
