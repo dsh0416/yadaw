@@ -158,7 +158,8 @@ function createHarness() {
           button("application.preferences", "Preferences"),
           button("project.settings", "Project settings"),
           button("transport.toggle-loop", "Cycle"),
-          button("edit.split-at-playhead", "Split")
+          button("edit.split-at-playhead", "Split"),
+          h("aside", { "data-media-browser": "" }, [h("button", "Preview")])
         ])
     }
   })
@@ -413,7 +414,7 @@ describe("useApplicationCommands", () => {
   })
 
   it("routes Space to the selected Media Browser audio instead of transport", async () => {
-    const { pinia, router } = createHarness()
+    const { pinia, router, wrapper } = createHarness()
     const projectWorkspace = workspace(session)
     projectWorkspace.assets = [
       {
@@ -444,6 +445,7 @@ describe("useApplicationCommands", () => {
       warnings: []
     })
     await router.push({ name: "studio" })
+    wrapper.get<HTMLElement>("[data-media-browser] button").element.focus()
 
     nativeCommandListener?.(rpcEvent("transport.toggle-playback"))
     await flushPromises()

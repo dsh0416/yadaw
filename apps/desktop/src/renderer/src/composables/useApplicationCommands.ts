@@ -317,13 +317,7 @@ export function useApplicationCommands() {
         if (router.currentRoute.value.name === "studio") workspaceStore.toggleMixerDock()
         break
       case "transport.toggle-playback":
-        if (
-          isEditableTarget(document.activeElement) ||
-          (document.activeElement instanceof HTMLButtonElement &&
-            document.activeElement.closest("[data-media-browser]"))
-        ) {
-          break
-        }
+        if (isEditableTarget(document.activeElement)) break
         if (
           router.currentRoute.value.name === "studio" &&
           workspaceStore.mediaBrowserOpen &&

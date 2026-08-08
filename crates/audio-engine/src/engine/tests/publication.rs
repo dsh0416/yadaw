@@ -39,6 +39,123 @@ fn reclaiming_retired_graphs_without_a_running_engine_is_a_noop() {
 }
 
 #[test]
+fn audition_commands_require_a_running_engine() {
+    let engine = AudioEngine::new();
+
+    assert!(engine.start_asset_audition("missing.bwf", [1, 2]).is_err());
+    assert!(engine.stop_asset_audition().is_err());
+}
+
+#[test]
+fn audition_preparation_validates_outputs_and_decodes_canonical_audio() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time moves forward")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "heron-audition-publication-{}-{nonce}.bwf",
+        std::process::id()
+    ));
+    write_deterministic_test_recording(
+        NativeRecordingStartConfig {
+            path: path.to_string_lossy().into_owned(),
+            asset_id: "audition-test".to_owned(),
+            originator: "Heron test".to_owned(),
+            origination_date: "2026-08-08".to_owned(),
+            origination_time: "12:00:00".to_owned(),
+            time_reference: 0,
+            sample_rate: 48_000,
+            channels: 2,
+        },
+        48_000,
+        32,
+    )
+    .expect("write audition fixture");
+
+    assert!(prepare_audition_command(&path.to_string_lossy(), 48_000, [0, 1]).is_err());
+    assert!(
+        prepare_audition_command(
+            &path.to_string_lossy(),
+            48_000,
+            [1, MAX_OUTPUT_CHANNELS as u32 + 1]
+        )
+        .is_err()
+    );
+    let command = prepare_audition_command(&path.to_string_lossy(), 48_000, [1, 2])
+        .expect("prepare audition");
+    let EngineCommand::StartAudition(audition) = command else {
+        panic!("expected start audition command");
+    };
+    assert_eq!(audition.hardware_outputs, [0, 1]);
+    assert_eq!(audition.frames.len(), 32);
+
+    fs::remove_file(path).expect("remove audition fixture");
+}
+
+#[test]
+fn running_engine_accepts_and_processes_asset_audition_commands() {
+    let _midi_guard = GLOBAL_MIDI_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = GRAPH_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time moves forward")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "heron-running-audition-{}-{nonce}.bwf",
+        std::process::id()
+    ));
+    write_deterministic_test_recording(
+        NativeRecordingStartConfig {
+            path: path.to_string_lossy().into_owned(),
+            asset_id: "running-audition-test".to_owned(),
+            originator: "Heron test".to_owned(),
+            origination_date: "2026-08-08".to_owned(),
+            origination_time: "12:00:00".to_owned(),
+            time_reference: 0,
+            sample_rate: 48_000,
+            channels: 2,
+        },
+        48_000,
+        64,
+    )
+    .expect("write audition fixture");
+    let config = || NativeAudioEngineConfig {
+        backend: "mock".to_owned(),
+        input_device_id: "custom:mock-duplex".to_owned(),
+        output_device_id: "custom:mock-duplex".to_owned(),
+        buffer_size: 64,
+        session_sample_rate: Some(48_000),
+    };
+    let engine = AudioEngine::new();
+
+    let started = engine.start_audio_engine(config()).expect("start engine");
+    assert_eq!(started.state, "running");
+    assert_eq!(
+        engine
+            .start_audio_engine(config())
+            .expect("reuse matching engine")
+            .state,
+        "running"
+    );
+    engine
+        .start_asset_audition(&path.to_string_lossy(), [1, 2])
+        .expect("queue audition start");
+    thread::sleep(Duration::from_millis(10));
+    engine.stop_asset_audition().expect("queue audition stop");
+    thread::sleep(Duration::from_millis(10));
+    assert_eq!(
+        engine.stop_audio_engine().expect("stop engine").state,
+        "stopped"
+    );
+
+    fs::remove_file(path).expect("remove audition fixture");
+}
+
+#[test]
 fn begin_graph_build_allocates_monotonic_generations_without_a_running_engine() {
     let _guard = GRAPH_TEST_LOCK
         .lock()

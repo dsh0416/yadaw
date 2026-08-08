@@ -27,8 +27,12 @@ export const useMediaBrowserStore = defineStore("media-browser", () => {
   async function stopAudition(): Promise<void> {
     if (auditionTimer) clearTimeout(auditionTimer)
     auditionTimer = null
-    auditioningAssetId.value = null
-    if (!(await projectStore.stopAssetAudition())) auditionFailed.value = true
+    const stoppingAssetId = auditioningAssetId.value
+    if (!(await projectStore.stopAssetAudition())) {
+      auditionFailed.value = true
+      return
+    }
+    if (auditioningAssetId.value === stoppingAssetId) auditioningAssetId.value = null
   }
 
   async function toggleAudition(asset: ProjectAssetSummary): Promise<void> {

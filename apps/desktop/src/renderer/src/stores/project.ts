@@ -285,6 +285,8 @@ export const useProjectStore = defineStore("project", () => {
     }
     if (!result.value) return []
     applyWorkspace(result.value.workspace)
+    const warning = result.warnings.find((candidate) => candidate.code === "audio-import-partial")
+    if (warning) rpcError.value = t(warning.userMessageKey)
     return result.value.selectedAssetIds
   }
 

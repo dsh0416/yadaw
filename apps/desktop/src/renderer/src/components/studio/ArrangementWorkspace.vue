@@ -308,17 +308,23 @@ async function placeAudioAsset(
   }
   if (!trackId) {
     const created = await mixerStore.createAudioTrack(asset.channels === 1 ? "mono" : "stereo")
-    if (!created || !mixerStore.selectedChannelId) return false
+    if (!created || !mixerStore.selectedChannelId) {
+      mediaDropError.value = t("studio.mediaBrowser.audioNotPlaced")
+      return false
+    }
     trackId =
       mixerStore.graph.tracks.find((track) => track.channelId === mixerStore.selectedChannelId)
         ?.id ?? null
   }
-  if (!trackId) return false
+  if (!trackId) {
+    mediaDropError.value = t("studio.mediaBrowser.audioNotPlaced")
+    return false
+  }
   const sourceLengthFrames = Math.max(
     1,
     Math.round((Number(asset.frameCount) * mixerStore.graph.sampleRate) / asset.sampleRate)
   )
-  return mixerStore.execute({
+  const placed = await mixerStore.execute({
     type: "create-audio-clip",
     clip: {
       id: crypto.randomUUID(),
@@ -335,6 +341,8 @@ async function placeAudioAsset(
       assetChannels: asset.channels
     }
   })
+  if (!placed) mediaDropError.value = t("studio.mediaBrowser.audioNotPlaced")
+  return placed
 }
 
 async function placeMidiAsset(

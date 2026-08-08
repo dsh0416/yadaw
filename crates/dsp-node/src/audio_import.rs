@@ -111,7 +111,9 @@ fn decode_audio(path: &str) -> Result<(AudioSpec, Vec<f32>)> {
         }
         let decoded = match decoder.decode(&packet) {
             Ok(decoded) => decoded,
-            Err(SymphoniaError::DecodeError(_)) => continue,
+            Err(SymphoniaError::DecodeError(error)) => {
+                return Err(import_error("failed to decode audio packet", error));
+            }
             Err(error) => return Err(import_error("failed to decode audio packet", error)),
         };
         let spec = decoded.spec().clone();
@@ -217,4 +219,78 @@ pub fn import_audio_file(
     config: NativeAudioImportConfig,
 ) -> napi::bindgen_prelude::AsyncTask<ImportAudioFileTask> {
     napi::bindgen_prelude::AsyncTask::new(ImportAudioFileTask { config })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs, path::PathBuf, time::SystemTime};
+
+    use super::*;
+
+    fn temporary_file(label: &str, extension: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("time moves forward")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "heron-audio-import-{label}-{}-{nonce}.{extension}",
+            std::process::id()
+        ))
+    }
+
+    fn write_input(path: &Path, channels: usize) {
+        let writer = WaveWriter::create(path, float_format(48_000, channels))
+            .expect("create import fixture");
+        let mut audio = writer.audio_frame_writer().expect("open fixture audio");
+        let samples = (0..128 * channels)
+            .map(|index| (index as f32 / 128.0).sin() * 0.25)
+            .collect::<Vec<_>>();
+        audio.write_frames(&samples).expect("write fixture frames");
+        audio.end().expect("finalize fixture");
+    }
+
+    #[test]
+    fn transcode_canonicalizes_audio_and_reports_source_identity() {
+        let input = temporary_file("source", "wav");
+        let output = temporary_file("canonical", "bwf");
+        write_input(&input, 2);
+        let expected_hash = source_hash(&input.to_string_lossy()).expect("hash source");
+
+        let imported = transcode(&NativeAudioImportConfig {
+            input_path: input.to_string_lossy().into_owned(),
+            output_path: output.to_string_lossy().into_owned(),
+            asset_id: "asset-1".to_owned(),
+            originator: "Heron test".to_owned(),
+            origination_date: "2026-08-08".to_owned(),
+            origination_time: "12:00:00".to_owned(),
+        })
+        .expect("transcode audio");
+
+        assert_eq!(imported.path, output.to_string_lossy());
+        assert_eq!(imported.content_hash, expected_hash);
+        assert_eq!(imported.sample_rate, 48_000);
+        assert_eq!(imported.channels, 2);
+        assert_eq!(imported.bit_depth, "float32");
+        assert_eq!(imported.frame_count, 128);
+        assert!(!imported.waveform_levels.is_empty());
+        assert!(output.exists());
+
+        fs::remove_file(input).expect("remove input fixture");
+        fs::remove_file(output).expect("remove canonical fixture");
+    }
+
+    #[test]
+    fn decode_audio_rejects_invalid_media_instead_of_importing_empty_audio() {
+        let input = temporary_file("invalid", "mp3");
+        fs::write(&input, b"not an audio stream").expect("write invalid fixture");
+
+        let error = decode_audio(&input.to_string_lossy()).expect_err("reject invalid audio");
+
+        assert!(
+            error
+                .to_string()
+                .contains("unsupported or invalid audio file")
+        );
+        fs::remove_file(input).expect("remove invalid fixture");
+    }
 }

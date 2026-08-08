@@ -511,6 +511,51 @@ describe("registerProjectHandlers", () => {
     })
   })
 
+  it("returns known partial audio imports with a committed projection and warning", async () => {
+    const asset = {
+      id: "audio-1",
+      kind: "audio" as const,
+      name: "Kick.wav",
+      contentHash: "hash-1",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32" as const,
+      frameCount: 48_000n
+    }
+    const context = createContext()
+    vi.mocked(context.audioImport.import).mockRejectedValue(
+      new AudioImportBatchError(new Error("Snare.flac is corrupt"), false, [asset.id], [asset.id])
+    )
+    vi.mocked(context.projects.listAssets).mockResolvedValue([asset])
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectAudioImport,
+      mutationMeta(workspace.projectGraph, {
+        expectedRevision: workspace.revision,
+        mutation: { operationId: "op-audio-partial", idempotencyKey: "idem-audio-partial" }
+      }),
+      ["/samples/Kick.wav", "/samples/Snare.flac"]
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        selectedAssetIds: [asset.id],
+        importedAssetIds: [asset.id],
+        workspace: { assets: [asset] }
+      },
+      warnings: [
+        {
+          code: "audio-import-partial",
+          userMessageKey: "errors.audioImportPartial"
+        }
+      ]
+    })
+  })
+
   it("updates project configuration", async () => {
     const context = createContext()
     registerProjectHandlers(context)

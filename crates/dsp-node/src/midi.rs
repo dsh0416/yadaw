@@ -264,6 +264,8 @@ pub fn parse_midi_data(
 
 #[cfg(test)]
 mod tests {
+    use std::time::SystemTime;
+
     use super::*;
     use heron_dsp_runtime::midi::{NormalizedMidiEvent, NormalizedMidiNote, NormalizedMidiTrack};
 
@@ -398,5 +400,45 @@ mod tests {
     fn tick_conversion_rejects_values_above_i64() {
         assert!(convert_tick(i64::MAX as u64).is_ok());
         assert!(convert_tick(i64::MAX as u64 + 1).is_err());
+    }
+
+    #[test]
+    fn parse_midi_task_accepts_project_bytes_and_file_sources() {
+        let bytes = vec![
+            b'M', b'T', b'h', b'd', 0, 0, 0, 6, 0, 0, 0, 1, 1, 0xe0, b'M', b'T', b'r', b'k', 0, 0,
+            0, 4, 0, 0xff, 0x2f, 0,
+        ];
+        let map = || NativeTempoMap {
+            tempo_events: vec![NativeTempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![NativeTimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        };
+        let mut byte_task = ParseMidiTask {
+            source: ParseMidiSource::Bytes(bytes.clone()),
+            project_tempo_map: map(),
+        };
+        assert_eq!(byte_task.compute().expect("parse bytes").format, 0);
+
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("time moves forward")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "heron-midi-import-{}-{nonce}.mid",
+            std::process::id()
+        ));
+        fs::write(&path, bytes).expect("write MIDI fixture");
+        let mut file_task = ParseMidiTask {
+            source: ParseMidiSource::File(path.to_string_lossy().into_owned()),
+            project_tempo_map: map(),
+        };
+        assert_eq!(file_task.compute().expect("parse file").format, 0);
+        fs::remove_file(path).expect("remove MIDI fixture");
     }
 }

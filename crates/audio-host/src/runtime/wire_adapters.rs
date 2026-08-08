@@ -390,6 +390,17 @@ fn recording_waveform(value: NativeWaveformSnapshot) -> RecordingWaveform {
     }
 }
 
+fn audition_control_result<E: std::fmt::Display>(
+    result: std::result::Result<(), E>,
+) -> ControlResult {
+    match result {
+        Ok(()) => ControlResult::Accepted,
+        Err(error) => control_error! {
+            message: error.to_string(),
+        },
+    }
+}
+
 pub(super) fn engine_command(
     audio_engine: &engine::AudioEngine,
     command: ControlCommand,
@@ -535,18 +546,10 @@ pub(super) fn engine_command(
         ControlCommand::StartAssetAudition {
             path,
             hardware_outputs,
-        } => match audio_engine.start_asset_audition(&path, hardware_outputs) {
-            Ok(()) => ControlResult::Accepted,
-            Err(error) => control_error! {
-                message: error.to_string(),
-            },
-        },
-        ControlCommand::StopAssetAudition => match audio_engine.stop_asset_audition() {
-            Ok(()) => ControlResult::Accepted,
-            Err(error) => control_error! {
-                message: error.to_string(),
-            },
-        },
+        } => audition_control_result(audio_engine.start_asset_audition(&path, hardware_outputs)),
+        ControlCommand::StopAssetAudition => {
+            audition_control_result(audio_engine.stop_asset_audition())
+        }
         ControlCommand::MixerSnapshot => match audio_engine.mixer_snapshot() {
             Ok(snapshot) => ControlResult::MixerSnapshot {
                 meters: snapshot
@@ -757,6 +760,35 @@ mod tests {
             Some("live.minori.player")
         );
         assert!(converted.logical_target.include_process_tree);
+    }
+
+    #[test]
+    fn audition_commands_map_acceptance_and_engine_errors_to_wire_results() {
+        assert!(matches!(
+            audition_control_result(Ok::<(), &str>(())),
+            ControlResult::Accepted
+        ));
+        assert!(matches!(
+            audition_control_result(Err::<(), _>("audition failed")),
+            ControlResult::Error { .. }
+        ));
+
+        let engine = engine::AudioEngine::new();
+        assert!(matches!(
+            engine_command(
+                &engine,
+                ControlCommand::StartAssetAudition {
+                    path: "missing.bwf".to_owned(),
+                    hardware_outputs: [1, 2]
+                },
+                None
+            ),
+            Some(ControlResult::Error { .. })
+        ));
+        assert!(matches!(
+            engine_command(&engine, ControlCommand::StopAssetAudition, None),
+            Some(ControlResult::Error { .. })
+        ));
     }
 
     #[test]

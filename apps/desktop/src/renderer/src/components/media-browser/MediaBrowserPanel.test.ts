@@ -2,8 +2,11 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ProjectAssetSummary } from "@heron/contracts"
-import { rpcSuccess } from "../../test/ipc"
+import { rpcFailure, rpcSuccess } from "../../test/ipc"
 import { useProjectStore } from "../../stores/project"
+import { useMidiImportStore } from "../../stores/midiImport"
+import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
+import { PROJECT_MEDIA_DRAG_TYPE } from "../../utils/mediaDrag"
 import MediaBrowserPanel from "./MediaBrowserPanel.vue"
 
 enableAutoUnmount(afterEach)
@@ -78,5 +81,50 @@ describe("MediaBrowserPanel", () => {
     await wrapper.get('button[aria-label="Stop auditioning Kick.mp3"]').trigger("click")
     await flushPromises()
     expect(window.heron.stopAssetAudition).toHaveBeenCalledOnce()
+  })
+
+  it("imports both media kinds, closes the panel, and exports project drag data", async () => {
+    const wrapper = mountBrowser()
+    const project = useProjectStore()
+    const midiImport = useMidiImportStore()
+    const workspace = useStudioWorkspaceStore()
+    const importAudio = vi.spyOn(project, "importAudio").mockResolvedValue(["audio-1"])
+    const prepareMidi = vi.spyOn(midiImport, "prepare").mockResolvedValue(undefined)
+    const close = vi.spyOn(workspace, "closeRightPanel")
+
+    await wrapper.findAll(".import-row button")[0]!.trigger("click")
+    await flushPromises()
+    expect(importAudio).toHaveBeenCalledOnce()
+
+    await wrapper.findAll(".import-row button")[1]!.trigger("click")
+    await flushPromises()
+    expect(prepareMidi).toHaveBeenCalledOnce()
+
+    const setData = vi.fn()
+    const dataTransfer = { effectAllowed: "none", setData } as unknown as DataTransfer
+    await wrapper.findAll(".asset-row")[0]!.trigger("dragstart", { dataTransfer })
+    expect(dataTransfer.effectAllowed).toBe("copy")
+    expect(setData).toHaveBeenCalledWith(
+      PROJECT_MEDIA_DRAG_TYPE,
+      JSON.stringify({ assetId: "audio-1", kind: "audio" })
+    )
+
+    await wrapper.get('button[aria-label="Close Media Browser"]').trigger("click")
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it("keeps the audition control active and reports a native stop failure", async () => {
+    const wrapper = mountBrowser()
+    await wrapper.get('button[aria-label="Audition Kick.mp3"]').trigger("click")
+    await flushPromises()
+    window.heron.stopAssetAudition = vi.fn(async () => rpcFailure("errors.audioEngineUnavailable"))
+
+    await wrapper.get('button[aria-label="Stop auditioning Kick.mp3"]').trigger("click")
+    await flushPromises()
+
+    expect(wrapper.find('button[aria-label="Stop auditioning Kick.mp3"]').exists()).toBe(true)
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      "The audio asset could not be auditioned on the current Output."
+    )
   })
 })

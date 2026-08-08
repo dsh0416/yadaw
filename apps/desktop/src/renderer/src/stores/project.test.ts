@@ -337,4 +337,95 @@ describe("project store dialogs", () => {
     await expect(Promise.all([firstClosing, secondClosing])).resolves.toEqual([true, true])
     expect(window.heron.closeProject).toHaveBeenCalledOnce()
   })
+
+  it("applies known partial audio imports and presents their warning", async () => {
+    const asset = {
+      id: "audio-1",
+      kind: "audio" as const,
+      name: "Kick.wav",
+      contentHash: "hash-1",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32" as const,
+      frameCount: 48_000n
+    }
+    const importedWorkspace = { ...workspace, revision: 2, assets: [asset] }
+    window.heron.importProjectAudio = vi.fn().mockResolvedValue({
+      ok: true,
+      requestId: "audio-import",
+      operationId: "audio-import-operation",
+      resourceRevision: 2,
+      value: {
+        selectedAssetIds: [asset.id],
+        importedAssetIds: [asset.id],
+        workspace: importedWorkspace
+      },
+      warnings: [
+        {
+          code: "audio-import-partial",
+          userMessageKey: "errors.audioImportPartial",
+          resource: workspace.projectGraph
+        }
+      ]
+    })
+    const store = useProjectStore()
+    store.applyBootstrap(bootstrap(workspace))
+
+    await expect(store.importAudio(["/samples/Kick.wav", "/samples/Broken.flac"])).resolves.toEqual(
+      [asset.id]
+    )
+
+    expect(store.projectAssets).toEqual([asset])
+    expect(store.error).toBe(
+      "Some audio files were imported, but at least one file could not be imported."
+    )
+  })
+
+  it("reconciles unknown imports and delegates asset audition through the project handle", async () => {
+    const asset = {
+      id: "audio-1",
+      kind: "audio" as const,
+      name: "Kick.wav",
+      contentHash: "hash-1",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32" as const,
+      frameCount: 48_000n
+    }
+    window.heron.importProjectAudio = vi.fn().mockResolvedValue({
+      ok: false,
+      requestId: "audio-import",
+      operationId: "audio-import-operation",
+      error: {
+        code: "operation-timeout-unknown",
+        category: "timeout-unknown",
+        outcome: "unknown",
+        retry: "after-reconcile",
+        correlationId: "audio-import-unknown",
+        userMessageKey: "errors.operationOutcomeUnknown",
+        resource: workspace.projectGraph,
+        details: { type: "operation-timeout-unknown", dispatched: true }
+      }
+    })
+    window.heron.listProjectAssets = vi.fn().mockResolvedValue(success([asset]))
+    window.heron.startAssetAudition = vi.fn().mockResolvedValue(success(undefined))
+    window.heron.stopAssetAudition = vi.fn().mockResolvedValue(success(undefined))
+    window.heron.resolveDroppedFilePath = vi
+      .fn()
+      .mockReturnValueOnce("/samples/Kick.wav")
+      .mockReturnValueOnce("")
+    const store = useProjectStore()
+    store.applyBootstrap(bootstrap(workspace))
+
+    await expect(store.importAudio(["/samples/Kick.wav"])).resolves.toEqual([])
+    await expect(store.startAssetAudition(asset.id)).resolves.toBe(true)
+    await expect(store.stopAssetAudition()).resolves.toBe(true)
+
+    expect(store.projectAssets).toEqual([asset])
+    expect(store.resolveDroppedFilePaths([{} as File, {} as File])).toEqual(["/samples/Kick.wav"])
+    expect(window.heron.startAssetAudition).toHaveBeenCalledWith(
+      expect.objectContaining({ target: workspace.project }),
+      asset.id
+    )
+  })
 })

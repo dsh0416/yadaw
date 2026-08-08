@@ -14,7 +14,8 @@ export class AudioImportBatchError extends Error {
   constructor(
     cause: unknown,
     readonly databaseWriteDispatched: boolean,
-    readonly importedAssetIds: readonly string[]
+    readonly importedAssetIds: readonly string[],
+    readonly selectedAssetIds: readonly string[] = importedAssetIds
   ) {
     super("Audio import batch did not complete", { cause })
     this.name = "AudioImportBatchError"
@@ -88,7 +89,12 @@ export class AudioImportService {
         }
       }
     } catch (error) {
-      throw new AudioImportBatchError(error, databaseWriteDispatched, [...importedAssetIds])
+      throw new AudioImportBatchError(
+        error,
+        databaseWriteDispatched,
+        [...importedAssetIds],
+        [...selectedAssetIds]
+      )
     }
     return { selectedAssetIds, importedAssetIds }
   }

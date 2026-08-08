@@ -361,10 +361,41 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       operations.registry.finish(meta.mutation!.operationId, "committed", result)
       return result
     } catch (error) {
-      const partialOrUnknown =
+      if (
         error instanceof AudioImportBatchError &&
-        (error.databaseWriteDispatched || error.importedAssetIds.length > 0)
-      const failure: RpcError = partialOrUnknown
+        !error.databaseWriteDispatched &&
+        error.selectedAssetIds.length > 0
+      ) {
+        const session = projects.current ?? workspace.session
+        const next = lifecycle.applicationState.commitWorkspaceProjection(
+          session,
+          await projectGraph.snapshot(),
+          await projects.listAssets()
+        )
+        lifecycle.syncProject(session)
+        const result = rpcSuccess(
+          meta,
+          {
+            selectedAssetIds: [...error.selectedAssetIds],
+            importedAssetIds: [...error.importedAssetIds],
+            workspace: next
+          },
+          {
+            resourceRevision: next.revision,
+            warnings: [
+              {
+                code: "audio-import-partial",
+                userMessageKey: "errors.audioImportPartial",
+                resource: workspace.projectGraph
+              }
+            ]
+          }
+        )
+        operations.registry.finish(meta.mutation!.operationId, "committed", result)
+        return result
+      }
+      const outcomeUnknown = error instanceof AudioImportBatchError && error.databaseWriteDispatched
+      const failure: RpcError = outcomeUnknown
         ? {
             code: "operation-timeout-unknown",
             category: "timeout-unknown",
@@ -392,7 +423,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       const result = rpcFailure(meta, failure)
       operations.registry.finish(
         meta.mutation!.operationId,
-        partialOrUnknown ? "quarantined" : "not-committed",
+        outcomeUnknown ? "quarantined" : "not-committed",
         result
       )
       return result

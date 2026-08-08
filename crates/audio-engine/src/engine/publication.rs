@@ -347,15 +347,7 @@ impl AudioEngine {
                 .metrics
                 .sample_rate
         };
-        let outputs = hardware_outputs.map(|channel| {
-            channel
-                .checked_sub(1)
-                .and_then(|index| usize::try_from(index).ok())
-                .filter(|index| *index < MAX_OUTPUT_CHANNELS)
-                .ok_or_else(|| invalid_config("audition hardware output is unavailable"))
-        });
-        let [left, right] = [outputs[0].clone()?, outputs[1].clone()?];
-        let frames = decode_clip_audio(path, sample_rate)?;
+        let command = prepare_audition_command(path, sample_rate, hardware_outputs)?;
         let mut guard = self
             .running
             .lock()
@@ -367,11 +359,7 @@ impl AudioEngine {
         engine.reclaim_retired_auditions();
         engine
             .commands
-            .try_push(EngineCommand::StartAudition(Box::new(AuditionPlayback {
-                frames,
-                cursor: 0,
-                hardware_outputs: [left, right],
-            })))
+            .try_push(command)
             .map_err(|_| audio_error("audition control queue", "full"))?;
         Ok(())
     }
@@ -606,4 +594,27 @@ impl AudioEngine {
             .ok()
             .and_then(|snapshots| snapshots.get(&build_generation).cloned())
     }
+}
+
+pub(super) fn prepare_audition_command(
+    path: &str,
+    sample_rate: u32,
+    hardware_outputs: [u32; 2],
+) -> Result<EngineCommand> {
+    let outputs = hardware_outputs.map(|channel| {
+        channel
+            .checked_sub(1)
+            .and_then(|index| usize::try_from(index).ok())
+            .filter(|index| *index < MAX_OUTPUT_CHANNELS)
+            .ok_or_else(|| invalid_config("audition hardware output is unavailable"))
+    });
+    let [left, right] = outputs;
+    let left = left?;
+    let right = right?;
+    let frames = decode_clip_audio(path, sample_rate)?;
+    Ok(EngineCommand::StartAudition(Box::new(AuditionPlayback {
+        frames,
+        cursor: 0,
+        hardware_outputs: [left, right],
+    })))
 }
