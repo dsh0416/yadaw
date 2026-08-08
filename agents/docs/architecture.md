@@ -32,6 +32,49 @@ main/native boundary is N-API within one process.
 - The audio callback owns only real-time-safe state. It must not perform N-API,
   Electron IPC, filesystem I/O, allocation, logging, or blocking locks.
 
+## Dependency contracts
+
+The process diagram is also a dependency direction. Imports and runtime calls
+must point toward an owned contract, never around it.
+
+```text
+renderer presenter <- props / intent -> renderer controller or store
+renderer controller or store -> typed preload API -> main IPC handler
+main IPC handler -> application service -> project DB and native adapters
+native adapter -> @heron/dsp-node -> embedded runtime -> audio callback
+```
+
+- Presenters do not read stores, routing, Electron, the project database, or
+  `window.heron`.
+- Preload adapts the narrow API but owns no application policy or durable state.
+- IPC handlers validate, authorize, resolve explicit resources, and delegate;
+  application services own workflows and commit points.
+- `@heron/contracts` contains serializable boundary types and depends on no UI,
+  Electron, persistence, or native implementation.
+- `@heron/project-model` owns pure project invariants.
+- `@heron/project-db` is the only project persistence implementation.
+- `@heron/ui` owns shared visual behavior and accessibility, never product state.
+
+Detailed code and review rules live in
+[Engineering standards](engineering-standards.md).
+
+## Stateful workflow contract
+
+A stateful operation that crosses renderer/main or main/native boundaries must
+define its states, explicit resource handles, generation/revision behavior,
+single commit point, prepare/abort cleanup, failure data state, and idempotency
+or operation-status reconciliation. The renderer receives a serializable typed
+result and a documented recoverable or quarantined state.
+
+Completion order is not authority. When automatic recovery competes with a
+newer user mutation, an explicit generation determines which result may commit.
+The proposed Live device-loss policy is recorded in
+[ADR-0003](adr/0003-device-recovery-precedence.md).
+
+Every workflow with these properties includes state-machine or state-table
+tests. A timeout must not manufacture a failure response when a dispatched
+mutation can still commit.
+
 ## Native control and UI events
 
 Electron main sends MessagePack request envelopes to the addon to preserve one
@@ -106,6 +149,13 @@ Runtime worker limits are saved as preferences and applied on the next
 application launch. Heron deliberately does not tear down and recreate the
 embedded audio runtime in a live process.
 
+Rust production paths return typed `Result` values for device, plug-in,
+filesystem, input, and protocol failure. Runtime input is not handled with
+`panic!`, `unwrap()`, or unexplained `expect()`. Panic must never unwind through
+N-API, a plug-in ABI, a platform callback, or the audio callback. A callback
+reports failure through bounded state, counters, or a non-blocking control
+signal; it does not recover in place.
+
 ## Real-time rules
 
 - Keep callback work bounded and allocation-free.
@@ -115,3 +165,11 @@ embedded audio runtime in a live process.
 - Never hold a callback-visible lock across N-API, Electron, device, plug-in,
   or filesystem calls.
 - Overflow and stale-generation outcomes must be explicit and observable.
+
+## Decision governance
+
+Changes to process/thread ownership, persistence, cross-process protocols,
+real-time assumptions, foundational dependencies, compatibility commitments,
+or material Logic interaction semantics require an architecture decision record.
+See [ADR governance](adr/README.md). Accepted decisions are reflected back into
+this current-state document; proposed decisions are not current architecture.

@@ -13,12 +13,26 @@ mise run check
 mise run dev
 ```
 
-Before changing behavior near process or audio boundaries, read:
+## Normative project rules
 
-- [Development environment](agents/docs/environment.md)
+All contributions must follow the repository governance index and the rules
+applicable to the changed scope:
+
+- [Governance index and precedence](agents/docs/README.md#adoption-and-precedence)
+- [Engineering standards](agents/docs/engineering-standards.md)
 - [Architecture and real-time constraints](agents/docs/architecture.md)
+- [Product interaction design](agents/docs/interaction-design.md)
+- [Architecture decision records](agents/docs/adr/README.md)
 - [Product roadmap](agents/docs/roadmap.md)
+- [Development environment](agents/docs/environment.md)
 - [Agent guide](AGENTS.md) (conventions used by automation and humans alike)
+
+Review every document that applies; a documentation-only or isolated internal
+change need not pretend to affect every domain. Material changes to ownership,
+process/thread boundaries, persistence, protocols, real-time assumptions,
+foundational dependencies, compatibility, or Logic interaction semantics need
+an ADR before implementation assumes the decision is accepted. Policy
+exceptions and deferred correctness work must link to an issue.
 
 ## Pull requests
 
@@ -27,6 +41,8 @@ Fill in the repository pull request template, and:
 - Use a [Conventional Commits](https://www.conventionalcommits.org/) title
   (for example `feat(desktop): …`, `fix(audio-host): …`, `chore: …`).
 - Prefer small, reviewable changes with a clear purpose.
+- Complete the governance review in the pull request template, using `N/A` only
+  with a short reason.
 - Match existing style and architecture; do not drive-by reformat unrelated code.
 - Keep Electron IPC, UI work, filesystem access, allocation, and blocking
   synchronization out of real-time audio callbacks.
