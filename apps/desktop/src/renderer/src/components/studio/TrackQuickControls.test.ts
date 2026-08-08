@@ -100,4 +100,38 @@ describe("TrackQuickControls", () => {
       pan: 32 / 63
     })
   })
+
+  it("keeps keyboard gain and pan previews local until their controlled commits", async () => {
+    const wrapper = mount(TrackQuickControls, {
+      props: {
+        channel,
+        meter: {
+          channelId: "audio",
+          preFaderPeak: [0, 0],
+          postFaderPeak: [0, 0],
+          heldPeak: [0, 0],
+          clipped: false
+        }
+      },
+      global: { plugins: [createPinia()] }
+    })
+
+    const gain = wrapper.get('input[aria-label="Vocal quick volume"]')
+    ;(gain.element as HTMLInputElement).value = "-9"
+    await gain.trigger("input")
+    expect((gain.element as HTMLInputElement).value).toBe("-9")
+    expect(gain.attributes("aria-valuetext")).toBe("-9.0 dB")
+    ;(gain.element as HTMLInputElement).value = "0"
+    await gain.trigger("change")
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -9 }])
+
+    const pan = wrapper.get('input[aria-label="Vocal quick pan"]')
+    ;(pan.element as HTMLInputElement).value = "32"
+    await pan.trigger("input")
+    expect((pan.element as HTMLInputElement).value).toBe("32")
+    expect(pan.attributes("aria-valuetext")).toBe("R32")
+    ;(pan.element as HTMLInputElement).value = "0"
+    await pan.trigger("change")
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { pan: 32 / 63 }])
+  })
 })

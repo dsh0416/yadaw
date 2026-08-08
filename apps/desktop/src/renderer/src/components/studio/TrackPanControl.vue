@@ -39,9 +39,12 @@ const rotaryGesture = useRotaryParameterGesture({
   commit: (value) => emit("commit", panUnitsToNormalized(value))
 })
 const { dragging, dragValue } = rotaryGesture
-const displayedPan = computed(() =>
-  dragging.value ? panUnitsToNormalized(dragValue.value) : props.value
-)
+const displayedPanUnits = computed(() => {
+  if (dragging.value) return dragValue.value
+  if (gesture.active.value) return gesture.gestureValue.value
+  return panUnits.value
+})
+const displayedPan = computed(() => panUnitsToNormalized(displayedPanUnits.value))
 const panLabel = computed(() => panLabelFromNormalized(displayedPan.value))
 const knobStyle = computed(() => ({
   "--pan-angle": `${Math.max(-1, Math.min(1, displayedPan.value)) * 135}deg`
@@ -98,7 +101,7 @@ function cancelEditing(): void {
       min="-64"
       max="63"
       step="1"
-      :value="panUnits"
+      :value="displayedPanUnits"
       :aria-label="`${channelName} quick pan`"
       :aria-valuetext="panLabel"
       @pointerdown="rotaryGesture.begin"

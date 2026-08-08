@@ -108,8 +108,15 @@ describe("UiRotaryControl", () => {
     })
     const range = wrapper.get('input[type="range"]')
     expect(range.attributes("aria-valuetext")).toBe("Center")
-    await range.setValue("12")
+    ;(range.element as HTMLInputElement).value = "12"
+    await range.trigger("input")
     expect(wrapper.emitted("preview")?.at(-1)).toEqual([12])
+    expect(range.attributes("aria-valuetext")).toBe("12")
+    expect((range.element as HTMLInputElement).value).toBe("12")
+
+    // A controlled parent still exposes the pre-gesture prop until its async commit completes.
+    ;(range.element as HTMLInputElement).value = "0"
+    await range.trigger("change")
     expect(wrapper.emitted("commit")?.at(-1)).toEqual([12])
 
     await range.trigger("keydown", { key: "F2" })
@@ -117,5 +124,27 @@ describe("UiRotaryControl", () => {
     await editor.setValue("-32")
     await editor.trigger("keydown", { key: "Enter" })
     expect(wrapper.emitted("commit")?.at(-1)).toEqual([-32])
+  })
+
+  it("restores a keyboard gesture with Escape without committing", async () => {
+    const wrapper = mount(UiRotaryControl, {
+      props: {
+        value: 0,
+        min: -64,
+        max: 63,
+        step: 1,
+        defaultValue: 0,
+        label: "Vocal pan"
+      }
+    })
+    const range = wrapper.get('input[type="range"]')
+    ;(range.element as HTMLInputElement).value = "24"
+    await range.trigger("input")
+    await range.trigger("keydown", { key: "Escape" })
+    await range.trigger("change")
+
+    expect(wrapper.emitted("preview")?.at(-1)).toEqual([0])
+    expect(wrapper.emitted("commit")).toBeUndefined()
+    expect((range.element as HTMLInputElement).value).toBe("0")
   })
 })

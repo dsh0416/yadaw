@@ -40,6 +40,7 @@ const emit = defineEmits<{
 const editing = shallowRef(false)
 const editValue = shallowRef("")
 const dragging = shallowRef(false)
+const keyboardActive = shallowRef(false)
 const dragValue = shallowRef(props.value)
 const tooltipVisible = shallowRef(false)
 const editInput = useTemplateRef<HTMLInputElement>("editInput")
@@ -53,7 +54,9 @@ const precision = computed(() => {
   const decimal = String(props.step).split(".")[1]
   return decimal?.length ?? 0
 })
-const displayedValue = computed(() => (dragging.value ? dragValue.value : props.value))
+const displayedValue = computed(() =>
+  dragging.value || keyboardActive.value ? dragValue.value : props.value
+)
 const displayText = computed(() => formatValue(displayedValue.value))
 const controlStyle = computed(() => {
   const range = props.max - props.min
@@ -76,7 +79,7 @@ const controlStyle = computed(() => {
 watch(
   () => props.value,
   (value) => {
-    if (!dragging.value) dragValue.value = value
+    if (!dragging.value && !keyboardActive.value) dragValue.value = value
   }
 )
 
@@ -100,6 +103,7 @@ function beginPointerGesture(event: PointerEvent): void {
   gestureStartValue = props.value
   dragValue.value = props.value
   dragging.value = true
+  keyboardActive.value = false
   tooltipVisible.value = true
   target.setPointerCapture?.(event.pointerId)
 }
@@ -143,21 +147,26 @@ function cancelPointerGesture(event: PointerEvent): void {
 function previewKeyboardGesture(event: Event): void {
   gestureStartValue ??= props.value
   keyboardCancelled = false
+  dragValue.value = snapValue(Number((event.currentTarget as HTMLInputElement).value))
+  keyboardActive.value = true
   tooltipVisible.value = true
-  emit("preview", snapValue(Number((event.currentTarget as HTMLInputElement).value)))
+  emit("preview", dragValue.value)
 }
 
 function commitKeyboardGesture(event: Event): void {
   const input = event.currentTarget as HTMLInputElement
   if (keyboardCancelled) {
     input.value = String(gestureStartValue ?? props.value)
+    dragValue.value = gestureStartValue ?? props.value
     keyboardCancelled = false
     gestureStartValue = null
+    keyboardActive.value = false
     tooltipVisible.value = false
     return
   }
-  emit("commit", snapValue(Number(input.value)))
+  emit("commit", dragValue.value)
   gestureStartValue = null
+  keyboardActive.value = false
   tooltipVisible.value = false
 }
 
@@ -172,8 +181,10 @@ function handleKeydown(event: KeyboardEvent): void {
   event.stopPropagation()
   keyboardCancelled = true
   const startValue = gestureStartValue
+  dragValue.value = startValue
   ;(event.currentTarget as HTMLInputElement).value = String(startValue)
   emit("preview", startValue)
+  keyboardActive.value = false
   tooltipVisible.value = false
 }
 
@@ -181,6 +192,7 @@ function resetToDefault(): void {
   if (props.disabled) return
   gestureStartValue = null
   keyboardCancelled = false
+  keyboardActive.value = false
   emit("commit", snapValue(props.defaultValue))
 }
 

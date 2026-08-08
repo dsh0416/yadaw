@@ -1,3 +1,5 @@
+import { shallowRef } from "vue"
+
 export interface ParameterGestureOptions {
   currentValue: () => number
   preview: (value: number) => void
@@ -9,17 +11,24 @@ function inputFrom(event: Event): HTMLInputElement {
 }
 
 export function useParameterGesture(options: ParameterGestureOptions) {
+  const active = shallowRef(false)
+  const gestureValue = shallowRef(options.currentValue())
   let startValue: number | null = null
   let cancelled = false
 
   function begin(): void {
-    startValue ??= options.currentValue()
+    if (!active.value) {
+      startValue = options.currentValue()
+      gestureValue.value = startValue
+    }
+    active.value = true
     cancelled = false
   }
 
   function preview(event: Event): void {
     begin()
-    options.preview(Number(inputFrom(event).value))
+    gestureValue.value = Number(inputFrom(event).value)
+    options.preview(gestureValue.value)
   }
 
   function commit(event: Event): void {
@@ -28,10 +37,12 @@ export function useParameterGesture(options: ParameterGestureOptions) {
       input.value = String(startValue ?? options.currentValue())
       cancelled = false
       startValue = null
+      active.value = false
       return
     }
-    options.commit(Number(input.value))
+    options.commit(gestureValue.value)
     startValue = null
+    active.value = false
   }
 
   function keydown(event: KeyboardEvent): void {
@@ -39,15 +50,19 @@ export function useParameterGesture(options: ParameterGestureOptions) {
     event.preventDefault()
     event.stopPropagation()
     cancelled = true
-    options.preview(startValue)
+    gestureValue.value = startValue
+    options.preview(gestureValue.value)
     inputFrom(event).value = String(startValue)
+    active.value = false
   }
 
   function reset(value: number): void {
     startValue = null
     cancelled = false
+    gestureValue.value = value
+    active.value = false
     options.commit(value)
   }
 
-  return { begin, preview, commit, keydown, reset }
+  return { active, gestureValue, begin, preview, commit, keydown, reset }
 }
