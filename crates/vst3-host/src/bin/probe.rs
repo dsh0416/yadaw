@@ -561,6 +561,10 @@ mod tests {
                 Some((kind, layout))
             );
         }
+        assert_eq!(
+            layout_probe_name(PluginKind::Instrument, AudioLayout::MonoToStereo),
+            "instrument:mono-to-stereo"
+        );
         assert_eq!(parse_layout_probe("effect:surround"), None);
     }
 

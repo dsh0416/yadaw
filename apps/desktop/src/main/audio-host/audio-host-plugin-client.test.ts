@@ -114,6 +114,20 @@ describe("AudioHostPluginClient", () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ audio_mode: "mono" }))
   })
 
+  it("rejects a layout that neither the plug-in nor the host can provide", async () => {
+    const { client, request } = createClient()
+    const unsupported: PluginInstanceState = {
+      ...plugin,
+      descriptor: { ...descriptor, supportedAudioModes: ["mono"] },
+      audioMode: "stereo"
+    }
+
+    await expect(client.loadPlugin(unsupported, 48_000)).rejects.toThrow(
+      "Plugin audio mode stereo is unavailable"
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it("rejects invalid load responses", async () => {
     const { client, request } = createClient()
     request.mockResolvedValue({ result: { type: "ok" } })

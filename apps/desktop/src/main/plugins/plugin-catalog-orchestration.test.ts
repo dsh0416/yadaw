@@ -133,6 +133,47 @@ describe("PluginCatalogService orchestration", () => {
     })
   })
 
+  it("persists a deep-probe failure only on the matching cached plug-in", async () => {
+    const target = externalDescriptor()
+    const unrelated = {
+      ...externalDescriptor(),
+      locator: { ...externalDescriptor().locator, nativeId: "unrelated-effect" },
+      name: "Unrelated"
+    }
+    const probeClient = { probe: vi.fn().mockRejectedValue(new Error("probe crashed")) }
+    const discovery = {
+      loadCachedCatalog: vi.fn().mockResolvedValue({
+        scannerVersion: 4,
+        scanning: false,
+        scannedAt: 1,
+        plugins: [target, unrelated]
+      }),
+      scan: vi.fn()
+    }
+    const service = new PluginCatalogService("user-data", "probe", "builtins", {
+      probeClient: probeClient as never,
+      discovery: discovery as never
+    })
+    await service.initialize()
+
+    await service.resolveDescriptorForRuntime(target)
+
+    expect(service.list().plugins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          locator: target.locator,
+          compatibility: "load-error",
+          supportedAudioModes: []
+        }),
+        expect.objectContaining({
+          locator: unrelated.locator,
+          compatibility: "compatible",
+          supportedAudioModes: ["stereo"]
+        })
+      ])
+    )
+  })
+
   it("does not fall back to soft metadata when the requested class disappears", async () => {
     const probeClient = {
       probe: vi.fn().mockResolvedValue([

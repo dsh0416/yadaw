@@ -919,6 +919,20 @@ describe("project graph validation and command guards", () => {
     expect(() => validateGraph(value)).not.toThrow()
   })
 
+  it("rejects a hosted mode that neither the plug-in nor the host can provide", () => {
+    const value = graph()
+    value.plugins.push(
+      plugin({
+        descriptor: { ...effectDescriptor, supportedAudioModes: ["mono"] },
+        audioMode: "stereo"
+      })
+    )
+
+    expect(() => validateGraph(value)).toThrowError(
+      "Plugin audio mode must be supported by its descriptor snapshot"
+    )
+  })
+
   it("rejects non-text project and track notes", () => {
     expect(() => validateGraph({ ...graph(), projectNotes: 42 as unknown as string })).toThrowError(
       "Project notes must be text"

@@ -399,6 +399,25 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
+    struct UnprocessedMonoProcessor;
+
+    impl AudioPluginProcessor for UnprocessedMonoProcessor {
+        fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
+            Box::new(self.clone())
+        }
+
+        fn process_block(
+            &mut self,
+            frames: &mut [[f32; 2]],
+            _sidechains: &dyn SidechainSource,
+            _context: &ProcessContext,
+        ) -> bool {
+            frames[0][0] = 4.0;
+            false
+        }
+    }
+
     struct NoSidechains;
 
     impl SidechainSource for NoSidechains {
@@ -443,5 +462,25 @@ mod tests {
 
         assert!(processor.process_block(&mut frames, &NoSidechains, &process_context()));
         assert_eq!(frames, [[0.5, 0.5], [-1.0, -1.0]]);
+    }
+
+    #[test]
+    fn mono_output_is_not_duplicated_without_the_host_fallback() {
+        let mut processor = AudioPluginProcessorHandle::new(MonoProcessor);
+        let mut frames = [[0.25, 9.0]];
+
+        assert!(processor.process_block(&mut frames, &NoSidechains, &process_context()));
+        assert_eq!(frames, [[0.5, 0.0]]);
+    }
+
+    #[test]
+    fn cloned_fallback_does_not_duplicate_an_unprocessed_block() {
+        let processor = AudioPluginProcessorHandle::new(UnprocessedMonoProcessor)
+            .with_mono_output_duplication();
+        let mut cloned = processor.clone();
+        let mut frames = [[0.25, 9.0]];
+
+        assert!(!cloned.process_block(&mut frames, &NoSidechains, &process_context()));
+        assert_eq!(frames, [[4.0, 9.0]]);
     }
 }
