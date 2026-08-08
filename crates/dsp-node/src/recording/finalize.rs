@@ -19,16 +19,6 @@ fn encode_hex(bytes: &[u8]) -> String {
     encoded
 }
 
-#[cfg(test)]
-mod tests {
-    use super::encode_hex;
-
-    #[test]
-    fn hex_encoding_is_lowercase_and_zero_padded() {
-        assert_eq!(encode_hex(&[0x00, 0x0f, 0x10, 0xab, 0xff]), "000f10abff");
-    }
-}
-
 impl TpdfDither {
     pub(super) fn new(seed: &[u8]) -> Self {
         let digest = Sha256::digest(seed);
@@ -229,4 +219,14 @@ pub(super) fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeF
         time_reference: config.time_reference.max(0),
         waveform_levels: analyzed.waveform_levels,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::encode_hex;
+
+    #[test]
+    fn hex_encoding_is_lowercase_and_zero_padded() {
+        assert_eq!(encode_hex(&[0x00, 0x0f, 0x10, 0xab, 0xff]), "000f10abff");
+    }
 }
