@@ -264,6 +264,7 @@ pub trait AudioPluginProcessor: Send {
 /// Cloneable type-erased processor handle stored by render graphs.
 pub struct AudioPluginProcessorHandle {
     inner: Box<dyn AudioPluginProcessor>,
+    duplicate_mono_output: bool,
 }
 
 impl AudioPluginProcessorHandle {
@@ -272,7 +273,15 @@ impl AudioPluginProcessorHandle {
     pub fn new(processor: impl AudioPluginProcessor + 'static) -> Self {
         Self {
             inner: Box::new(processor),
+            duplicate_mono_output: false,
         }
+    }
+
+    /// Duplicates the processed mono left channel into the right channel.
+    #[must_use]
+    pub fn with_mono_output_duplication(mut self) -> Self {
+        self.duplicate_mono_output = true;
+        self
     }
 
     pub fn process_block(
@@ -281,7 +290,13 @@ impl AudioPluginProcessorHandle {
         sidechains: &dyn SidechainSource,
         context: &ProcessContext,
     ) -> bool {
-        self.inner.process_block(frames, sidechains, context)
+        let processed = self.inner.process_block(frames, sidechains, context);
+        if processed && self.duplicate_mono_output {
+            for frame in frames {
+                frame[1] = frame[0];
+            }
+        }
+        processed
     }
 
     pub fn retire(&mut self) {
@@ -350,13 +365,84 @@ impl Clone for AudioPluginProcessorHandle {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone_box(),
+            duplicate_mono_output: self.duplicate_mono_output,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ParameterTokenMap;
+    use super::{
+        AudioPluginProcessor, AudioPluginProcessorHandle, AudioPortToken, ParameterTokenMap,
+        ProcessContext, SidechainSource,
+    };
+
+    #[derive(Clone)]
+    struct MonoProcessor;
+
+    impl AudioPluginProcessor for MonoProcessor {
+        fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
+            Box::new(self.clone())
+        }
+
+        fn process_block(
+            &mut self,
+            frames: &mut [[f32; 2]],
+            _sidechains: &dyn SidechainSource,
+            _context: &ProcessContext,
+        ) -> bool {
+            for frame in frames {
+                frame[0] *= 2.0;
+                frame[1] = 0.0;
+            }
+            true
+        }
+    }
+
+    #[derive(Clone)]
+    struct UnprocessedMonoProcessor;
+
+    impl AudioPluginProcessor for UnprocessedMonoProcessor {
+        fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
+            Box::new(self.clone())
+        }
+
+        fn process_block(
+            &mut self,
+            frames: &mut [[f32; 2]],
+            _sidechains: &dyn SidechainSource,
+            _context: &ProcessContext,
+        ) -> bool {
+            frames[0][0] = 4.0;
+            false
+        }
+    }
+
+    struct NoSidechains;
+
+    impl SidechainSource for NoSidechains {
+        fn frames(&self, _port: AudioPortToken) -> Option<&[[f32; 2]]> {
+            None
+        }
+    }
+
+    fn process_context() -> ProcessContext {
+        ProcessContext {
+            project_time_samples: 0,
+            continuous_time_samples: 0,
+            steady_time_samples: 0,
+            project_time_quarters: 0.0,
+            bar_position_quarters: 0.0,
+            tempo: 120.0,
+            time_signature_numerator: 4,
+            time_signature_denominator: 4,
+            playing: false,
+            recording: false,
+            loop_active: false,
+            loop_start_quarters: 0.0,
+            loop_end_quarters: 0.0,
+        }
+    }
 
     #[test]
     fn parameter_tokens_are_dense_deterministic_and_instance_local() {
@@ -366,5 +452,35 @@ mod tests {
         assert_eq!(tokens.token(90), Some(3));
         assert_eq!(tokens.native_id(2), Some(42));
         assert_eq!(tokens.native_id(0), None);
+    }
+
+    #[test]
+    fn mono_output_duplication_runs_after_successful_native_processing() {
+        let mut processor =
+            AudioPluginProcessorHandle::new(MonoProcessor).with_mono_output_duplication();
+        let mut frames = [[0.25, 9.0], [-0.5, 9.0]];
+
+        assert!(processor.process_block(&mut frames, &NoSidechains, &process_context()));
+        assert_eq!(frames, [[0.5, 0.5], [-1.0, -1.0]]);
+    }
+
+    #[test]
+    fn mono_output_is_not_duplicated_without_the_host_fallback() {
+        let mut processor = AudioPluginProcessorHandle::new(MonoProcessor);
+        let mut frames = [[0.25, 9.0]];
+
+        assert!(processor.process_block(&mut frames, &NoSidechains, &process_context()));
+        assert_eq!(frames, [[0.5, 0.0]]);
+    }
+
+    #[test]
+    fn cloned_fallback_does_not_duplicate_an_unprocessed_block() {
+        let processor = AudioPluginProcessorHandle::new(UnprocessedMonoProcessor)
+            .with_mono_output_duplication();
+        let mut cloned = processor.clone();
+        let mut frames = [[0.25, 9.0]];
+
+        assert!(!cloned.process_block(&mut frames, &NoSidechains, &process_context()));
+        assert_eq!(frames, [[4.0, 9.0]]);
     }
 }

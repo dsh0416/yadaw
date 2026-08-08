@@ -29,10 +29,10 @@ describe("PluginAudioModeMenu", () => {
     expect(wrapper.find('button[title^="Stereo"]').exists()).toBe(false)
     expect(wrapper.find('button[title^="Dual mono"]').exists()).toBe(false)
 
-    expect(
-      wrapper.get('button[title="Mono to stereo is not supported by this plug-in"]').attributes()
-    ).toHaveProperty("disabled")
-    expect(wrapper.emitted("select")).toBeUndefined()
+    const monoToStereo = wrapper.get('button[title="Mono to stereo: 1 → 2"]')
+    expect(monoToStereo.attributes("disabled")).toBeUndefined()
+    await monoToStereo.trigger("click")
+    expect(wrapper.emitted("select")?.at(-1)).toEqual(["mono-to-stereo"])
 
     const mono = wrapper.get('button[title="Mono: 1 → 1"]')
     expect(document.activeElement).toBe(mono.element)

@@ -10,7 +10,12 @@ import type {
   PluginScanEvent,
   RpcEvent
 } from "@heron/contracts"
-import { pluginDescriptorKey, pluginLocator, pluginTypeKey } from "@heron/contracts"
+import {
+  pluginDescriptorKey,
+  pluginLocator,
+  pluginSupportsHostedAudioMode,
+  pluginTypeKey
+} from "@heron/contracts"
 import {
   pluginAudioModeInputWidth,
   pluginAudioModeOutputWidth,
@@ -107,7 +112,7 @@ export const usePluginStore = defineStore("plugins", () => {
           error: descriptor.compatibilityReason
         }
         nextCatalogFailureIds.add(instance.id)
-      } else if (!descriptor.supportedAudioModes.includes(instance.audioMode)) {
+      } else if (!pluginSupportsHostedAudioMode(descriptor, instance.audioMode)) {
         next[instance.id] = {
           instanceId: instance.id,
           state: "failed",

@@ -545,6 +545,55 @@ describe("plugin store", () => {
     expect(pluginStore.runtime["instrument-instance"]).toBeUndefined()
   })
 
+  it("accepts host-provided mono-to-stereo while rejecting unsupported saved layouts", async () => {
+    const mixerStore = useMixerStore()
+    const initialGraph = graph()
+    const monoDescriptor: PluginDescriptor = {
+      ...effectDescriptor,
+      supportedAudioModes: ["mono"]
+    }
+    initialGraph.plugins.push(
+      {
+        id: "hosted-mono-to-stereo",
+        channelId: "audio",
+        role: "insert",
+        slotOrder: 0,
+        locator: monoDescriptor.locator,
+        descriptor: monoDescriptor,
+        audioMode: "mono-to-stereo",
+        enabled: true,
+        sidechainInputs: [],
+        state: { version: 1, chunks: [] }
+      },
+      {
+        id: "unsupported-stereo",
+        channelId: "audio",
+        role: "insert",
+        slotOrder: 1,
+        locator: monoDescriptor.locator,
+        descriptor: monoDescriptor,
+        audioMode: "stereo",
+        enabled: true,
+        sidechainInputs: [],
+        state: { version: 1, chunks: [] }
+      }
+    )
+    mixerStore.graph = initialGraph
+    window.heron.listPlugins = vi
+      .fn()
+      .mockResolvedValue(
+        success({ scannerVersion: 4, scanning: false, scannedAt: 1, plugins: [monoDescriptor] })
+      )
+    window.heron.subscribePluginScan = vi.fn().mockReturnValue(vi.fn())
+    window.heron.subscribePluginEditorClosed = vi.fn().mockReturnValue(vi.fn())
+
+    const pluginStore = usePluginStore()
+    await pluginStore.load()
+
+    expect(pluginStore.runtime["hosted-mono-to-stereo"]).toBeUndefined()
+    expect(pluginStore.runtime["unsupported-stereo"]?.state).toBe("failed")
+  })
+
   it("rejects effect modes whose native input width does not match the insert point", async () => {
     const mixerStore = useMixerStore()
     mixerStore.graph = graph()

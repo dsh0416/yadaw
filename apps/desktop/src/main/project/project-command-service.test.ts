@@ -426,6 +426,65 @@ describe("project graph and command services", () => {
     )
   })
 
+  it("reports unsupported hosted plug-in modes as graph validation failures", async () => {
+    const projects = projectMock()
+    const plugins = {
+      resolveDescriptor: vi.fn((value: PluginDescriptor) => value),
+      resolveDescriptorForRuntime: vi.fn(async (value: PluginDescriptor) => value)
+    }
+    const service = await mixer(projects, undefined, plugins)
+    await service.load()
+
+    await expect(
+      service.execute({
+        type: "create-plugin",
+        plugin: {
+          id: "unsupported-stereo",
+          channelId: "audio",
+          role: "insert",
+          slotOrder: 1,
+          locator: effectDescriptor.locator,
+          descriptor: { ...effectDescriptor, supportedAudioModes: ["mono"] },
+          audioMode: "stereo",
+          enabled: true,
+          sidechainInputs: [],
+          state: { version: 1, chunks: [] }
+        }
+      })
+    ).rejects.toThrow("validation-failed")
+    expect(projects.prepareProjectCommand).not.toHaveBeenCalled()
+  })
+
+  it("does not classify non-error transaction failures as graph validation", async () => {
+    const projects = projectMock()
+    const plugins = {
+      resolveDescriptor: vi.fn((value: PluginDescriptor) => value),
+      resolveDescriptorForRuntime: vi.fn(async (value: PluginDescriptor) => value)
+    }
+    const service = await mixer(projects, undefined, plugins)
+    await service.load()
+    projects.prepareProjectCommand.mockRejectedValueOnce("worker stopped")
+
+    await expect(
+      service.execute({
+        type: "create-plugin",
+        plugin: {
+          id: "unavailable-effect",
+          channelId: "audio",
+          role: "insert",
+          slotOrder: 1,
+          locator: effectDescriptor.locator,
+          descriptor: effectDescriptor,
+          audioMode: "stereo",
+          enabled: true,
+          sidechainInputs: [],
+          state: { version: 1, chunks: [] }
+        }
+      })
+    ).rejects.toThrow("resource-unavailable")
+    expect(projects.prepareProjectCommand).toHaveBeenCalledOnce()
+  })
+
   it("commits realtime and structural candidates without rebuilding the database graph", async () => {
     const projects = projectMock()
     const loadGraph = vi.fn().mockResolvedValue(undefined)

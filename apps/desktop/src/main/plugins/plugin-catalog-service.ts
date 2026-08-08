@@ -191,14 +191,47 @@ export class PluginCatalogService {
             : descriptor
         )
       }
-      return structuredClone(
-        descriptors.find((descriptor) => pluginLocator(descriptor).nativeId === locator.nativeId) ??
-          resolved
+      const descriptor = descriptors.find(
+        (descriptor) => pluginLocator(descriptor).nativeId === locator.nativeId
       )
-    } catch {
+      if (descriptor) return structuredClone(descriptor)
+      return this.markRuntimeProbeUnavailable(
+        resolved,
+        "Deep probe did not return the requested plug-in class"
+      )
+    } catch (error) {
       this.runtimeBundleProbes.delete(locator.artifactPath)
-      return resolved
+      return this.markRuntimeProbeUnavailable(
+        resolved,
+        error instanceof Error ? error.message : "Deep plug-in capability probe failed"
+      )
     }
+  }
+
+  private markRuntimeProbeUnavailable(
+    descriptor: PluginDescriptor,
+    reason: string
+  ): PluginDescriptor {
+    const unavailable: PluginDescriptor = {
+      ...descriptor,
+      supportedAudioModes: [],
+      compatibility: "load-error",
+      compatibilityReason: reason
+    }
+    const unavailableLocator = pluginLocator(unavailable)
+    this.catalog = {
+      ...this.catalog,
+      plugins: this.catalog.plugins.map((candidate) => {
+        const candidateLocator = pluginLocator(candidate)
+        return candidate.source.kind === "external" &&
+          candidateLocator.format === unavailableLocator.format &&
+          candidateLocator.artifactPath === unavailableLocator.artifactPath &&
+          candidateLocator.nativeId === unavailableLocator.nativeId
+          ? unavailable
+          : candidate
+      })
+    }
+    return structuredClone(unavailable)
   }
 
   subscribe(listener: ScanListener): () => void {

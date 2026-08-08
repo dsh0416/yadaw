@@ -117,7 +117,7 @@ function unavailableError(meta: RpcRequestMeta, dispatched: boolean): RpcError {
 
 function isGraphCommandError(error: unknown): error is Error {
   if (!(error instanceof Error)) return false
-  return /(?:was not found|require a valid .* input|must reference|must target|cannot be)/i.test(
+  return /(?:was not found|require a valid .* input|must reference|must target|must be supported|cannot be)/i.test(
     error.message
   )
 }

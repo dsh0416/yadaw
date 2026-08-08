@@ -7,6 +7,8 @@ import {
   pluginCategoriesLabel,
   pluginDescriptorKey,
   pluginLooksLikeInstrument,
+  pluginSupportsHostedAudioMode,
+  resolvePluginProcessorAudioMode,
   type PluginDescriptor
 } from "./plugins"
 
@@ -159,6 +161,22 @@ describe("pluginLooksLikeInstrument", () => {
   it("rejects effect-only categories", () => {
     expect(pluginLooksLikeInstrument(["Fx", "Reverb", "Dynamics"])).toBe(false)
     expect(pluginLooksLikeInstrument([])).toBe(false)
+  })
+})
+
+describe("hosted plug-in audio modes", () => {
+  it("provides mono-to-stereo with a native mono processor and output duplication", () => {
+    const mono = descriptor({ supportedAudioModes: ["mono"] })
+
+    expect(pluginSupportsHostedAudioMode(mono, "mono-to-stereo")).toBe(true)
+    expect(resolvePluginProcessorAudioMode(mono, "mono-to-stereo")).toBe("mono")
+  })
+
+  it("prefers a native mono-to-stereo processor when one is available", () => {
+    const native = descriptor({ supportedAudioModes: ["mono", "mono-to-stereo"] })
+
+    expect(resolvePluginProcessorAudioMode(native, "mono-to-stereo")).toBe("mono-to-stereo")
+    expect(pluginSupportsHostedAudioMode(native, "stereo")).toBe(false)
   })
 })
 

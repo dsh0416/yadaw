@@ -107,6 +107,25 @@ export function pluginDescriptorKey(descriptor: PluginDescriptor): string {
     : `${locator.format}:${locator.artifactPath}:${locator.nativeId}`
 }
 
+/** Resolve the native processor layout used to provide a host-facing audio mode. */
+export function resolvePluginProcessorAudioMode(
+  descriptor: PluginDescriptor,
+  hostedMode: PluginAudioMode
+): PluginAudioMode | null {
+  if (descriptor.supportedAudioModes.includes(hostedMode)) return hostedMode
+  if (hostedMode === "mono-to-stereo" && descriptor.supportedAudioModes.includes("mono")) {
+    return "mono"
+  }
+  return null
+}
+
+export function pluginSupportsHostedAudioMode(
+  descriptor: PluginDescriptor,
+  hostedMode: PluginAudioMode
+): boolean {
+  return resolvePluginProcessorAudioMode(descriptor, hostedMode) !== null
+}
+
 /** Split a VST3 pipe-separated subcategory string, or normalize an array. */
 export function parsePluginCategories(
   value: string | readonly string[] | null | undefined

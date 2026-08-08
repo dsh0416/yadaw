@@ -189,6 +189,8 @@ pub struct LivePluginInstance {
     pub slot_order: u32,
     #[serde(default)]
     pub audio_mode: PluginAudioMode,
+    #[serde(default)]
+    pub duplicate_mono_output: bool,
     pub enabled: bool,
     #[serde(default)]
     pub aux_input_buses: Vec<LivePluginAuxInputBus>,

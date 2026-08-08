@@ -196,10 +196,18 @@ pub(super) fn live_graph(
         .plugins
         .iter()
         .map(|plugin| {
+            let processor = processors
+                .and_then(|processors| processors.get(&plugin.instance_id))
+                .cloned()
+                .map(|processor| {
+                    if plugin.duplicate_mono_output {
+                        processor.with_mono_output_duplication()
+                    } else {
+                        processor
+                    }
+                });
             Ok(engine::NativePluginInstance {
-                processor: processors
-                    .and_then(|processors| processors.get(&plugin.instance_id))
-                    .cloned(),
+                processor,
                 instance_id: plugin.instance_id.clone(),
                 channel_index: channel_index(&plugin.channel_id)?,
                 role: plugin.role.clone(),
@@ -721,6 +729,7 @@ pub(super) fn engine_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use heron_audio_plugin::{AudioPluginProcessor, ProcessContext, SidechainSource};
     use heron_dsp_runtime::protocol::{
         ApplicationCaptureTarget, BinaryPayload, LiveLatencyPolicy, LiveMidiClip, LiveMidiEvent,
         LiveMidiNote, LiveMixerChannel, LiveMixerClip, LiveMixerGraph, LiveMixerSend,
@@ -729,6 +738,24 @@ mod tests {
     };
 
     type InvalidGraphCase = (&'static str, fn(&mut LiveMixerGraph));
+
+    #[derive(Clone)]
+    struct TestProcessor;
+
+    impl AudioPluginProcessor for TestProcessor {
+        fn clone_box(&self) -> Box<dyn AudioPluginProcessor> {
+            Box::new(self.clone())
+        }
+
+        fn process_block(
+            &mut self,
+            _frames: &mut [[f32; 2]],
+            _sidechains: &dyn SidechainSource,
+            _context: &ProcessContext,
+        ) -> bool {
+            true
+        }
+    }
 
     fn logical_target() -> engine::application_capture::ApplicationCaptureLogicalTarget {
         engine::application_capture::ApplicationCaptureLogicalTarget {
@@ -929,6 +956,7 @@ mod tests {
                 role: "effect".to_owned(),
                 slot_order: 1,
                 audio_mode: PluginAudioMode::Stereo,
+                duplicate_mono_output: false,
                 enabled: true,
                 aux_input_buses: vec![LivePluginAuxInputBus {
                     input_port_key: "vst3:audio:input:7".to_owned(),
@@ -981,6 +1009,22 @@ mod tests {
         assert_eq!(converted.plugins[0].aux_input_buses[0].input_port_token, 7);
         assert_eq!(converted.midi_clips[0].events.len(), 6);
         assert_eq!(converted.tempo_events[0].beats_per_minute, 120.0);
+    }
+
+    #[test]
+    fn live_graph_applies_mono_duplication_only_when_requested() {
+        let processor = vst3::AudioPluginProcessorHandle::new(TestProcessor);
+        let processors = HashMap::from([("effect".to_owned(), processor)]);
+        let graph = graph_with_every_wire_value();
+
+        let native = live_graph(1, &graph, Some(&processors)).expect("graph should convert");
+        assert!(native.plugins[0].processor.is_some());
+
+        let mut fallback_graph = graph;
+        fallback_graph.plugins[0].duplicate_mono_output = true;
+        let native =
+            live_graph(2, &fallback_graph, Some(&processors)).expect("graph should convert");
+        assert!(native.plugins[0].processor.is_some());
     }
 
     #[test]

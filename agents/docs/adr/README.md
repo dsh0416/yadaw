@@ -48,3 +48,4 @@ review.
 - [ADR-0002: Address Live MIDI controls by ordered channels and plug-in aliases](0002-live-midi-control-addressing.md)
 - [ADR-0003: Make explicit device selection win reconnect races](0003-device-recovery-precedence.md)
 - [ADR-0004: Keep project media canonical and audition outside transport](0004-project-media-assets.md)
+- [ADR-0005: Keep plug-in channel adapters host-owned](0005-host-owned-plugin-channel-adapters.md)

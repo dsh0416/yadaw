@@ -289,6 +289,22 @@ describe("AudioGraphCompiler", () => {
     ])
   })
 
+  it("marks host-provided mono-to-stereo output duplication for native mono effects", () => {
+    const monoDescriptor: PluginDescriptor = { ...descriptor, supportedAudioModes: ["mono"] }
+    const monoToStereo: PluginInstanceState = {
+      ...plugin,
+      descriptor: monoDescriptor,
+      audioMode: "mono-to-stereo"
+    }
+
+    const compiled = compiler.compile(snapshot({ plugins: [monoToStereo] }), assetPaths, true)
+
+    expect(compiled.plugins[0]).toMatchObject({
+      audio_mode: "mono-to-stereo",
+      duplicate_mono_output: true
+    })
+  })
+
   it("gates audio monitoring on softwareMonitoringEnabled while instruments keep theirs", () => {
     const graph = snapshot()
     const monitored = compiler.compile(graph, assetPaths, true)

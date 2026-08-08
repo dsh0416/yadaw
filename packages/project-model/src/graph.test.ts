@@ -907,6 +907,32 @@ describe("additional project graph commands", () => {
 })
 
 describe("project graph validation and command guards", () => {
+  it("accepts host-provided mono-to-stereo mode for a native mono effect", () => {
+    const value = graph()
+    value.plugins.push(
+      plugin({
+        descriptor: { ...effectDescriptor, supportedAudioModes: ["mono"] },
+        audioMode: "mono-to-stereo"
+      })
+    )
+
+    expect(() => validateGraph(value)).not.toThrow()
+  })
+
+  it("rejects a hosted mode that neither the plug-in nor the host can provide", () => {
+    const value = graph()
+    value.plugins.push(
+      plugin({
+        descriptor: { ...effectDescriptor, supportedAudioModes: ["mono"] },
+        audioMode: "stereo"
+      })
+    )
+
+    expect(() => validateGraph(value)).toThrowError(
+      "Plugin audio mode must be supported by its descriptor snapshot"
+    )
+  })
+
   it("rejects non-text project and track notes", () => {
     expect(() => validateGraph({ ...graph(), projectNotes: 42 as unknown as string })).toThrowError(
       "Project notes must be text"

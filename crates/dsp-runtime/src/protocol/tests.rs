@@ -603,6 +603,7 @@ fn plugin(instance_id: &str) -> LivePluginInstance {
         role: "insert".into(),
         slot_order: 0,
         audio_mode: PluginAudioMode::Stereo,
+        duplicate_mono_output: false,
         enabled: true,
         aux_input_buses: vec![],
         latency_samples: 0,

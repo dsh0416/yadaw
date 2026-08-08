@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, useTemplateRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
-import type { PluginAudioMode, PluginDescriptor } from "@heron/contracts"
+import {
+  pluginSupportsHostedAudioMode,
+  type PluginAudioMode,
+  type PluginDescriptor
+} from "@heron/contracts"
 import { pluginAudioModeOptions, type PluginSignalWidth } from "./plugin-audio-mode"
 
 const props = defineProps<{
@@ -20,7 +24,7 @@ const visibleOptions = computed(() =>
 )
 
 function isSupported(mode: PluginAudioMode): boolean {
-  return props.descriptor.supportedAudioModes.includes(mode)
+  return pluginSupportsHostedAudioMode(props.descriptor, mode)
 }
 
 function focusFirstMode(): void {

@@ -8,7 +8,11 @@ import type {
   ProjectGraphSnapshot,
   TrackState
 } from "@heron/contracts"
-import { DEFAULT_PROJECT_END_TICK, pluginLocator } from "@heron/contracts"
+import {
+  DEFAULT_PROJECT_END_TICK,
+  pluginLocator,
+  pluginSupportsHostedAudioMode
+} from "@heron/contracts"
 
 export function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
   if (!Number.isFinite(value) || value < minimum || value > maximum) {
@@ -860,7 +864,7 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
     ) {
       throw new Error("Plugin locator must match its descriptor snapshot")
     }
-    if (!plugin.descriptor.supportedAudioModes.includes(plugin.audioMode)) {
+    if (!pluginSupportsHostedAudioMode(plugin.descriptor, plugin.audioMode)) {
       throw new Error("Plugin audio mode must be supported by its descriptor snapshot")
     }
     const sidechainPortKeys = new Set<string>()
