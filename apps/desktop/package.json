@@ -32,7 +32,7 @@
     "@heron/project-db": "workspace:*",
     "@heron/project-model": "workspace:*",
     "@heron/ui": "workspace:*",
-    "dompurify": "3.4.12",
+    "dompurify": "3.4.13",
     "echarts": "^6.1.0",
     "marked": "16.3.0",
     "vue-i18n": "^11.4.8"
