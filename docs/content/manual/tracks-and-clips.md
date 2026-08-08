@@ -38,7 +38,25 @@ Recordings appear as audio clips when capture finishes. The waveform is a
 visual guide; changing the arrangement's **Gain** zoom changes only the drawing,
 not the clip level.
 
-Audio files stored in the project appear under **Library → Samples**.
+Audio and MIDI files stored in the project appear in the right-side **Media
+Browser**. Use its top-bar button to open or close it. The panel starts closed,
+can be resized from its left edge, and shares the right side with Notes.
+
+Use **Audio** in the Media Browser to import WAV/BWF, MP3, or FLAC files. Heron
+copies supported mono or stereo media into the project as canonical float32 BWF;
+files with more than two channels are rejected. Importing the same source
+content again reuses the first asset and keeps its original name.
+
+Select an audio asset and press <kbd>Space</kbd>, or use its play button, to
+audition it through the current stereo Output. Audition is independent of the
+transport and may continue while the arrangement plays. It does not create a
+clip, change the playhead, dirty the project, or add an Undo step.
+
+Drag audio from the Media Browser to an Audio track to create a clip. Drop it on
+blank arrangement space to create an Audio track and clip together. You can
+also drag supported files from the operating system; Heron imports them before
+placing the clips. If placement fails after import, the Media Browser retains
+the imported asset.
 
 Drag a clip's left or right edge to trim it without changing the underlying
 audio. Trimmed material remains available, so dragging the edge back out
@@ -62,9 +80,12 @@ later. Right-click for split, trim-to-playhead, and delete commands. Splitting
 one or more selected MIDI clips at the playhead is one edit and one Undo step;
 the resulting clips can be extended and edited independently.
 
-To bring in an existing Standard MIDI File, use the MIDI import command. For
-each sequence, choose a new instrument track or ignore it. You can keep the
-project Tempo Track or replace it with the imported tempo map.
+To bring in an existing Standard MIDI File, use **MIDI** in the Media Browser.
+For each sequence, choose a new instrument track, an existing Instrument track,
+or ignore it. You can keep the project Tempo Track or replace it with the
+imported tempo map. Dragging MIDI to an Instrument track opens the same mapping
+dialog with that track preselected; dropping on blank arrangement space defaults
+to a new Instrument track.
 
 ## Global lanes
 

@@ -1,6 +1,8 @@
 import type { SystemPerformanceSnapshot } from "@heron/contracts"
 import type { ApplicationSettingsStore } from "../settings"
 import type { AudioHostService } from "../audio-host"
+import type { AudioImportService } from "../project"
+import type { AssetAuditionService } from "../project"
 import type { LifecycleCoordinator } from "../kernel"
 import type { MidiImportService } from "../project"
 import type { MixerRuntimeService } from "../audio"
@@ -24,6 +26,8 @@ export interface ApplicationServices {
   projectCommands: ProjectCommandService
   mixerRuntime: MixerRuntimeService
   transport: TransportService
+  audioImport: AudioImportService
+  assetAudition: AssetAuditionService
   plugins: PluginCatalogService
   midiImport: MidiImportService
   lifecycle: LifecycleCoordinator

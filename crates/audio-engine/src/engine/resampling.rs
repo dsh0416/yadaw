@@ -381,6 +381,7 @@ where
         mut commands,
         mut mixer,
         mut retired_mixers,
+        mut retired_auditions,
     } = mixer_control;
     let channels = usize::from(config.channels);
     let mut resampler = AdaptiveResampler::new(
@@ -435,7 +436,9 @@ where
 
                 while let Some(command) = commands.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
-                        if let Some(replacement) = runtime.handle_command(command) {
+                        if let Some(replacement) =
+                            runtime.handle_command_realtime(command, &mut retired_auditions)
+                        {
                             callback_metrics
                                 .published_graph_generation
                                 .store(replacement.generation, Ordering::Release);
@@ -452,16 +455,26 @@ where
                                 }
                             }
                         }
-                    } else if let EngineCommand::LoadMixer(mut runtime) = command {
-                        runtime.external_sync_enabled = external_sync_enabled;
-                        runtime.activate_application_captures();
-                        callback_metrics
-                            .published_graph_generation
-                            .store(runtime.generation, Ordering::Release);
-                        callback_metrics
-                            .published_graph_build_generation
-                            .store(runtime.build_generation, Ordering::Release);
-                        mixer = Some(runtime);
+                    } else {
+                        match command {
+                            EngineCommand::LoadMixer(mut runtime) => {
+                                runtime.external_sync_enabled = external_sync_enabled;
+                                runtime.activate_application_captures();
+                                callback_metrics
+                                    .published_graph_generation
+                                    .store(runtime.generation, Ordering::Release);
+                                callback_metrics
+                                    .published_graph_build_generation
+                                    .store(runtime.build_generation, Ordering::Release);
+                                mixer = Some(runtime);
+                            }
+                            EngineCommand::StartAudition(audition) => {
+                                if let Err(audition) = retired_auditions.try_push(audition) {
+                                    std::mem::forget(audition);
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
 

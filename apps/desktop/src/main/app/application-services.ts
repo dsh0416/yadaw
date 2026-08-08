@@ -1,4 +1,6 @@
 import { AssetMaterializer } from "../project"
+import { AssetAuditionService } from "../project"
+import { AudioImportService } from "../project"
 import { AudioGraphCompiler } from "../project"
 import { AudioGraphPublisher } from "../project"
 import { bindAudioHostApplicationEvents } from "./audio-host-application-events"
@@ -26,6 +28,8 @@ export interface ApplicationServices {
   projectCommands: ProjectCommandService
   mixerRuntime: MixerRuntimeService
   transport: TransportService
+  audioImport: AudioImportService
+  assetAudition: AssetAuditionService
   midiImport: MidiImportService
   lifecycle: LifecycleCoordinator
   operations: OperationService
@@ -49,9 +53,10 @@ export async function createApplicationServices(
   options: CreateApplicationServicesOptions
 ): Promise<ApplicationServices> {
   const { settings, projectService, audioHost, plugins } = options
+  const assetMaterializer = new AssetMaterializer(options.userDataPath, projectService)
   const graphPublisher = new AudioGraphPublisher(
     new AudioGraphCompiler(),
-    new AssetMaterializer(options.userDataPath, projectService),
+    assetMaterializer,
     audioHost,
     plugins,
     settings
@@ -65,6 +70,13 @@ export async function createApplicationServices(
   )
   const mixerRuntime = new MixerRuntimeService(audioHost)
   const transport = new TransportService(projectService, audioHost)
+  const audioImport = new AudioImportService(options.userDataPath, projectService)
+  const assetAudition = new AssetAuditionService(
+    projectService,
+    projectGraph,
+    assetMaterializer,
+    audioHost
+  )
 
   plugins.attachRuntime({
     resolveInstance: async (instanceId) => {
@@ -93,7 +105,7 @@ export async function createApplicationServices(
     closeEditor: (instanceId) => audioHost.closePluginEditor(instanceId)
   })
 
-  const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
+  const midiImport = new MidiImportService(projectGraph, projectCommands, plugins, projectService)
   const initialAudioRuntime = await audioHost.audioEngineSnapshot()
   const normalizedAudioRuntime = normalizeAudioRuntime(initialAudioRuntime)
   const lifecycle = new LifecycleCoordinator(projectService.current, normalizedAudioRuntime, {
@@ -132,6 +144,8 @@ export async function createApplicationServices(
     projectCommands,
     mixerRuntime,
     transport,
+    audioImport,
+    assetAudition,
     midiImport,
     lifecycle,
     operations,

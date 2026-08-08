@@ -208,8 +208,13 @@ fn into_native(value: NormalizedSmf) -> Result<NativeNormalizedSmf> {
 }
 
 pub struct ParseMidiTask {
-    path: String,
+    source: ParseMidiSource,
     project_tempo_map: NativeTempoMap,
+}
+
+enum ParseMidiSource {
+    File(String),
+    Bytes(Vec<u8>),
 }
 
 #[napi]
@@ -218,8 +223,11 @@ impl Task for ParseMidiTask {
     type JsValue = NativeNormalizedSmf;
 
     fn compute(&mut self) -> Result<Self::Output> {
-        let bytes = fs::read(&self.path)
-            .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))?;
+        let bytes = match &self.source {
+            ParseMidiSource::File(path) => fs::read(path)
+                .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))?,
+            ParseMidiSource::Bytes(bytes) => bytes.clone(),
+        };
         let map = tempo_map(&self.project_tempo_map)?;
         into_native(
             normalize_smf(&bytes, &map)
@@ -238,7 +246,18 @@ pub fn parse_midi_file(
     project_tempo_map: NativeTempoMap,
 ) -> AsyncTask<ParseMidiTask> {
     AsyncTask::new(ParseMidiTask {
-        path,
+        source: ParseMidiSource::File(path),
+        project_tempo_map,
+    })
+}
+
+#[napi]
+pub fn parse_midi_data(
+    bytes: Buffer,
+    project_tempo_map: NativeTempoMap,
+) -> AsyncTask<ParseMidiTask> {
+    AsyncTask::new(ParseMidiTask {
+        source: ParseMidiSource::Bytes(bytes.to_vec()),
         project_tempo_map,
     })
 }

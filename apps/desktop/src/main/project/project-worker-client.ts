@@ -192,6 +192,10 @@ export class ProjectWorkerClient {
     return this.call({ type: "import-midi", source, command, fallbackOutputId })
   }
 
+  readMidiSource(sourceId: string): Promise<MidiSourceInput | null> {
+    return this.call({ type: "read-midi-source", sourceId })
+  }
+
   rollbackMidi(sourceId: string, command: ProjectCommand, fallbackOutputId: string): Promise<void> {
     return this.call({
       type: "rollback-midi",

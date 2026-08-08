@@ -18,6 +18,8 @@ function asset(id: string, frameCount: bigint, sampleRate = 48_000): Asset {
   return {
     id,
     name: `${id}.bwf`,
+    kind: "audio",
+    contentHash: `${id}-hash`,
     sampleRate,
     channels: 2,
     bitDepth: "float32",

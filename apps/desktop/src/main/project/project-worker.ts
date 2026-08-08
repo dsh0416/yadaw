@@ -152,6 +152,8 @@ async function handle(request: WorkerRequest): Promise<WorkerResult> {
     }
     case "import-midi":
       return requireDatabase().importMidi(request.source, request.command, request.fallbackOutputId)
+    case "read-midi-source":
+      return requireDatabase().readMidiSource(request.sourceId)
     case "rollback-midi":
       return requireDatabase().rollbackMidi(
         request.sourceId,

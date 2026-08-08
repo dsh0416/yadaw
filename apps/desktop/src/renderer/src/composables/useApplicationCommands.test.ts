@@ -21,6 +21,7 @@ import { useAudioBenchmarkStore } from "../stores/audioBenchmark"
 import { useCompiledEffectGraphStore } from "../stores/compiledEffectGraph"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
+import { useMediaBrowserStore } from "../stores/mediaBrowser"
 import { useApplicationWindowStore } from "../stores/applicationWindow"
 import { rpcEvent } from "../test/ipc"
 
@@ -409,6 +410,47 @@ describe("useApplicationCommands", () => {
 
     expect(useAboutStore(pinia).isOpen).toBe(true)
     expect(window.heron.executeApplicationWindowCommand).not.toHaveBeenCalled()
+  })
+
+  it("routes Space to the selected Media Browser audio instead of transport", async () => {
+    const { pinia, router } = createHarness()
+    const projectWorkspace = workspace(session)
+    projectWorkspace.assets = [
+      {
+        id: "asset-1",
+        kind: "audio",
+        name: "Kick.wav",
+        contentHash: "hash-1",
+        sampleRate: 48_000,
+        channels: 2,
+        bitDepth: "float32",
+        frameCount: 48_000n
+      }
+    ]
+    useProjectStore(pinia).applyWorkspace(projectWorkspace)
+    useStudioWorkspaceStore(pinia).toggleMediaBrowser()
+    const mediaBrowserStore = useMediaBrowserStore(pinia)
+    mediaBrowserStore.select("asset-1")
+    window.heron.startAssetAudition = vi.fn().mockResolvedValue({
+      ok: true,
+      requestId: "audition",
+      value: undefined,
+      warnings: []
+    })
+    window.heron.stopAssetAudition = vi.fn().mockResolvedValue({
+      ok: true,
+      requestId: "audition-stop",
+      value: undefined,
+      warnings: []
+    })
+    await router.push({ name: "studio" })
+
+    nativeCommandListener?.(rpcEvent("transport.toggle-playback"))
+    await flushPromises()
+
+    expect(window.heron.startAssetAudition).toHaveBeenCalledWith(expect.any(Object), "asset-1")
+    expect(window.heron.transportCommand).not.toHaveBeenCalled()
+    await mediaBrowserStore.reset()
   })
 
   it.each(["window.close", "application.quit"] as const)(

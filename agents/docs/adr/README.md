@@ -47,3 +47,4 @@ review.
 - [ADR-0001: Embed the native audio runtime](0001-embedded-audio-runtime.md)
 - [ADR-0002: Address Live MIDI controls by ordered channels and plug-in aliases](0002-live-midi-control-addressing.md)
 - [ADR-0003: Make explicit device selection win reconnect races](0003-device-recovery-precedence.md)
+- [ADR-0004: Keep project media canonical and audition outside transport](0004-project-media-assets.md)

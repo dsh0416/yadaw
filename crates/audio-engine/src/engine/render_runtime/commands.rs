@@ -1,8 +1,9 @@
 use super::{
-    CountInState, EngineCommand, NativeMixerRuntime, Ordering, RealtimeParameter,
-    TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED,
-    TRANSPORT_WAITING, TransportAction,
+    AuditionPlayback, CountInState, EngineCommand, HeapProd, NativeMixerRuntime, Ordering,
+    RealtimeParameter, TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING, TRANSPORT_RECORDING,
+    TRANSPORT_STOPPED, TRANSPORT_WAITING, TransportAction,
 };
+use ringbuf::traits::Producer;
 
 impl NativeMixerRuntime {
     pub(in crate::runtime) fn activate_application_captures(&self) {
@@ -40,10 +41,27 @@ impl NativeMixerRuntime {
         &mut self,
         command: EngineCommand,
     ) -> Option<Box<NativeMixerRuntime>> {
+        self.handle_command_inner(command, None)
+    }
+
+    pub(in crate::runtime) fn handle_command_realtime(
+        &mut self,
+        command: EngineCommand,
+        retired_auditions: &mut HeapProd<Box<AuditionPlayback>>,
+    ) -> Option<Box<NativeMixerRuntime>> {
+        self.handle_command_inner(command, Some(retired_auditions))
+    }
+
+    fn handle_command_inner(
+        &mut self,
+        command: EngineCommand,
+        retired_auditions: Option<&mut HeapProd<Box<AuditionPlayback>>>,
+    ) -> Option<Box<NativeMixerRuntime>> {
         match command {
             EngineCommand::LoadMixer(mut runtime) => {
                 self.all_notes_off();
                 runtime.external_sync_enabled = self.external_sync_enabled;
+                runtime.audition = self.audition.take();
                 let state = runtime.transport.state.load(Ordering::Relaxed);
                 if state == TRANSPORT_COUNTING_IN {
                     if let Some(count_in) = self.count_in {
@@ -200,7 +218,30 @@ impl NativeMixerRuntime {
                     meter.clear_clip();
                 }
             }
+            EngineCommand::StartAudition(audition) => {
+                if let Some(previous) = self.audition.replace(audition) {
+                    retire_audition(previous, retired_auditions);
+                }
+            }
+            EngineCommand::StopAudition => {
+                if let Some(previous) = self.audition.take() {
+                    retire_audition(previous, retired_auditions);
+                }
+            }
         }
         None
+    }
+}
+
+fn retire_audition(
+    audition: Box<AuditionPlayback>,
+    retired: Option<&mut HeapProd<Box<AuditionPlayback>>>,
+) {
+    if let Some(queue) = retired {
+        if let Err(audition) = queue.try_push(audition) {
+            std::mem::forget(audition);
+        }
+    } else {
+        std::mem::forget(audition);
     }
 }

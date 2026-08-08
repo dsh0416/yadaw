@@ -42,6 +42,7 @@ import {
   projectSession
 } from "./test-harness"
 import { registerProjectHandlers } from "./project-handlers"
+import { AudioImportBatchError } from "../project"
 
 vi.mock("../app", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../app")>()),
@@ -362,6 +363,7 @@ describe("registerProjectHandlers", () => {
     const result = await invoke(electronMocks, IPC_CHANNELS.projectClose, meta(), "discard")
 
     expect(result).toMatchObject({ ok: true, value: { closed: true } })
+    expect(context.assetAudition.stop).toHaveBeenCalledOnce()
     expect(context.transport.command).toHaveBeenCalledWith({ type: "stop" })
     expect(context.synchronizePluginStates).not.toHaveBeenCalled()
     expect(context.recordings.cleanupCommittedForProject).not.toHaveBeenCalled()
@@ -423,6 +425,90 @@ describe("registerProjectHandlers", () => {
     )
 
     expect(result).toMatchObject({ ok: true, value: assets })
+  })
+
+  it("starts and stops one project audio audition", async () => {
+    const context = createContext()
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const started = await invoke(
+      electronMocks,
+      IPC_CHANNELS.assetAuditionStart,
+      meta({ target: workspace.project }),
+      "asset-1"
+    )
+    const stopped = await invoke(
+      electronMocks,
+      IPC_CHANNELS.assetAuditionStop,
+      meta({ target: workspace.project })
+    )
+
+    expect(started).toMatchObject({ ok: true })
+    expect(stopped).toMatchObject({ ok: true })
+    expect(context.assetAudition.start).toHaveBeenCalledWith("asset-1")
+    expect(context.assetAudition.stop).toHaveBeenCalledOnce()
+  })
+
+  it("imports audio and publishes the refreshed project assets", async () => {
+    const asset = {
+      id: "audio-1",
+      kind: "audio" as const,
+      name: "Kick.mp3",
+      contentHash: "hash-1",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32" as const,
+      frameCount: 48_000n
+    }
+    const context = createContext()
+    vi.mocked(context.audioImport.import).mockResolvedValue({
+      selectedAssetIds: [asset.id],
+      importedAssetIds: [asset.id]
+    })
+    vi.mocked(context.projects.listAssets).mockResolvedValue([asset])
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectAudioImport,
+      mutationMeta(workspace.projectGraph, { expectedRevision: workspace.revision }),
+      ["/samples/Kick.mp3"]
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        selectedAssetIds: [asset.id],
+        importedAssetIds: [asset.id],
+        workspace: { assets: [asset] }
+      }
+    })
+  })
+
+  it("quarantines an audio import whose database commit outcome is unknown", async () => {
+    const context = createContext()
+    vi.mocked(context.audioImport.import).mockRejectedValue(
+      new AudioImportBatchError(new Error("worker disconnected"), true, [])
+    )
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectAudioImport,
+      mutationMeta(workspace.projectGraph, {
+        expectedRevision: workspace.revision,
+        mutation: { operationId: "op-audio-unknown", idempotencyKey: "idem-audio-unknown" }
+      }),
+      ["/samples/Kick.wav"]
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "operation-timeout-unknown", outcome: "unknown" }
+    })
   })
 
   it("updates project configuration", async () => {

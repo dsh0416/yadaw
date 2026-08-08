@@ -532,6 +532,21 @@ pub(super) fn engine_command(
                 },
             }
         }
+        ControlCommand::StartAssetAudition {
+            path,
+            hardware_outputs,
+        } => match audio_engine.start_asset_audition(&path, hardware_outputs) {
+            Ok(()) => ControlResult::Accepted,
+            Err(error) => control_error! {
+                message: error.to_string(),
+            },
+        },
+        ControlCommand::StopAssetAudition => match audio_engine.stop_asset_audition() {
+            Ok(()) => ControlResult::Accepted,
+            Err(error) => control_error! {
+                message: error.to_string(),
+            },
+        },
         ControlCommand::MixerSnapshot => match audio_engine.mixer_snapshot() {
             Ok(snapshot) => ControlResult::MixerSnapshot {
                 meters: snapshot

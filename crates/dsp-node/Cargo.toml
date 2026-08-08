@@ -24,6 +24,7 @@ ringbuf.workspace = true
 rmp-serde.workspace = true
 rubato.workspace = true
 sha2.workspace = true
+symphonia.workspace = true
 heron-audio-host.workspace = true
 heron-dsp-core.workspace = true
 heron-dsp-runtime.workspace = true

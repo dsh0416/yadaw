@@ -1,4 +1,6 @@
 export * from "./asset-materializer"
+export * from "./asset-audition-service"
+export * from "./audio-import-service"
 export * from "./audio-graph-compiler"
 export * from "./audio-graph-publisher"
 export * from "./external-project-dirty"

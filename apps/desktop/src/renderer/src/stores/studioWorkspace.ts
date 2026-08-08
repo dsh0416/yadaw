@@ -2,35 +2,20 @@ import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed } from "vue"
 
-export type StudioLeftPanel = "browser" | "inspector" | null
+export type StudioLeftPanel = "inspector" | null
+export type StudioRightPanel = "notes" | "media-browser" | null
 type StoredStudioLeftPanel = Exclude<StudioLeftPanel, null> | "closed"
-
-function initialLeftPanel(): StoredStudioLeftPanel {
-  try {
-    return localStorage.getItem("heron.workspace.sound-browser.v1") === "false"
-      ? "closed"
-      : "browser"
-  } catch {
-    return "browser"
-  }
-}
+type StoredStudioRightPanel = Exclude<StudioRightPanel, null> | "closed"
 
 export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
   const storedLeftPanel = useStorage<StoredStudioLeftPanel>(
-    "heron.workspace.left-panel.v1",
-    initialLeftPanel()
+    "heron.workspace.left-panel.v2",
+    "closed"
   )
   const activeLeftPanel = computed<StudioLeftPanel>({
     get: () => (storedLeftPanel.value === "closed" ? null : storedLeftPanel.value),
     set: (panel) => {
       storedLeftPanel.value = panel ?? "closed"
-    }
-  })
-  const soundBrowserOpen = computed({
-    get: () => activeLeftPanel.value === "browser",
-    set: (open: boolean) => {
-      if (open) activeLeftPanel.value = "browser"
-      else if (activeLeftPanel.value === "browser") activeLeftPanel.value = null
     }
   })
   const inspectorOpen = computed({
@@ -40,7 +25,19 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
       else if (activeLeftPanel.value === "inspector") activeLeftPanel.value = null
     }
   })
-  const notesPanelOpen = useStorage("heron.workspace.notes-panel.v1", false)
+  const storedRightPanel = useStorage<StoredStudioRightPanel>(
+    "heron.workspace.right-panel.v1",
+    "closed"
+  )
+  const activeRightPanel = computed<StudioRightPanel>({
+    get: () => (storedRightPanel.value === "closed" ? null : storedRightPanel.value),
+    set: (panel) => {
+      storedRightPanel.value = panel ?? "closed"
+    }
+  })
+  const notesPanelOpen = computed(() => activeRightPanel.value === "notes")
+  const mediaBrowserOpen = computed(() => activeRightPanel.value === "media-browser")
+  const rightPanelWidth = useStorage("heron.workspace.right-panel-width.v1", 320)
   const activeNotesTab = useStorage<"project" | "track">("heron.workspace.notes-tab.v1", "project")
   const lowerDockOpen = useStorage("heron.workspace.mixer-dock.v1", true)
   const activeLowerDock = useStorage<"mixer" | "piano-roll">(
@@ -63,20 +60,28 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
     height: `${Math.min(480, Math.max(190, mixerDockHeight.value))}px`
   }))
 
-  function toggleSoundBrowser(): void {
-    soundBrowserOpen.value = !soundBrowserOpen.value
-  }
-
   function toggleInspector(): void {
     inspectorOpen.value = !inspectorOpen.value
   }
 
   function toggleNotesPanel(): void {
-    notesPanelOpen.value = !notesPanelOpen.value
+    activeRightPanel.value = notesPanelOpen.value ? null : "notes"
   }
 
   function closeNotesPanel(): void {
-    notesPanelOpen.value = false
+    if (notesPanelOpen.value) activeRightPanel.value = null
+  }
+
+  function toggleMediaBrowser(): void {
+    activeRightPanel.value = mediaBrowserOpen.value ? null : "media-browser"
+  }
+
+  function closeRightPanel(): void {
+    activeRightPanel.value = null
+  }
+
+  function setRightPanelWidth(width: number): void {
+    rightPanelWidth.value = Math.min(480, Math.max(260, Math.round(width)))
   }
 
   function setActiveNotesTab(tab: "project" | "track"): void {
@@ -113,8 +118,9 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
   }
 
   function reset(): void {
-    activeLeftPanel.value = "browser"
-    notesPanelOpen.value = false
+    activeLeftPanel.value = null
+    activeRightPanel.value = null
+    rightPanelWidth.value = 320
     activeNotesTab.value = "project"
     lowerDockOpen.value = true
     activeLowerDock.value = "mixer"
@@ -123,9 +129,11 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
 
   return {
     activeLeftPanel,
-    soundBrowserOpen,
     inspectorOpen,
+    activeRightPanel,
     notesPanelOpen,
+    mediaBrowserOpen,
+    rightPanelWidth,
     activeNotesTab,
     lowerDockOpen,
     activeLowerDock,
@@ -133,10 +141,12 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
     pianoRollDockOpen,
     mixerDockHeight,
     dockStyle,
-    toggleSoundBrowser,
     toggleInspector,
     toggleNotesPanel,
     closeNotesPanel,
+    toggleMediaBrowser,
+    closeRightPanel,
+    setRightPanelWidth,
     setActiveNotesTab,
     toggleMixerDock,
     togglePianoRollDock,

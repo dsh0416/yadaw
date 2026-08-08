@@ -331,6 +331,24 @@ export class AudioHostTransportClient {
     }
   }
 
+  async startAssetAudition(path: string, hardwareOutputs: [number, number]): Promise<void> {
+    const response = await this.request({
+      type: "start-asset-audition",
+      path,
+      hardware_outputs: hardwareOutputs
+    })
+    if (response.result.type !== "accepted") {
+      throw new Error("audio host rejected asset audition")
+    }
+  }
+
+  async stopAssetAudition(): Promise<void> {
+    const response = await this.request({ type: "stop-asset-audition" })
+    if (response.result.type !== "accepted") {
+      throw new Error("audio host rejected stopping asset audition")
+    }
+  }
+
   async mixerSnapshot(): Promise<MixerRuntimeSnapshot> {
     if (!this.directTelemetry()) {
       const response = await this.request({ type: "mixer-snapshot" })

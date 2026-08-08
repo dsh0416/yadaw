@@ -21,11 +21,12 @@ import {
   pluginLocator,
   pluginTypeKey
 } from "@heron/contracts"
-import { parseMidiFile } from "@heron/dsp-node"
+import { parseMidiData, parseMidiFile } from "@heron/dsp-node"
 import type { NativeNormalizedSmf } from "@heron/dsp-node"
 import type { PluginCatalogService } from "../plugins"
 import type { ProjectCommandService } from "./project-command-service"
 import type { ProjectGraphService } from "./project-graph-service"
+import type { ProjectService } from "./project-service"
 
 interface PreparedImport {
   projectGraph: ProjectGraphRef
@@ -33,6 +34,8 @@ interface PreparedImport {
   parsed: NativeNormalizedSmf
   rawBytes: Uint8Array
 }
+
+type MidiImportSource = { kind: "file"; path: string } | { kind: "asset"; assetId: string }
 
 function tempoMapFromNative(parsed: NativeNormalizedSmf): TempoMapSnapshot {
   return {
@@ -55,23 +58,45 @@ export class MidiImportService {
   constructor(
     private readonly graphs: ProjectGraphService,
     private readonly commands: ProjectCommandService,
-    private readonly plugins: PluginCatalogService
+    private readonly plugins: PluginCatalogService,
+    private readonly projects: Pick<ProjectService, "readMidiSource" | "listAssets"> = {
+      readMidiSource: async () => null,
+      listAssets: async () => []
+    }
   ) {}
 
-  async prepare(path: string, projectGraph: ProjectGraphRef): Promise<MidiImportPreview> {
+  async prepare(
+    input: MidiImportSource | string,
+    projectGraph: ProjectGraphRef
+  ): Promise<MidiImportPreview> {
+    const source: MidiImportSource =
+      typeof input === "string" ? { kind: "file", path: input } : input
     const graph = await this.graphs.snapshot()
-    const parsed = await parseMidiFile(path, {
+    const tempoMap = {
       tempoEvents: graph.tempoMap.tempoEvents,
       timeSignatureEvents: graph.tempoMap.timeSignatureEvents
-    })
+    }
+    let rawBytes: Uint8Array
+    let previewPath: string
+    let parsed: NativeNormalizedSmf
+    if (source.kind === "asset") {
+      const stored = await this.projects.readMidiSource(source.assetId)
+      if (!stored) throw new Error("MIDI asset was not found")
+      rawBytes = stored.rawBytes
+      previewPath = stored.name
+      parsed = await parseMidiData(Buffer.from(stored.rawBytes), tempoMap)
+    } else {
+      rawBytes = await readFile(source.path)
+      previewPath = source.path
+      parsed = await parseMidiFile(source.path, tempoMap)
+    }
     if (parsed.format !== 0 && parsed.format !== 1 && parsed.format !== 2) {
       throw new Error("Unsupported Standard MIDI File format")
     }
-    const rawBytes = await readFile(path)
     const token = randomUUID()
     const preview: MidiImportPreview = {
       token,
-      path,
+      path: previewPath,
       format: parsed.format,
       sourceTiming: parsed.sourceTiming,
       tracks: parsed.tracks.map((track) => ({
@@ -134,7 +159,11 @@ export class MidiImportService {
     const graph = await this.graphs.snapshot()
     const defaultOutput = graph.channels.find((channel) => channel.kind === "output")
     if (!defaultOutput) throw new Error("Project has no hardware Output")
-    const sourceId = randomUUID()
+    const contentHash = createHash("sha256").update(prepared.rawBytes).digest("hex")
+    const existingSource = (await this.projects.listAssets()).find(
+      (asset) => asset.kind === "midi" && asset.contentHash === contentHash
+    )
+    const sourceId = existingSource?.id ?? randomUUID()
     const commands: ProjectCommand[] = []
     if (plan.importTempoMap) {
       const selectedSequenceMap =
@@ -240,8 +269,8 @@ export class MidiImportService {
       meta,
       {
         id: sourceId,
-        name: basename(prepared.preview.path),
-        contentHash: createHash("sha256").update(prepared.rawBytes).digest("hex"),
+        name: existingSource?.name ?? basename(prepared.preview.path),
+        contentHash,
         rawBytes: prepared.rawBytes
       },
       { type: "batch", commands }

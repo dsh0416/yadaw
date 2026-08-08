@@ -279,23 +279,46 @@ export function registerMidiRpcHandlers(context: IpcHandlerContext): void {
     }
     const guarded = beginMutation(context, meta, workspace.project)
     if (guarded) return guarded
-    let path = typeof value === "string" && value.trim() ? value : undefined
+    const request =
+      value && typeof value === "object" && "kind" in value
+        ? (value as { kind?: unknown; path?: unknown; assetId?: unknown })
+        : undefined
+    if (
+      request &&
+      !(
+        (request.kind === "file" &&
+          (request.path === undefined ||
+            (typeof request.path === "string" && request.path.trim().length > 0))) ||
+        (request.kind === "asset" &&
+          typeof request.assetId === "string" &&
+          request.assetId.length > 0)
+      )
+    ) {
+      return rpcFailure(meta, error(meta, "validation"))
+    }
     try {
       lifecycle.assertProjectWriteAllowed()
-      if (!path) {
-        const selected = await dialog.showOpenDialog({
-          title: t("dialog.importMidi.title"),
-          properties: ["openFile"],
-          filters: [{ name: t("dialog.importMidi.filter"), extensions: ["mid", "midi"] }]
-        })
-        path = selected.filePaths[0]
-        if (selected.canceled || !path) {
-          const result = rpcSuccess(meta, null)
-          finish(context, meta, "committed", result)
-          return result
+      let source: { kind: "file"; path: string } | { kind: "asset"; assetId: string }
+      if (request?.kind === "asset") {
+        source = { kind: "asset", assetId: request.assetId as string }
+      } else {
+        let path = request?.path as string | undefined
+        if (!path) {
+          const selected = await dialog.showOpenDialog({
+            title: t("dialog.importMidi.title"),
+            properties: ["openFile"],
+            filters: [{ name: t("dialog.importMidi.filter"), extensions: ["mid", "midi"] }]
+          })
+          path = selected.filePaths[0]
+          if (selected.canceled || !path) {
+            const result = rpcSuccess(meta, null)
+            finish(context, meta, "committed", result)
+            return result
+          }
         }
+        source = { kind: "file", path }
       }
-      const result = rpcSuccess(meta, await midiImport.prepare(path, workspace.projectGraph))
+      const result = rpcSuccess(meta, await midiImport.prepare(source, workspace.projectGraph))
       finish(context, meta, "committed", result)
       return result
     } catch {

@@ -1006,6 +1006,14 @@ describe("ProjectDatabase", () => {
 
     await database.applyCommand(create, "output-1-2")
     expect((await database.mixerSnapshot()).midiClips).toContainEqual(clip)
+    expect(await database.listAssets()).toContainEqual({
+      id: source.id,
+      kind: "midi",
+      name: source.name,
+      contentHash: source.contentHash,
+      byteLength: 0
+    })
+    expect(await database.readMidiSource(source.id)).toEqual(source)
 
     await database.applyCommand(
       {
@@ -1495,7 +1503,9 @@ describe("ProjectDatabase", () => {
     expect(await database.listAssets()).toEqual([
       {
         id: "asset-1",
+        kind: "audio",
         name: "Audio",
+        contentHash: "hash-1",
         sampleRate: 48_000,
         channels: 2,
         bitDepth: "float32",

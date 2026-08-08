@@ -1,7 +1,7 @@
 use super::{
-    Arc, AudioEngine, Consumer, EngineCommand, Error, HeapCons, HeapProd, InputPeakBank, MeterBank,
-    NativeMixerRuntime, Ordering, RecorderController, RecordingTap, Result,
-    RoundTripLatencyMeasurement, RuntimeMetrics, Status, Stream, TransportShared,
+    Arc, AudioEngine, AuditionPlayback, Consumer, EngineCommand, Error, HeapCons, HeapProd,
+    InputPeakBank, MeterBank, NativeMixerRuntime, Ordering, RecorderController, RecordingTap,
+    Result, RoundTripLatencyMeasurement, RuntimeMetrics, Status, Stream, TransportShared,
 };
 
 pub(super) struct RunningAudioEngine {
@@ -12,6 +12,7 @@ pub(super) struct RunningAudioEngine {
     pub(super) recorder: RecorderController,
     pub(super) commands: HeapProd<EngineCommand>,
     pub(super) retired_mixers: HeapCons<Box<NativeMixerRuntime>>,
+    pub(super) retired_auditions: HeapCons<Box<AuditionPlayback>>,
     pub(super) meter_bank: Arc<MeterBank>,
     pub(super) transport: Arc<TransportShared>,
     pub(super) input_peaks: Arc<InputPeakBank>,
@@ -22,6 +23,7 @@ pub(super) struct OutputMixerControl {
     pub(super) commands: HeapCons<EngineCommand>,
     pub(super) mixer: Option<Box<NativeMixerRuntime>>,
     pub(super) retired_mixers: HeapProd<Box<NativeMixerRuntime>>,
+    pub(super) retired_auditions: HeapProd<Box<AuditionPlayback>>,
 }
 
 pub(super) struct OutputStreamContext {
@@ -57,6 +59,14 @@ impl RunningAudioEngine {
     pub(super) fn reclaim_retired_mixers(&mut self) -> usize {
         let mut reclaimed = 0;
         while self.retired_mixers.try_pop().is_some() {
+            reclaimed += 1;
+        }
+        reclaimed
+    }
+
+    pub(super) fn reclaim_retired_auditions(&mut self) -> usize {
+        let mut reclaimed = 0;
+        while self.retired_auditions.try_pop().is_some() {
             reclaimed += 1;
         }
         reclaimed

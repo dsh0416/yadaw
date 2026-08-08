@@ -73,7 +73,6 @@ function mountStudio() {
           template:
             '<div class="topbar"><button class="tempo" @click="$emit(\'update-tempo\', 132)"/><button class="meter" @click="$emit(\'update-meter\', { numerator: 7, denominator: 8 })"/><button class="key" @click="$emit(\'update-key\', { fifths: 2, mode: \'minor\' })"/><button class="preview" @click="$emit(\'preview-master\', { channelId: \'master\', parameter: \'gainDb\', value: -3 })"/><button class="update" @click="$emit(\'update-master\', \'master\', { gainDb: -4 })"/><button class="metro" @click="$emit(\'toggle-metronome\')"/><button class="record" @click="$emit(\'toggle-recording\')"/><button class="cycle" @click="$emit(\'toggle-cycle\')"/></div>'
         },
-        SoundBrowser: true,
         TrackInspector: true,
         StudioWorkspace: true,
         NotesPanel: true,

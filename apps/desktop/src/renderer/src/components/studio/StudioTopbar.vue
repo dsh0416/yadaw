@@ -43,9 +43,9 @@ defineProps<{
   playheadSeconds: number
   tempoMap: TempoMapSnapshot
   keySignatureEvents: KeySignatureEventState[]
-  soundBrowserOpen: boolean
   inspectorOpen: boolean
   notesPanelOpen: boolean
+  mediaBrowserOpen: boolean
   mixerDockOpen: boolean
   pianoRollDockOpen: boolean
   pianoRollAvailable: boolean
@@ -58,9 +58,9 @@ defineProps<{
   lowLatencyModeTooltip?: string
 }>()
 const emit = defineEmits<{
-  toggleSoundBrowser: []
   toggleInspector: []
   toggleNotesPanel: []
+  toggleMediaBrowser: []
   toggleMixerDock: []
   togglePianoRollDock: []
   toggleRecording: []
@@ -83,14 +83,6 @@ const { t } = useI18n()
 <template>
   <header class="topbar">
     <div class="control-group left-panel-group" data-topbar-group="left-panel">
-      <StudioControlButton
-        :label="t('studio.topbar.library')"
-        :pressed="soundBrowserOpen"
-        tone="accent"
-        @activate="emit('toggleSoundBrowser')"
-      >
-        <Library :size="15" />
-      </StudioControlButton>
       <StudioControlButton
         :label="t('studio.topbar.inspector')"
         :pressed="inspectorOpen"
@@ -224,7 +216,12 @@ const { t } = useI18n()
       <StudioControlButton :label="t('studio.topbar.loopBrowser')" unavailable compact-hidden>
         <ListMusic :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.mediaBrowser')" unavailable compact-hidden>
+      <StudioControlButton
+        :label="t('studio.topbar.mediaBrowser')"
+        :pressed="mediaBrowserOpen"
+        tone="accent"
+        @activate="emit('toggleMediaBrowser')"
+      >
         <Library :size="15" />
       </StudioControlButton>
     </div>

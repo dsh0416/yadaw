@@ -103,10 +103,10 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     async function expectStudioTopbarToFit(): Promise<void> {
       const topbar = page.locator(".topbar")
-      await page.getByRole("button", { name: "Library" }).click()
-      await expect(page.locator(".browser-panel")).toBeHidden()
-      await page.getByRole("button", { name: "Library" }).click()
-      await expect(page.locator(".browser-panel")).toBeVisible()
+      await page.getByRole("button", { name: "Media Browser", exact: true }).click()
+      await expect(page.locator(".media-browser")).toBeVisible()
+      await page.getByRole("button", { name: "Media Browser", exact: true }).click()
+      await expect(page.locator(".media-browser")).toBeHidden()
 
       const initialTheme = await page.locator("html").getAttribute("data-theme")
       for (const theme of ["dark", "light"]) {
@@ -116,10 +116,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
         await page.setViewportSize({ width: 1440, height: 900 })
         await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(8)
-        await expect(page.getByRole("button", { name: "Inspector" })).toHaveAttribute(
-          "aria-disabled",
-          "true"
-        )
+        await expect(page.getByRole("button", { name: "Inspector" })).toBeEnabled()
         expect(
           await topbar.evaluate(
             (element) =>
@@ -129,8 +126,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
         ).toBe(true)
 
         await page.setViewportSize({ width: 960, height: 640 })
-        await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(6)
-        await expect(page.getByRole("button", { name: "Library" })).toBeVisible()
+        await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(8)
+        await expect(page.getByRole("button", { name: "Media Browser", exact: true })).toBeVisible()
         await expect(page.getByRole("button", { name: "Mixer", exact: true })).toBeVisible()
         await expect(page.getByRole("button", { name: "Metronome", exact: true })).toBeVisible()
         await expect(topbar.getByRole("slider", { name: "Master quick volume" })).toBeVisible()

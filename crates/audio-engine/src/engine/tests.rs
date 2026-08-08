@@ -10,9 +10,9 @@ use super::device_streams::{
 };
 use super::resampling::{AdaptiveResampler, SessionOutputConverter};
 use super::{
-    AtomicBool, AtomicU32, AtomicU64, AudioEngine, AudioEngineKey, BufferSize, ClipSamples,
-    ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LOOPBACK_PROBE, LivePlugin,
-    LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
+    AtomicBool, AtomicU32, AtomicU64, AudioEngine, AudioEngineKey, AuditionPlayback, BufferSize,
+    ClipSamples, ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LOOPBACK_PROBE,
+    LivePlugin, LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
     MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics, MeterBank,
     MetronomeScheduler, NativeLatencyPolicy, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
     NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerParameterPreview,
@@ -231,6 +231,7 @@ fn transport_test_runtime(
         application_captures: (0..3).map(|_| None).collect(),
         input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
         meter_frame_clock: 0,
+        audition: None,
     })
 }
 

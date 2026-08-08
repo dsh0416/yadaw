@@ -10,6 +10,7 @@ import { useMixerStore } from "../../stores/mixer"
 import { useMidiInputStore } from "../../stores/midiInput"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
+import { useMidiImportStore } from "../../stores/midiImport"
 import ArrangementTimelineTrack from "./ArrangementTimelineTrack.vue"
 import ArrangementTrackRail from "./ArrangementTrackRail.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
@@ -22,7 +23,13 @@ import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
 import KeyTrackLane from "./global-lanes/KeyTrackLane.vue"
 import MeterTrackLane from "./global-lanes/MeterTrackLane.vue"
 import TempoTrackLane from "./global-lanes/TempoTrackLane.vue"
-import { secondsToTimelineX } from "../../utils/timelineCoordinates"
+import {
+  secondsToTimelineX,
+  timelineXToSeconds,
+  timelineXToTick
+} from "../../utils/timelineCoordinates"
+import { readProjectMediaDrag, PROJECT_MEDIA_DRAG_TYPE } from "../../utils/mediaDrag"
+import { snapTicks } from "../../utils/pianoRoll"
 import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
@@ -48,6 +55,7 @@ const mixerStore = useMixerStore()
 const midiInputStore = useMidiInputStore()
 const pianoRollStore = usePianoRollStore()
 const workspaceStore = useStudioWorkspaceStore()
+const midiImportStore = useMidiImportStore()
 const { snap: pianoRollSnap } = storeToRefs(pianoRollStore)
 const { session } = storeToRefs(projectStore)
 const {
@@ -63,6 +71,7 @@ const {
 const { pixelsPerQuarter, trackHeight, amplitudeScale, globalTracksExpanded } =
   storeToRefs(viewStore)
 const liveDurationSeconds = shallowRef(0)
+const mediaDropError = shallowRef("")
 const {
   selectedTempoTick,
   selectedMeterTick,
@@ -255,11 +264,164 @@ function handleWaveformFrameCount(frameCount: number, sampleRate: number): void 
 function updateArrangementDrag(event: DragEvent): void {
   updateClipDrag(event)
   updateMidiClipDrag(event)
+  if (
+    event.dataTransfer?.types.includes(PROJECT_MEDIA_DRAG_TYPE) ||
+    (event.dataTransfer?.files.length ?? 0) > 0
+  ) {
+    event.preventDefault()
+    event.dataTransfer!.dropEffect = "copy"
+  }
+}
+
+function dropPosition(event: DragEvent): {
+  trackId: string | null
+  trackKind: string | null
+  startFrame: number
+  startTick: number
+} {
+  const lane = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-track-id]")
+  const x = Math.max(0, event.clientX - (content.value?.getBoundingClientRect().left ?? 0))
+  const seconds = timelineXToSeconds(mixerStore.graph.tempoMap, x, pixelsPerQuarter.value)
+  return {
+    trackId: lane?.dataset.trackId ?? null,
+    trackKind: lane?.dataset.trackKind ?? null,
+    startFrame: Math.max(0, Math.round(seconds * mixerStore.graph.sampleRate)),
+    startTick: snapTicks(
+      timelineXToTick(mixerStore.graph.tempoMap, x, pixelsPerQuarter.value),
+      pianoRollStore.snap
+    )
+  }
+}
+
+async function placeAudioAsset(
+  assetId: string,
+  position: ReturnType<typeof dropPosition>
+): Promise<boolean> {
+  const asset = projectStore.projectAssets.find(
+    (candidate) => candidate.id === assetId && candidate.kind === "audio"
+  )
+  if (!asset || asset.kind !== "audio") return false
+  let trackId = position.trackId
+  if (position.trackKind && position.trackKind !== "audio") {
+    mediaDropError.value = t("studio.mediaBrowser.audioTrackOnly")
+    return false
+  }
+  if (!trackId) {
+    const created = await mixerStore.createAudioTrack(asset.channels === 1 ? "mono" : "stereo")
+    if (!created || !mixerStore.selectedChannelId) return false
+    trackId =
+      mixerStore.graph.tracks.find((track) => track.channelId === mixerStore.selectedChannelId)
+        ?.id ?? null
+  }
+  if (!trackId) return false
+  const sourceLengthFrames = Math.max(
+    1,
+    Math.round((Number(asset.frameCount) * mixerStore.graph.sampleRate) / asset.sampleRate)
+  )
+  return mixerStore.execute({
+    type: "create-audio-clip",
+    clip: {
+      id: crypto.randomUUID(),
+      assetId: asset.id,
+      trackId,
+      name: asset.name.replace(/\.(?:wav|bwf|mp3|flac)$/i, ""),
+      startFrame: position.startFrame,
+      sourceOffsetFrames: 0,
+      lengthFrames: sourceLengthFrames,
+      sourceLengthFrames,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
+      assetSampleRate: asset.sampleRate,
+      assetChannels: asset.channels
+    }
+  })
+}
+
+async function placeMidiAsset(
+  assetId: string,
+  position: ReturnType<typeof dropPosition>
+): Promise<void> {
+  if (position.trackKind && position.trackKind !== "instrument") {
+    mediaDropError.value = t("studio.mediaBrowser.midiTrackOnly")
+    return
+  }
+  await midiImportStore.prepare(
+    { kind: "asset", assetId },
+    {
+      ...(position.trackId ? { targetTrackId: position.trackId } : {}),
+      insertionTick: position.startTick
+    }
+  )
+}
+
+async function handleExternalMediaDrop(
+  event: DragEvent,
+  position: ReturnType<typeof dropPosition>
+): Promise<void> {
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  const paths = projectStore.resolveDroppedFilePaths(files)
+  const audioPaths = paths.filter((path) => /\.(?:wav|bwf|mp3|flac)$/i.test(path))
+  const midiPath = paths.find((path) => /\.midi?$/i.test(path))
+  if (audioPaths.length > 0) {
+    const selected = await projectStore.importAudio(audioPaths)
+    let startFrame = position.startFrame
+    for (const assetId of selected) {
+      const placed = await placeAudioAsset(assetId, { ...position, startFrame })
+      const asset = projectStore.projectAssets.find(
+        (candidate) => candidate.id === assetId && candidate.kind === "audio"
+      )
+      if (!placed) {
+        mediaDropError.value = t(
+          position.trackKind && position.trackKind !== "audio"
+            ? "studio.mediaBrowser.importedAudioTrackOnly"
+            : "studio.mediaBrowser.importedNotPlaced"
+        )
+        break
+      }
+      if (asset?.kind === "audio") {
+        startFrame += Math.round(
+          (Number(asset.frameCount) * mixerStore.graph.sampleRate) / asset.sampleRate
+        )
+      }
+    }
+  }
+  if (midiPath) {
+    if (position.trackKind && position.trackKind !== "instrument") {
+      mediaDropError.value = t("studio.mediaBrowser.midiTrackOnly")
+      return
+    }
+    await midiImportStore.prepare(
+      { kind: "file", path: midiPath },
+      {
+        ...(position.trackKind === "instrument" && position.trackId
+          ? { targetTrackId: position.trackId }
+          : {}),
+        insertionTick: position.startTick
+      }
+    )
+  }
+  if (audioPaths.length === 0 && !midiPath) {
+    mediaDropError.value = t("studio.mediaBrowser.unsupportedDrop")
+  }
 }
 
 function handleArrangementDrop(event: DragEvent): void {
   handleClipDrop(event)
   handleMidiClipDrop(event)
+  const payload = readProjectMediaDrag(event.dataTransfer)
+  const position = dropPosition(event)
+  if (payload) {
+    event.preventDefault()
+    mediaDropError.value = ""
+    if (payload.kind === "audio") void placeAudioAsset(payload.assetId, position)
+    else void placeMidiAsset(payload.assetId, position)
+    return
+  }
+  if ((event.dataTransfer?.files.length ?? 0) > 0) {
+    event.preventDefault()
+    mediaDropError.value = ""
+    void handleExternalMediaDrop(event, position)
+  }
 }
 </script>
 
@@ -491,8 +653,8 @@ function handleArrangementDrop(event: DragEvent): void {
         </div>
       </div>
     </div>
-    <p v-if="recordingError || error" class="playback-error" role="alert">
-      {{ recordingError || error }}
+    <p v-if="recordingError || error || mediaDropError" class="playback-error" role="alert">
+      {{ recordingError || error || mediaDropError }}
     </p>
   </section>
 </template>

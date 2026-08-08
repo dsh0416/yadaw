@@ -212,7 +212,8 @@ export class ProjectCommandService {
         ...workspace,
         revision: updated.value.revision,
         session: this.projects.current ?? workspace.session,
-        graph: this.graphs.snapshotNow()
+        graph: this.graphs.snapshotNow(),
+        assets: await this.projects.listAssets()
       }
       this.lifecycle!.applicationState.setWorkspace(nextWorkspace)
       this.lifecycle!.syncProject(nextWorkspace.session)

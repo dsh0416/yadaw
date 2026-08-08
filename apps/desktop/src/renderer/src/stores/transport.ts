@@ -37,29 +37,31 @@ export interface TimelineClip {
 
 export function assetsToTimelineClips(assets: Asset[]): TimelineClip[] {
   let cursor = 0
-  return assets.map((asset) => {
-    const durationSeconds = asset.sampleRate > 0 ? Number(asset.frameCount) / asset.sampleRate : 0
-    const clip: TimelineClip = {
-      id: asset.id,
-      assetId: asset.id,
-      trackId: "audio-1",
-      name: asset.name.replace(/\.bwf$/i, ""),
-      startSeconds: cursor,
-      durationSeconds,
-      endSeconds: cursor + durationSeconds,
-      channels: asset.channels,
-      sampleRate: asset.sampleRate,
-      projectSampleRate: asset.sampleRate,
-      startFrame: Math.round(cursor * asset.sampleRate),
-      sourceOffsetFrames: 0,
-      lengthFrames: Number(asset.frameCount),
-      sourceLengthFrames: Number(asset.frameCount),
-      fadeInFrames: 0,
-      fadeOutFrames: 0
-    }
-    cursor = clip.endSeconds
-    return clip
-  })
+  return assets
+    .filter((asset) => asset.kind === "audio")
+    .map((asset) => {
+      const durationSeconds = asset.sampleRate > 0 ? Number(asset.frameCount) / asset.sampleRate : 0
+      const clip: TimelineClip = {
+        id: asset.id,
+        assetId: asset.id,
+        trackId: "audio-1",
+        name: asset.name.replace(/\.bwf$/i, ""),
+        startSeconds: cursor,
+        durationSeconds,
+        endSeconds: cursor + durationSeconds,
+        channels: asset.channels,
+        sampleRate: asset.sampleRate,
+        projectSampleRate: asset.sampleRate,
+        startFrame: Math.round(cursor * asset.sampleRate),
+        sourceOffsetFrames: 0,
+        lengthFrames: Number(asset.frameCount),
+        sourceLengthFrames: Number(asset.frameCount),
+        fadeInFrames: 0,
+        fadeOutFrames: 0
+      }
+      cursor = clip.endSeconds
+      return clip
+    })
 }
 
 const EMPTY_TRANSPORT: TransportSnapshot = {

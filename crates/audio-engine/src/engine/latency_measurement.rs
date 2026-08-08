@@ -58,6 +58,19 @@ pub(super) struct NativeMixerRuntime {
     pub(super) application_captures: Vec<Option<PreparedApplicationCapture>>,
     pub(super) input_peak_scratch: [f32; MAX_INPUT_CHANNELS],
     pub(super) meter_frame_clock: u64,
+    pub(super) audition: Option<Box<AuditionPlayback>>,
+}
+
+pub(super) struct AuditionPlayback {
+    pub(super) frames: Vec<StereoFrame>,
+    pub(super) cursor: usize,
+    pub(super) hardware_outputs: [usize; 2],
+}
+
+impl AuditionPlayback {
+    pub(super) fn is_active(&self) -> bool {
+        self.cursor < self.frames.len()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -118,6 +131,8 @@ pub(super) enum EngineCommand {
     Preview(RealtimeParameterCommand),
     Transport(TransportAction, u64),
     ClearMeterClips,
+    StartAudition(Box<AuditionPlayback>),
+    StopAudition,
 }
 
 pub(super) struct RoundTripLatencyMeasurement {

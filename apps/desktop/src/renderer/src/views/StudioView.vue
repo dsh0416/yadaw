@@ -10,10 +10,10 @@ import type {
   MixerParameterPreview,
   TimeSignatureEventState
 } from "@heron/contracts"
-import SoundBrowser from "../components/studio/SoundBrowser.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"
 import StudioWorkspace from "../components/studio/StudioWorkspace.vue"
+import RightPanelHost from "../components/studio/RightPanelHost.vue"
 import { useEngineStore } from "../stores/engine"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
@@ -25,7 +25,6 @@ import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
 import { useLowLatencyModeStore } from "../stores/lowLatencyMode"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
-import NotesPanel from "../components/notes/NotesPanel.vue"
 import TrackInspector from "../components/inspector/TrackInspector.vue"
 import {
   replaceTempoEventAtTick,
@@ -54,7 +53,7 @@ const pianoRollStore = usePianoRollStore()
 const lowLatencyModeStore = useLowLatencyModeStore()
 const { snapshot: lowLatencySnapshot, applying: lowLatencyApplying } =
   storeToRefs(lowLatencyModeStore)
-const { session, projectAssets } = storeToRefs(projectStore)
+const { session } = storeToRefs(projectStore)
 const {
   active: activeRecording,
   busy: recordingBusy,
@@ -209,7 +208,7 @@ onBeforeUnmount(() => {
       'studio-shell',
       {
         'left-panel-open': workspaceStore.activeLeftPanel !== null,
-        'notes-panel-open': workspaceStore.notesPanelOpen
+        'right-panel-open': workspaceStore.activeRightPanel !== null
       }
     ]"
   >
@@ -226,9 +225,9 @@ onBeforeUnmount(() => {
       :playhead-seconds="playheadSeconds"
       :tempo-map="mixerStore.graph.tempoMap"
       :key-signature-events="mixerStore.graph.keySignatureEvents"
-      :sound-browser-open="workspaceStore.soundBrowserOpen"
       :inspector-open="workspaceStore.inspectorOpen"
       :notes-panel-open="workspaceStore.notesPanelOpen"
+      :media-browser-open="workspaceStore.mediaBrowserOpen"
       :mixer-dock-open="workspaceStore.mixerDockOpen"
       :piano-roll-dock-open="workspaceStore.pianoRollDockOpen"
       :piano-roll-available="pianoRollStore.openClipIds.length > 0"
@@ -238,9 +237,9 @@ onBeforeUnmount(() => {
       :low-latency-mode-busy="lowLatencyApplying"
       :low-latency-mode-disabled="!lowLatencyModeStore.canConfigure"
       :low-latency-mode-tooltip="lowLatencyTooltip"
-      @toggle-sound-browser="workspaceStore.toggleSoundBrowser"
       @toggle-inspector="workspaceStore.toggleInspector"
       @toggle-notes-panel="workspaceStore.toggleNotesPanel"
+      @toggle-media-browser="workspaceStore.toggleMediaBrowser"
       @toggle-mixer-dock="workspaceStore.toggleMixerDock"
       @toggle-piano-roll-dock="workspaceStore.togglePianoRollDock"
       @toggle-recording="toggleRecording"
@@ -256,7 +255,6 @@ onBeforeUnmount(() => {
       @preview-master="previewMaster"
       @update-master="updateMaster"
     />
-    <SoundBrowser v-show="workspaceStore.soundBrowserOpen" :assets="projectAssets" />
     <TrackInspector v-show="workspaceStore.inspectorOpen" />
     <StudioWorkspace
       :recording-id="activeRecording?.id ?? null"
@@ -267,7 +265,7 @@ onBeforeUnmount(() => {
       :recording-midi-track-ids="activeRecording?.midiTrackIds ?? []"
       :recording-error="recordingError"
     />
-    <NotesPanel v-show="workspaceStore.notesPanelOpen" />
+    <RightPanelHost v-if="workspaceStore.activeRightPanel !== null" />
     <StudioStatusbar
       :runtime="audioRuntime"
       :statistics="audioStatistics"
@@ -291,11 +289,11 @@ onBeforeUnmount(() => {
 .studio-shell.left-panel-open {
   grid-template-columns: 214px minmax(0, 1fr);
 }
-.studio-shell.notes-panel-open {
-  grid-template-columns: minmax(0, 1fr) 292px;
+.studio-shell.right-panel-open {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
-.studio-shell.left-panel-open.notes-panel-open {
-  grid-template-columns: 214px minmax(0, 1fr) 292px;
+.studio-shell.left-panel-open.right-panel-open {
+  grid-template-columns: 214px minmax(0, 1fr) auto;
 }
 .studio-shell
   :deep(:is(input, textarea, select, [contenteditable]:not([contenteditable="false"]))) {
@@ -306,11 +304,8 @@ onBeforeUnmount(() => {
   .studio-shell.left-panel-open {
     grid-template-columns: 184px minmax(0, 1fr);
   }
-  .studio-shell.notes-panel-open {
-    grid-template-columns: minmax(0, 1fr) 264px;
-  }
-  .studio-shell.left-panel-open.notes-panel-open {
-    grid-template-columns: 184px minmax(0, 1fr) 264px;
+  .studio-shell.left-panel-open.right-panel-open {
+    grid-template-columns: 184px minmax(0, 1fr) auto;
   }
 }
 </style>

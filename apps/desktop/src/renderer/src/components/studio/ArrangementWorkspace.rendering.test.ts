@@ -11,6 +11,8 @@ import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 const recordingAsset: Asset = {
   id: "recording-1",
   name: "First take.bwf",
+  kind: "audio",
+  contentHash: "recording-1-hash",
   sampleRate: 48_000,
   channels: 2,
   bitDepth: "float32",

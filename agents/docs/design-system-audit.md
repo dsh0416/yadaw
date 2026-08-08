@@ -68,7 +68,9 @@ their focus/keyboard semantics remain part of desktop tests.
 - [x] `components/studio/StudioTopbar.vue` — shared tooltips.
 - [x] `components/studio/StudioStatusbar.vue`.
 - [x] `components/studio/StudioPlaceholderPanel.vue`.
-- [x] `components/studio/SoundBrowser.vue` — native accessible tabs and local scrolling.
+- [x] `components/media-browser/MediaBrowserPanel.vue` and
+      `components/studio/RightPanelHost.vue` — project asset filtering, local scrolling,
+      mutually exclusive right-panel ownership, and keyboard resizing.
 - [x] `components/studio/EngineInspector.vue` — shared slider/action.
 - [x] `components/studio/ArrangementWorkspace.vue` — local two-dimensional scrolling retained.
 - [x] `components/studio/ArrangementTrack.vue`.

@@ -89,6 +89,10 @@
       "title": "Import Standard MIDI File",
       "filter": "Standard MIDI File"
     },
+    "importAudio": {
+      "title": "Import Audio Files",
+      "filter": "Audio Files"
+    },
     "chooseSwap": {
       "title": "Choose recording swap directory"
     },
@@ -1356,7 +1360,6 @@
       "comingSoon": "Coming soon"
     },
     "topbar": {
-      "library": "Library",
       "inspector": "Inspector",
       "quickHelp": "Quick Help",
       "downloadManager": "Download Manager",
@@ -1378,6 +1381,35 @@
       "noOutput": "No Output",
       "tooltip": "Low Latency Mode · {output} · {budget} ms budget · {count} temporarily bypassed",
       "noMonitoringPath": "Low Latency Mode enabled · {output} · {budget} ms budget · no active monitoring path"
+    },
+    "mediaBrowser": {
+      "ariaLabel": "Project Media Browser",
+      "eyebrow": "Project assets",
+      "title": "Media Browser",
+      "close": "Close Media Browser",
+      "resizeAria": "Resize right panel",
+      "importAudio": "Audio",
+      "importMidi": "MIDI",
+      "search": "Search project assets",
+      "filterAria": "Filter project assets",
+      "filter": {
+        "all": "All",
+        "audio": "Audio",
+        "midi": "MIDI"
+      },
+      "assets": "Project assets",
+      "audioDetail": "{channels} ch · {rate} kHz · {duration} s",
+      "midiDetail": "MIDI · {size} bytes",
+      "emptyTitle": "No matching assets",
+      "emptyDetail": "Import WAV/BWF, MP3, FLAC, or MIDI files into this project.",
+      "audioTrackOnly": "Audio assets can only be dropped on an Audio track or blank arrangement space.",
+      "midiTrackOnly": "MIDI assets can only be dropped on an Instrument track or blank arrangement space.",
+      "importedNotPlaced": "The asset was imported and retained, but no clip could be placed.",
+      "importedAudioTrackOnly": "The audio was imported and retained, but it can only be placed on an Audio track or blank arrangement space.",
+      "unsupportedDrop": "This file type cannot be imported into the project.",
+      "startAudition": "Audition {name}",
+      "stopAudition": "Stop auditioning {name}",
+      "auditionFailed": "The audio asset could not be auditioned on the current Output."
     },
     "transport": {
       "ariaLabel": "Transport controls",
@@ -1494,34 +1526,6 @@
       "monitorAria": "Monitor {name}",
       "inputMonitoring": "Input monitoring",
       "inputMonitoringDisabled": "Select a hardware or application input first"
-    },
-    "soundBrowser": {
-      "eyebrow": "LIBRARY",
-      "title": "Sound browser",
-      "searchAria": "Search sounds",
-      "searchPlaceholder": "Search sounds & devices",
-      "tabsAria": "Sound browser",
-      "tabs": {
-        "instruments": "Instruments",
-        "effects": "Audio effects",
-        "samples": "Samples",
-        "plugins": "Plugins"
-      },
-      "headings": {
-        "instruments": "Audio plug-in instruments",
-        "effects": "Audio plug-in effects",
-        "samples": "Project audio",
-        "catalog": "Plugin catalog"
-      },
-      "empty": {
-        "instruments": "No compatible audio plug-in instruments found.",
-        "effects": "No compatible audio plug-in effects found."
-      },
-      "builtIn": "Built-in · ",
-      "rescan": "Rescan Audio Plug-ins",
-      "formatFilter": "Filter audio plug-ins by format",
-      "allFormats": "All",
-      "scanning": "Scanning…"
     },
     "trackInspector": {
       "ariaLabel": "Selected track inspector",

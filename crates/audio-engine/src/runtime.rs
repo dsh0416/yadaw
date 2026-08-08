@@ -201,9 +201,9 @@ use device_streams::{
 };
 use graph_build::build_mixer_runtime;
 use latency_measurement::{
-    EngineCommand, NativeMixerRuntime, RealtimeParameter, RealtimeParameterCommand,
-    RoundTripInputDetector, RoundTripLatencyMeasurement, RoundTripOutputProbe, RuntimeMetrics,
-    TransportAction,
+    AuditionPlayback, EngineCommand, NativeMixerRuntime, RealtimeParameter,
+    RealtimeParameterCommand, RoundTripInputDetector, RoundTripLatencyMeasurement,
+    RoundTripOutputProbe, RuntimeMetrics, TransportAction,
 };
 use lifecycle_types::{
     AudioEngineKey, OutputMixerControl, OutputStreamContext, RunningAudioEngine, audio_error,

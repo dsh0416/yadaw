@@ -368,6 +368,10 @@ export class ProjectService {
     await this.completeMutation(commandChangesConfiguration(command))
   }
 
+  readMidiSource(sourceId: string): Promise<MidiSourceInput | null> {
+    return this.requireActive().worker.readMidiSource(sourceId)
+  }
+
   async rollbackMidi(
     sourceId: string,
     command: ProjectCommand,

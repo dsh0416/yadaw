@@ -23,10 +23,27 @@ export class AssetMaterializer {
     graph: ProjectGraphSnapshot,
     source: ProjectAssetReader = this.projects
   ): Promise<Map<string, string>> {
-    await mkdir(this.cacheDirectory, { recursive: true })
     const ids = [...new Set(graph.audioClips.map((clip) => clip.assetId))]
+    return this.materializeIds(ids, source)
+  }
+
+  async materializeAsset(
+    assetId: string,
+    source: ProjectAssetReader = this.projects
+  ): Promise<string> {
+    const paths = await this.materializeIds([assetId], source)
+    const path = paths.get(assetId)
+    if (!path) throw new Error(`Audio asset '${assetId}' could not be materialized`)
+    return path
+  }
+
+  private async materializeIds(
+    ids: readonly string[],
+    source: ProjectAssetReader
+  ): Promise<Map<string, string>> {
+    await mkdir(this.cacheDirectory, { recursive: true })
     const contentHashes = new Map(
-      (await source.assetContentHashes(ids)).map((asset) => [asset.id, asset.contentHash])
+      (await source.assetContentHashes([...ids])).map((asset) => [asset.id, asset.contentHash])
     )
     const result = new Map<string, string>()
     for (const id of ids) {
